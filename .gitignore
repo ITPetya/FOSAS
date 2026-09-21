@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.log
+
+# Fallstudien/Case-Ordner und Cache (Nutzerdaten, nicht versioniert)
+cases/
+cache/
+*.msh
+*.su2
+*.vtu
+*.vtp
+
+.vscode/
+.idea/
+.DS_Store
