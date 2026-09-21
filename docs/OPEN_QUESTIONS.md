@@ -2,18 +2,21 @@
 
 ## Technisch, vor der jeweiligen Phase zu klaeren
 
-- trame versus Qt versus eigene vtk.js-Anwendung fuer die begehbare,
-  zeitlich animierte Feldvisualisierung: Spike noch nicht durchgefuehrt
-  (siehe RISKS.md, R9). Muss vor Phase 3 erledigt sein.
+- trame wurde per Spike als grundsaetzlich geeignet bestaetigt (RISKS.md,
+  R9), aber nur mit einem stark vereinfachten synthetischen Datensatz. Ein
+  Lasttest mit echter Netzaufloesung inklusive Stromlinien/Schnittflaechen
+  steht vor Phase 3 noch aus.
 - Konkreter Schwellwert fuer den Ablösungsanteil in der erweiterten
   Qualitaetsampel (ADR-0005): noch nicht kalibriert, braucht
   Validierungsfaelle aus Phase 2.
 - Genauer EULA-Wortlaut von MS-MPI und WebView2 (RISKS.md, R4): noch nicht
   aus den Installer-Paketen selbst gelesen.
-- Reales Hands-on-Testergebnis fuer Gmsh-Grenzschichtvernetzung an einer
-  duennen Hinterkante (RISKS.md, R1) und fuer SU2-Laufzeiten auf x86_64
-  (RISKS.md, R5): beides nur aus Sekundaerquellen abgeleitet, noch nicht
-  selbst gemessen.
+- Gmsh-Grenzschichtvernetzung an einer duennen Hinterkante wurde an einem
+  ersten realen NACA-0012-Testfall erfolgreich durchgefuehrt (RISKS.md,
+  R1), aber noch nicht mit einem vollstaendigen SU2-Loeserlauf (y+-Kontrolle
+  fehlt) und nicht mit anspruchsvolleren Geometrien (z. B. Fluegelspitze)
+  wiederholt. SU2-Laufzeiten wurden noch nicht systematisch gemessen, nur
+  ein einzelner Vernetzungslauf.
 
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 

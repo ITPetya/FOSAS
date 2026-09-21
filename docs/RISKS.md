@@ -6,19 +6,50 @@ echten Test oder eine belastbare Quelle geschlossen wird.
 
 ## R1: Gmsh, kollabierende Grenzschichtzellen an scharfen Hinterkanten
 
-Beleg: Mehrere unabhaengige Sekundaerquellen (Gmsh-Mailingliste 2016,
-GitLab-Issue-Titel, ResearchGate-Diskussion) beschreiben uebereinstimmend,
-dass das `BoundaryLayer`-Feld an scharfen Hinterkanten sich ueberschneidende
-oder kollabierende Prismenschichten erzeugt. Verbreiteter Workaround: kleiner
-Radius/Halbkreis an der Hinterkante statt idealer Schaerfe. Kein eigener Test
-moeglich (siehe R5).
+Beleg (urspruenglich): Mehrere unabhaengige Sekundaerquellen (Gmsh-
+Mailingliste 2016, GitLab-Issue-Titel, ResearchGate-Diskussion) beschreiben
+uebereinstimmend, dass das `BoundaryLayer`-Feld an scharfen Hinterkanten
+sich ueberschneidende oder kollabierende Prismenschichten erzeugt.
+Verbreiteter Workaround: kleiner Radius/Halbkreis an der Hinterkante statt
+idealer Schaerfe.
 
-Status: Offen, ungeprueft mit eigenem Testfall.
+Beleg (eigener Test, nachtraeglich moeglich geworden, siehe R5-Update):
+Ein realer Testlauf wurde durchgefuehrt. Geometrie: NACA-0012-Profil,
+Sehnenlaenge 0,6 m, Spannweite 1,2 m, per build123d parametrisch erzeugt
+und als STEP exportiert (Hinterkante mathematisch exakt scharf, kein
+Radius). Vernetzung ueber Gmsh 4.15.2 (CLI, `.geo`-Skript mit OCC-Kernel,
+Boolean-Differenz Box minus Fluegel, unstrukturiertes tetraedrisches
+`BoundaryLayer`-Feld mit hwall_n = 0,3 mm, ratio = 1,25, thickness = 20 mm).
+Ergebnis: Vernetzung erfolgreich abgeschlossen, 351216 Knoten, 2135525
+Tetraeder, Gesamtlaufzeit rund 215 s auf 1 Kern dieser Sandbox. Nach
+Optimierung meldet Gmsh selbst "No ill-shaped tets in the mesh", schlechteste
+Elementqualitaet (Gmsh-eigenes Qualitaetsmass, nicht identisch mit SICN)
+0,0166, also klar positiv, keine invertierten oder entarteten Elemente. Ein
+kleiner Anteil der Elemente liegt in der niedrigen Qualitaetsklasse
+(560 von 2,14 Mio. Elementen, rund 0,03 Prozent, in der Klasse
+0,00 bis 0,10), was auf lokal schwierige Bereiche (vermutlich nahe der
+Hinterkante oder am Uebergang der Grenzschicht zum Aussenfeld) hindeutet,
+aber keinen Abbruch verursacht hat.
 
-Massnahme: In Phase 1 automatische Mindestradius-Anwendung an duennen
-Kanten vorsehen, falls noetig. Jede solche automatische Korrektur wird im
-Bericht offengelegt (Projektregel, keine stillen Fallbacks). Realer Test mit
-NACA-0012-Geometrie ist Teil der Phase-1-Abnahme.
+Status: Teilweise entkraeftet durch eigenen Test. Die pessimistischste
+Lesart der Sekundaerquellen (Vernetzung bricht an scharfen Hinterkanten
+grundsaetzlich ab) hat sich fuer diesen konkreten Fall nicht bestaetigt.
+Offen bleibt: ob duennere/schaerfere Konfigurationen, andere hwall_n/ratio-
+Kombinationen oder komplexere 3D-Geometrien (z. B. Fluegelspitzen,
+Verjuengung) robust bleiben, und ob die y+-Zielwerte mit den hier gewaehlten
+Parametern tatsaechlich erreicht werden (noch nicht ausgewertet, da kein
+Loeserlauf in diesem Test enthalten war). Kein Vergleich mit den in den
+Sekundaerquellen beschriebenen Gmsh-Versionen/Konfigurationen durchgefuehrt,
+der Widerspruch zu den dortigen Berichten ist daher nicht vollstaendig
+aufgeloest, nur fuer diesen Testfall widerlegt.
+
+Massnahme: In Phase 1 den vollstaendigen Weg (Netz zu SU2-Format, Loeserlauf,
+y+-Auswertung) mit diesem Testfall abschliessen. Zusaetzlich mindestens einen
+Fall mit deutlich duennerer Hinterkante relativ zur Grenzschichtdicke testen,
+bevor Robustheit als allgemein gesichert gilt. Automatische
+Mindestradius-Anwendung bleibt als Rueckfalloption vorgemerkt, falls sich in
+Phase 1 doch Faelle zeigen, die scheitern, mit Offenlegung im Bericht bei
+Anwendung.
 
 ## R2: MS-MPI-Prozessbeendigung unter Windows Job Object nicht spezifisch belegt
 
@@ -70,21 +101,38 @@ Massnahme: Vor dem ersten Installer-Release beide EULA-Texte aus den
 tatsaechlichen Installer-Paketen extrahieren, archivieren und in
 `THIRD-PARTY-NOTICES.md` aufnehmen.
 
-## R5: Eigene Testumgebung ist ARM64-Linux ohne Root
+## R5: Eigene Testumgebung ist ARM64-Linux ohne Root (teilweise geloest)
 
-Beleg: Eigener Installationsversuch. `pip install gmsh` bietet kein
-Linux-aarch64-Wheel. Der offizielle Gmsh-Bereich stellt nur Linux32/Linux64
-(x86) bereit. `apt-get install gmsh` scheitert ohne Root. SU2-Installation
-per conda-forge scheiterte am begrenzten Speicherplatz der Sandbox
-(2 GB tmpfs).
+Beleg (urspruenglich): `pip install gmsh` bietet kein Linux-aarch64-Wheel.
+Der offizielle Gmsh-Bereich stellt nur Linux32/Linux64 (x86) bereit.
+`apt-get install gmsh` scheitert ohne Root. Ein erster SU2-Installations-
+versuch per conda-forge scheiterte, allerdings nur weil er versehentlich in
+ein 2-GB-tmpfs-Verzeichnis (`/tmp`) statt auf die eigentliche Festplatte
+(209 GB frei unter `/home`) zielte.
 
-Status: Bestaetigt, strukturelle Einschraenkung der aktuellen
-Entwicklungsumgebung, kein Bug im Projekt selbst.
+Beleg (Nachtest, erfolgreich): Mit `micromamba` (aarch64-Binary von
+micro.mamba.pm) und Installationsverzeichnis auf der echten Festplatte
+liessen sich sowohl Gmsh 4.15.2 als auch SU2 8.5.0 (mit Python 3.11 und
+OpenMPI, conda-forge-Kanal) erfolgreich installieren und ausfuehren. Beide
+Kommandozeilenprogramme (`gmsh`, `SU2_CFD`, `mpirun`) laufen. Einschraenkung:
+Das conda-forge-Gmsh-Paket fuer diese Plattform/Python-Kombination liefert
+keine Python-Bindings (kein `import gmsh` moeglich), nur die CLI und die
+C/C++/Fortran-SDK-Header. Das ist fuer unsere Architektur unproblematisch,
+da Gmsh ohnehin nur als externer Prozess angesprochen wird (ADR-0002).
+Fuer OpenCASCADE-Bindings (build123d) war zusaetzlich das manuelle
+Extrahieren von `libgl1`/`libglx0`/`libglvnd0` per `apt-get download` +
+`dpkg -x` noetig (siehe R7).
 
-Massnahme: Hands-on-Tests von Gmsh-Vernetzung und SU2-Laeufen brauchen
-entweder eine x86_64-Linux-Umgebung mit Root-Rechten und ausreichend
-Speicherplatz, oder muessen auf einer Windows-Maschine erfolgen. Das ist
-Voraussetzung fuer die Abnahme von Phase 1, nicht optional.
+Status: Fuer Gmsh- und SU2-Kommandozeilenwerkzeuge geloest, hands-on-Tests
+sind in dieser Sandbox jetzt tatsaechlich moeglich (siehe R1-Update). Fuer
+Windows-spezifisches Verhalten (Installer, Job Objects, WebView2, MS-MPI
+statt OpenMPI) bleibt die Einschraenkung bestehen, das ist weiterhin nur auf
+echtem Windows pruefbar.
+
+Massnahme: Diese conda-forge-basierte Werkzeugkette (`micromamba`-Umgebungen
+unter `/home/development/mamba_root`, nicht Teil des Repos) fuer weitere
+Phase-1-Tests in dieser Sandbox weiterverwenden. Windows-spezifische Tests
+bleiben Aufgabe des Projektinhabers auf echter Windows-Hardware, siehe R2.
 
 ## R6: Lizenzmetadaten-Widersprueche bei zwei Komponenten
 
@@ -127,11 +175,28 @@ den Ablösungsanteil noch nicht kalibriert.
 
 Massnahme: Schwellwert in Phase 2 anhand von Validierungsfaellen festlegen.
 
-## R9: trame-Performance fuer begehbare Animation mit vielen Zustaenden ungeprueft
+## R9: trame-Performance fuer begehbare Animation mit vielen Zustaenden
 
-Beleg: Noch kein eigener Spike zu trame vs. Qt vs. eigener vtk.js-Anwendung
-durchgefuehrt.
+Beleg: Spike durchgefuehrt. trame, trame-vtk, trame-vuetify und VTK 9.7.0
+liessen sich per pip vollstaendig installieren (inklusive fertigem
+aarch64-Wheel fuer VTK selbst ueber piwheels), deutlich unproblematischer
+als der Gmsh-Fall. Ein synthetischer Test mit 40 Zeitschritten (1682 Punkte,
+3360 Zellen je Zustand mit Skalarfeld) liess sich in 0,11 s aufbauen, Peak-
+Speicher rund 189 MB fuer alle 40 Zustaende im Prozess. `VtkLocalView`
+(Geometrie einmalig an den Client uebertragen, danach rein clientseitige
+Kamera/Interaktion) ist der fuer unseren Anwendungsfall passende Baustein,
+per Codeinspektion bestaetigt vorhanden. Ein Forumsbericht (VTK Discourse)
+und ein aktuelles Paper zu petaskaligem zeitabhaengigem Rendering weisen
+darauf hin, dass vtk.js/Three.js bei sehr vielen Actors beziehungsweise bei
+Datensaetzen mit hunderten Zeitschritten an Grenzen stossen, das betraf aber
+deutlich groessere Volumendaten als unsere geplanten 30 bis 60 Zustaende mit
+Oberflaechendaten.
 
-Status: Offen, siehe OPEN_QUESTIONS.md.
+Status: Ueberwiegend entkraeftet fuer den geplanten Umfang, aber nicht
+abschliessend. Der Test lief mit einer stark vereinfachten synthetischen
+Kugel, nicht mit realer CFD-Netzaufloesung inklusive Stromlinien und
+Schnittflaechen, die die Punktzahl pro Zustand deutlich erhoehen koennen.
 
-Massnahme: Spike vor Phase 3 nachholen.
+Massnahme: Vor Phase 3 einen Lasttest mit echter Netzaufloesung (z. B. dem
+Netz aus R1) inklusive Stromlinien und Schnittflaechen wiederholen, um die
+Hochrechnung zu bestaetigen.

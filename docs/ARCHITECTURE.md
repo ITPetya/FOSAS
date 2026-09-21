@@ -93,13 +93,16 @@ rotierende Teile, transsonische/supersonische Stroemung.
 ## Entwicklungsumgebung
 
 Ein Teil der Entwicklung findet aktuell in einer Linux-Sandbox (ARM64, ohne
-Root) statt. SU2 und Gmsh laufen grundsaetzlich nativ unter Linux, was
-Core- und Engine-Entwicklung dort ermoeglicht. Hands-on-Tests von
-Gmsh-Vernetzung und SU2-Laeufen brauchen aber eine x86_64-Umgebung mit
-ausreichend Root-Rechten und Speicherplatz (siehe RISKS.md, R5). Fuer
+Root) statt. Entgegen der ersten Einschaetzung sind Gmsh und SU2 dort ueber
+`micromamba`/conda-forge tatsaechlich installierbar und lauffaehig (siehe
+RISKS.md, R5), solange die Installation auf echtem Speicherplatz statt in
+einem tmpfs-`/tmp` erfolgt. Damit sind Hands-on-Tests der Vernetzungs- und
+Loeserpipeline in dieser Sandbox grundsaetzlich moeglich, ein erster
+erfolgreicher 3D-Grenzschichtnetzlauf an einer scharfen NACA-0012-
+Hinterkante wurde bereits durchgefuehrt (RISKS.md, R1). Fuer
 Linux-Server-Betrieb und CI muessen `libgl1`, `libglx0`, `libglvnd0` (oder
 Distributions-Aequivalent) als Systemabhaengigkeit bereitgestellt werden
 (RISKS.md, R7), da die OpenCASCADE-Bindings fest dagegen gelinkt sind, auch
 ohne Grafikausgabe. Windows-spezifisches Verhalten (Installer, Job
-Objects, WebView2, MS-MPI-Prozessbeendigung) kann in dieser Umgebung nicht
-getestet werden und bleibt bis Phase 5 offen (RISKS.md, R2).
+Objects, WebView2, MS-MPI-Prozessbeendigung) kann in dieser Umgebung nach
+wie vor nicht getestet werden und bleibt bis Phase 5 offen (RISKS.md, R2).

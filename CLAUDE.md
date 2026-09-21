@@ -75,8 +75,10 @@ CFD-Kern. Details zu Umfang und Architektur siehe `docs/ARCHITECTURE.md`.
 ## Entwicklungsumgebung, bekannte Einschraenkung
 
 Ein Teil der Entwicklung findet in einer Linux-Sandbox ohne Windows und ohne
-Root-Rechte statt. Hands-on-Tests von Gmsh- und SU2-Laeufen sind dort nicht
-immer moeglich (siehe `docs/RISKS.md`, R5). Windows-spezifisches Verhalten
-(Installer, Job Objects, WebView2) muss auf einer echten Windows-Maschine
-durch den Projektinhaber getestet werden, das ist keine Verzoegerung,
-sondern eine Grenze der Werkzeugumgebung.
+Root-Rechte statt. Gmsh und SU2 lassen sich dort ueber `micromamba`/
+conda-forge installieren und ausfuehren (siehe `docs/RISKS.md`, R5),
+solange die Installation auf echtem Speicherplatz statt in einem
+tmpfs-Verzeichnis erfolgt. Windows-spezifisches Verhalten (Installer, Job
+Objects, WebView2, MS-MPI statt OpenMPI) muss trotzdem auf einer echten
+Windows-Maschine durch den Projektinhaber getestet werden, das ist keine
+Verzoegerung, sondern eine Grenze der Werkzeugumgebung.
