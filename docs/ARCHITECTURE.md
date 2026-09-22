@@ -35,6 +35,30 @@ OpenAPI). Regel: Die UI darf nichts koennen, was die API nicht auch kann.
 Lokal laeuft die Web-UI in einem eigenen Fenster (WebView2), auf einem
 Server im Browser.
 
+## Koordinatenkonvention (wichtig, empirisch bestaetigt)
+
+SU2 erwartet fuer Kraft-/Momentenbeiwerte und die automatische Berechnung
+von Anstellwinkel/Schiebewinkel aus dem Geschwindigkeitsvektor eine feste
+Achsenkonvention: X in Anstroemrichtung (stromab), Y spannweitig, Z vertikal
+(Auftriebsrichtung). Anstellwinkel ist die Drehung in der X-Z-Ebene,
+Schiebewinkel die Drehung in der X-Y-Ebene. Das wurde in einem eigenen
+Testlauf bestaetigt: Eine Geometrie mit vertauschten Achsen (Spannweite
+entlang Z statt Y, Profildicke/Auftriebsrichtung entlang Y statt Z) fuehrte
+dazu, dass SU2 den vorgegebenen Anstroemvektor als "Anstellwinkel 0 Grad,
+Schiebewinkel 10 Grad" interpretierte, obwohl 10 Grad Anstellwinkel
+beabsichtigt waren, und CL infolgedessen die ganze Rechnung ueber exakt bei
+0,000000 blieb.
+
+Konsequenz fuer die Core-Pipeline: Die vom Nutzer angegebene Ausrichtung
+(Anstroemrichtung und "oben", siehe Abschnitt Eingaben) muss beim Export
+von der Eingabegeometrie in das Rechennetz immer in dieses kanonische
+Koordinatensystem transformiert werden (X = Anstroemrichtung, Z = "oben"),
+unabhaengig davon, wie die STEP-Datei urspruenglich orientiert war. Das ist
+kein Detail, sondern eine harte Voraussetzung fuer korrekte Kraftbeiwerte,
+und erklaert, warum die vom Nutzer per 3D-Vorschau zu bestaetigende
+Ausrichtung (Abschnitt 3 der urspruenglichen Anforderungen) architektonisch
+notwendig ist, nicht nur eine Komfortfunktion.
+
 ## Geometrie- und Vernetzungspipeline
 
 1. STEP-Import per build123d. Wasserdichtheitspruefung nicht allein ueber
