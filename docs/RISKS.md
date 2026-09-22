@@ -64,18 +64,62 @@ abbricht. Das ist selbst ein kleines Robustheits- und
 Fehlerbarkeit-Risiko der Werkzeugkette, unabhaengig von der
 Hinterkanten-Frage.
 
-Massnahme: Vor einer erneuten Erfolgsmeldung zu diesem Risiko entweder (a)
-den echten `extrudeBoundaryLayer`-Mechanismus per `.geo`-Skript
-nachvollziehen (Syntax noch zu klaeren, moeglicherweise ueber die
-`Extrude ... { Layers{...} }`-Konstruktion mit Grenzschicht-Modus, noch
-nicht verifiziert), oder (b) eine funktionierende gmsh-Python-Umgebung auf
-einer x86_64- oder Windows-Maschine nutzen, wo die offiziellen Python-Wheels
-verfuegbar sind, und das offizielle Beispiel `naca_boundary_layer_3d.py`
-direkt als Ausgangspunkt verwenden. Bis dahin gilt: jedes Meshing-Ergebnis
-wird erst nach Pruefung der VOLLSTAENDIGEN Log-Ausgabe (nicht nur der
-letzten Zeilen) auf das Wort "Error" hin als erfolgreich gewertet, das wird
-als feste Vorgehensregel fuer alle weiteren Gmsh-Tests in diesem Projekt
-uebernommen.
+Massnahme: Erledigt fuer den einfachen (ungepfeilten, ungetaperten)
+Fluegelfall, siehe Update unten. Fuer komplexere 3D-Formen (Fluegelspitzen,
+Verjuengung, echte freie STEP-Geometrie ohne konstanten Querschnitt) bleibt
+offen, ob derselbe Ansatz uebertragbar ist oder der generische
+`extrudeBoundaryLayer`-Mechanismus (bisher nur per Python-API demonstriert)
+noetig wird. Feste Vorgehensregel bleibt: jedes Meshing-Ergebnis wird erst
+nach Pruefung der VOLLSTAENDIGEN Log-Ausgabe (nicht nur der letzten Zeilen)
+auf das Wort "Error" hin als erfolgreich gewertet.
+
+Update, funktionierender Ansatz gefunden und verifiziert (Gesichert, eigener
+Test): Fuer einen Fluegel mit konstantem Profilquerschnitt (unser
+Testfall) funktioniert ein zweistufiges Vorgehen zuverlaessig. Erstens wird
+das 2D-Profil direkt in Gmsh (nicht aus STEP) mit zwei Splines aufgebaut,
+und das `BoundaryLayer`-Feld mit der tatsaechlich existierenden Option
+`CurvesList` (statt des nicht existierenden `FacesList`) auf diese Splines
+angewandt, wobei jede Kante an genau eine Flaeche angrenzen darf (die reine
+Profilflaeche ohne Fluidbereich musste dafuer entfernt werden, sonst Fehler
+"Only 2D Boundary Layers are supported, curve is adjacent to 2 surfaces").
+Das ergab ein sauberes 2D-Netz mit 8447 Knoten, 16782 Elementen, ohne
+Fehler im vollstaendigen Log. Zweitens wird dieses 2D-Netz klassisch
+translatorisch entlang der Spannweite extrudiert (`Extrude {0,span,0}
+{ Surface{s}; Layers{n}; }`), was aus den 2D-Dreieckselementen automatisch
+3D-Prismenelemente macht und die Grenzschichtstruktur mitnimmt. Ergebnis:
+208343 Knoten, 1225358 Elemente, Vernetzungszeit nur rund 27 s (deutlich
+schneller als der fruehere, fehlerhafte isotrope Tetraeder-Ansatz). Die
+Randflaechen wurden erneut per Bounding-Box-Heuristik klassifiziert (2
+Fluegel-, 6 Farfield-Flaechen), nicht per angenommener Extrude-Reihenfolge,
+um keine ungeprueften Annahmen zu wiederholen.
+
+Wichtige Einschraenkung des Testfalls: Der erfolgreiche Test hat die
+Profilgeometrie direkt in Gmsh mit zwei Splines aus der NACA-0012-Formel
+neu aufgebaut, nicht die zuvor per build123d erzeugte und als STEP
+exportierte Geometrie wiederverwendet. Ob sich derselbe curve-basierte
+2D-BoundaryLayer-Ansatz auf eine aus einer echten STEP-Datei importierte
+Kontur uebertragen laesst (z. B. bei einer Kontur mit vielen kleinen
+Segmenten wie in R1 urspruenglich beobachtet, 200 Teilflaechen aus einer
+Polyline), ist NICHT getestet und bleibt offen fuer Phase 1.
+
+Verifikation der echten Anisotropie (Gesichert, eigene Nachrechnung): Die
+Knotenkoordinaten der exportierten `.su2`-Datei wurden bei 50 Prozent
+Sehnenlaenge nahe der Oberseite ausgewertet. Gefundene Abstaende von der
+analytisch berechneten Profiloberflaeche: 0,00011 m, 0,000199 m,
+0,000498 m (aufsteigend), ein klar erkennbares, wachsendes Schichtmuster,
+kein isotropes Netz. Damit ist die urspruengliche Frage aus R1 (kollabieren
+Grenzschichtzellen an der scharfen Hinterkante) fuer diesen Testfall jetzt
+tatsaechlich mit einer echten Grenzschicht beantwortet: die Vernetzung ist
+gelungen, keine Fehlermeldung im vollstaendigen Log, keine entarteten
+Elemente erkennbar. Ein erster SU2-Loeserlauf mit diesem Netz und korrekter
+Koordinatenkonvention (siehe ARCHITECTURE.md) lieferte nach rund 200
+expliziten Iterationen (in 8 Minuten auf dieser Sandbox erreicht, noch
+nicht konvergiert, RMS_DENSITY erst bei -0,73 von angestrebt -8) einen
+plausiblen, von Null verschiedenen Auftriebsbeiwert (CL um 1,25, fallende
+Tendenz) und Widerstandsbeiwert (CD um 0,29, fallende Tendenz). Das ist
+ausdruecklich kein konvergiertes, belastbares Ergebnis, nur ein Beleg, dass
+die gesamte Kette Geometrie-Netz-Loeser-Kraftbeiwerte grundsaetzlich
+funktioniert.
 
 ## R2: MS-MPI-Prozessbeendigung unter Windows Job Object nicht spezifisch belegt
 
@@ -226,3 +270,31 @@ Schnittflaechen, die die Punktzahl pro Zustand deutlich erhoehen koennen.
 Massnahme: Vor Phase 3 einen Lasttest mit echter Netzaufloesung (z. B. dem
 Netz aus R1) inklusive Stromlinien und Schnittflaechen wiederholen, um die
 Hochrechnung zu bestaetigen.
+
+## R10: SU2-Konvergenz in dieser Sandbox sehr langsam, implizites Schema geht in OOM
+
+Beleg (eigener Test): Ein erster Loeserlauf mit dem impliziten Zeitschema
+(`EULER_IMPLICIT`) fuer die Stroemungsgleichungen auf dem isotropen
+1,92-Mio.-Elemente-Netz wurde vom Betriebssystem mit SIGKILL beendet
+(Exit-Code 137), waehrend der Arbeitsspeicher (4 GB total in dieser
+Sandbox) beim Aufbau der Jacobi-Matrix nahezu vollstaendig belegt war. Mit
+explizitem Zeitschema (`RUNGE-KUTTA_EXPLICIT`) blieb der Speicherverbrauch
+stabil bei rund 3,1 bis 3,3 GB, lief also durch, aber die Konvergenz ist
+dadurch sehr langsam: nach 8 Minuten (rund 200 Iterationen) auf dem
+Grenzschichtnetz war der RMS_DENSITY-Reststand erst bei -0,73 von
+angestrebt -8, Auftriebs- und Widerstandsbeiwert waren noch klar in
+Bewegung (CL fallend von 1,35 auf 1,25, CD fallend von 0,33 auf 0,29
+innerhalb der letzten rund 40 beobachteten Iterationen).
+
+Status: Bestaetigt fuer diese Sandbox (4 GB RAM, ARM64, 1 Kern effektiv
+genutzt in den bisherigen Tests). Nicht direkt uebertragbar auf die
+eigentliche Zielhardware (siehe R3), aber ein konkreter Hinweis, dass
+implizite RANS-Loesung nennenswerten Arbeitsspeicher braucht und explizite
+Verfahren als Rueckfalloption deutlich mehr Iterationen bis zur Konvergenz
+brauchen als in einer kurzen Testsitzung praktikabel sind.
+
+Massnahme: Fuer Phase 1 auf ausreichend RAM und nach Moeglichkeit
+Mehrkern-MPI-Parallelisierung testen (in diesem Lauf nicht genutzt, nur 1
+Prozess), um implizite Konvergenz in praktikabler Zeit zu erreichen. Bis
+dahin gilt jedes cl/cd-Ergebnis aus dieser Sandbox als nicht konvergiert
+und nicht als Referenzwert verwendbar.

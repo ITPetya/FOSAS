@@ -11,13 +11,26 @@
   Validierungsfaelle aus Phase 2.
 - Genauer EULA-Wortlaut von MS-MPI und WebView2 (RISKS.md, R4): noch nicht
   aus den Installer-Paketen selbst gelesen.
-- Gmsh-Grenzschichtvernetzung an einer duennen Hinterkante ist weiterhin
-  ungetestet (siehe RISKS.md, R1, dort auch die Korrektur eines eigenen
-  Fehlers: ein zunaechst als Erfolg gemeldeter Testlauf hat tatsaechlich gar
-  keine Grenzschicht erzeugt, nur ein isotropes Netz). Der richtige
-  Gmsh-Mechanismus fuer echte 3D-Grenzschichten (`extrudeBoundaryLayer`)
-  ist identifiziert, aber als reines `.geo`-Skript noch nicht funktionsfaehig
-  nachgebaut. SU2-Laufzeiten wurden noch nicht gemessen.
+- Gmsh-Grenzschichtvernetzung an einer duennen Hinterkante ist fuer den
+  Fall eines Koerpers mit konstantem Querschnitt geloest (2D
+  `CurvesList`-Feld plus translatorische Extrusion, siehe ADR-0007,
+  RISKS.md R1), nachdem ein erster, faelschlich als erfolgreich gemeldeter
+  Versuch korrigiert werden musste. Offen bleibt: ob sich das auf eine aus
+  einer echten STEP-Datei importierte Kontur uebertragen laesst (der Test
+  hat die Kontur direkt in Gmsh neu aufgebaut, nicht die STEP-Datei
+  verwendet), und ob Koerper mit Verjuengung/Pfeilung/Fluegelspitzen einen
+  anderen Ansatz brauchen.
+- Ein erster SU2-Loeserlauf mit korrekter Koordinatenkonvention und echter
+  Grenzschicht lief, aber nicht bis zur Konvergenz (siehe RISKS.md, R10).
+  Implizites Zeitschema fuehrte in dieser Sandbox zu einem
+  Speicherueberlauf, explizites Schema ist stabil aber sehr langsam. Ein
+  konvergiertes cl/cd fuer den NACA-0012-Testfall steht noch aus.
+- Digitalisierte Referenzwerte (Gregory-Experimentaldaten bzw.
+  NASA-TMR/CFL3D-Werte) fuer cl/cd bei Re=6 Mio. und 10 Grad Anstellwinkel
+  konnten in dieser Sitzung nicht abgerufen werden (die betreffende
+  NASA-TMR-Unterseite wurde umstrukturiert und leitet auf eine allgemeine
+  Seite um). Der Vergleich mit einer belastbaren Referenzzahl steht noch
+  aus.
 
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 

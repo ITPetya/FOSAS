@@ -136,3 +136,35 @@ Projektinhaber abgelehnt).
 Konsequenzen: Auch der fruehe, unfertige Planungsstand ist von Anfang an
 oeffentlich sichtbar. Das ist eine bewusste Entscheidung des
 Projektinhabers, kein Versehen.
+
+## ADR-0007: 3D-Grenzschichtvernetzung fuer Koerper mit konstantem Querschnitt
+
+Kontext: Das Gmsh-Feld vom Typ `BoundaryLayer` unterstuetzt in der
+aktuellen Version keine flaechenbasierte 3D-Ansteuerung (`FacesList` oder
+`SurfacesList` existieren nicht, siehe RISKS.md R1), sondern nur
+kantenbasierte 2D-Ansteuerung (`CurvesList`). Der von Gmsh offiziell
+gezeigte generische 3D-Weg (`extrudeBoundaryLayer`) ist bisher nur per
+Python-API demonstriert, die in unserer Entwicklungssandbox nicht verfuegbar
+ist.
+
+Entscheidung: Fuer Koerper mit konstantem oder stueckweise konstantem
+Querschnitt entlang einer Achse (typisch fuer einen ungepfeilten,
+ungetaperten Fluegelabschnitt) wird die Grenzschicht in 2D am
+Querschnittsprofil erzeugt (`BoundaryLayer`-Feld mit `CurvesList`) und das
+Ergebnis anschliessend klassisch translatorisch entlang der Achse extrudiert
+(`Extrude {...} { Surface{s}; Layers{n}; }`), was automatisch Prismen
+erzeugt. Erfolgreich getestet an einem NACA-0012-Testfall, siehe RISKS.md
+R1.
+
+Alternativen: `extrudeBoundaryLayer` per Python-API (verworfen fuer den
+Moment, keine funktionierende Python-Umgebung verfuegbar). Isotropes Netz
+ohne echte Grenzschicht (verworfen, macht y+ und wandnahe Werte unbrauchbar).
+
+Konsequenzen: Dieser Ansatz ist auf Koerper mit (stueckweise) konstantem
+Querschnitt beschraenkt, keine allgemeine Loesung fuer beliebige
+STEP-Geometrie mit Verjuengung, Pfeilung oder Fluegelspitzen. Ausserdem
+wurde er bisher nur mit einer direkt in Gmsh aufgebauten Profilkurve
+getestet, nicht mit einer aus einer STEP-Datei importierten Kontur (siehe
+OPEN_QUESTIONS.md). Fuer allgemeinere Geometrie bleibt der
+`extrudeBoundaryLayer`-Weg oder eine Windows/x86_64-Umgebung mit
+Python-Bindings notwendig zu klaeren.
