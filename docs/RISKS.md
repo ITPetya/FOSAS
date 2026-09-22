@@ -13,43 +13,69 @@ sich ueberschneidende oder kollabierende Prismenschichten erzeugt.
 Verbreiteter Workaround: kleiner Radius/Halbkreis an der Hinterkante statt
 idealer Schaerfe.
 
-Beleg (eigener Test, nachtraeglich moeglich geworden, siehe R5-Update):
-Ein realer Testlauf wurde durchgefuehrt. Geometrie: NACA-0012-Profil,
-Sehnenlaenge 0,6 m, Spannweite 1,2 m, per build123d parametrisch erzeugt
-und als STEP exportiert (Hinterkante mathematisch exakt scharf, kein
-Radius). Vernetzung ueber Gmsh 4.15.2 (CLI, `.geo`-Skript mit OCC-Kernel,
-Boolean-Differenz Box minus Fluegel, unstrukturiertes tetraedrisches
-`BoundaryLayer`-Feld mit hwall_n = 0,3 mm, ratio = 1,25, thickness = 20 mm).
-Ergebnis: Vernetzung erfolgreich abgeschlossen, 351216 Knoten, 2135525
-Tetraeder, Gesamtlaufzeit rund 215 s auf 1 Kern dieser Sandbox. Nach
-Optimierung meldet Gmsh selbst "No ill-shaped tets in the mesh", schlechteste
-Elementqualitaet (Gmsh-eigenes Qualitaetsmass, nicht identisch mit SICN)
-0,0166, also klar positiv, keine invertierten oder entarteten Elemente. Ein
-kleiner Anteil der Elemente liegt in der niedrigen Qualitaetsklasse
-(560 von 2,14 Mio. Elementen, rund 0,03 Prozent, in der Klasse
-0,00 bis 0,10), was auf lokal schwierige Bereiche (vermutlich nahe der
-Hinterkante oder am Uebergang der Grenzschicht zum Aussenfeld) hindeutet,
-aber keinen Abbruch verursacht hat.
+Korrektur eines eigenen Fehlers (wichtig): In einem ersten Testlauf wurde
+faelschlich behauptet, dieses Risiko sei durch einen erfolgreichen
+3D-Grenzschichtnetz-Test an einer scharfen NACA-0012-Hinterkante teilweise
+entkraeftet worden. Das war falsch und wurde nur durch eine zweite,
+sorgfaeltigere Pruefung entdeckt. Tatsaechlich hatte das verwendete
+`.geo`-Skript beim Setzen des Feldes `Field[3].FacesList = {...}` einen
+Fehler produziert ("Unknown option 'FacesList' in field 3 of type
+'BoundaryLayer'"), der aber nicht das gesamte Skript abgebrochen hat,
+sondern nur als Fehlermeldung protokolliert wurde, waehrend die restliche
+Vernetzung ganz normal weiterlief. Diese Fehlermeldung stand mitten in
+mehreren hunderttausend Zeilen Fortschrittsausgabe des Delaunay-Verfeinerers
+und wurde beim ersten Mal uebersehen, weil nur die letzten Zeilen der
+Ausgabe (`tail`) gepruef wurden. Der tatsaechlich erzeugte, als Erfolg
+gemeldete Mesh mit 2,14 Mio. Elementen war also kein anisotropes
+Grenzschichtnetz, sondern ein gewoehnliches isotropes Tetraedernetz mit
+lokal feinerer Aufloesung nahe der Fluegeloberflaeche (ueber ein separates,
+gueltiges Distance/Threshold-Feld). Die eigentliche Frage (kollabieren
+Prismenschichten an der scharfen Hinterkante) wurde damit gar nicht
+getestet.
 
-Status: Teilweise entkraeftet durch eigenen Test. Die pessimistischste
-Lesart der Sekundaerquellen (Vernetzung bricht an scharfen Hinterkanten
-grundsaetzlich ab) hat sich fuer diesen konkreten Fall nicht bestaetigt.
-Offen bleibt: ob duennere/schaerfere Konfigurationen, andere hwall_n/ratio-
-Kombinationen oder komplexere 3D-Geometrien (z. B. Fluegelspitzen,
-Verjuengung) robust bleiben, und ob die y+-Zielwerte mit den hier gewaehlten
-Parametern tatsaechlich erreicht werden (noch nicht ausgewertet, da kein
-Loeserlauf in diesem Test enthalten war). Kein Vergleich mit den in den
-Sekundaerquellen beschriebenen Gmsh-Versionen/Konfigurationen durchgefuehrt,
-der Widerspruch zu den dortigen Berichten ist daher nicht vollstaendig
-aufgeloest, nur fuer diesen Testfall widerlegt.
+Ursache geklaert (Gesichert, Gmsh-Quellcode auf GitHub, Datei
+`src/mesh/Field.cpp`, Klasse BoundaryLayerField): Der Feldtyp
+`BoundaryLayer` registriert aktuell die Optionen `CurvesList`, `Size`,
+`SizesList`, `Ratio`, `SizeFar`, `Thickness`, `Quads`, `IntersectMetrics`,
+`AnisoMax`, `BetaLaw`, `Beta`, `NbLayers`, `ExcludedSurfacesList`, sowie als
+veraltete Aliase `EdgesList`, `FanNodesList`, `NodesList`, `hwall_n`,
+`hwall_n_nodes`, `ratio`, `hfar`, `thickness`, `ExcludedFaceList`. Weder
+`FacesList` noch `SurfacesList` sind darunter, auch nicht als veralteter
+Alias. Das Feld ist also curve-getrieben (2D-Kanten), nicht
+flaechen-getrieben. Der offizielle, im Gmsh-Beispielverzeichnis mitgelieferte
+Referenzfall fuer echte 3D-Grenzschichten an einem NACA-0012-Fluegel
+(`examples/api/naca_boundary_layer_3d.py`) nutzt konsequent einen anderen
+Mechanismus, `gmsh.model.geo.extrudeBoundaryLayer(...)`, eine geometrische
+CAD-Kernel-Extrusion, kein Feld. Dieser Mechanismus ist bisher nur ueber die
+Python-API demonstriert, eine funktionierende reine `.geo`-Skript-Fassung
+davon wurde in dieser Sitzung noch nicht erfolgreich nachgebaut, und die
+Python-Bindings von Gmsh sind in unserer aarch64-Sandbox nicht installierbar
+(siehe R5).
 
-Massnahme: In Phase 1 den vollstaendigen Weg (Netz zu SU2-Format, Loeserlauf,
-y+-Auswertung) mit diesem Testfall abschliessen. Zusaetzlich mindestens einen
-Fall mit deutlich duennerer Hinterkante relativ zur Grenzschichtdicke testen,
-bevor Robustheit als allgemein gesichert gilt. Automatische
-Mindestradius-Anwendung bleibt als Rueckfalloption vorgemerkt, falls sich in
-Phase 1 doch Faelle zeigen, die scheitern, mit Offenlegung im Bericht bei
-Anwendung.
+Status: Weiterhin offen, unveraendert gegenueber dem urspruenglichen,
+sekundaerquellenbasierten Stand. Es gibt keinen eigenen erfolgreichen Test
+einer echten 3D-Grenzschichtvernetzung an dieser Geometrie, weder
+bestaetigend noch widerlegend. Neu und fuer sich genommen bereits relevant:
+das Setzen einer 3D-Grenzschicht ueber die Gmsh-Kommandozeile/`.geo`-Skripte
+ist nicht trivial und die naheliegende, in mehreren aelteren Foreneintraegen
+und Tutorials beschriebene Syntax (`FacesList` am `BoundaryLayer`-Feld) ist
+in der aktuellen Version schlicht falsch/veraltet, ohne dass Gmsh dabei hart
+abbricht. Das ist selbst ein kleines Robustheits- und
+Fehlerbarkeit-Risiko der Werkzeugkette, unabhaengig von der
+Hinterkanten-Frage.
+
+Massnahme: Vor einer erneuten Erfolgsmeldung zu diesem Risiko entweder (a)
+den echten `extrudeBoundaryLayer`-Mechanismus per `.geo`-Skript
+nachvollziehen (Syntax noch zu klaeren, moeglicherweise ueber die
+`Extrude ... { Layers{...} }`-Konstruktion mit Grenzschicht-Modus, noch
+nicht verifiziert), oder (b) eine funktionierende gmsh-Python-Umgebung auf
+einer x86_64- oder Windows-Maschine nutzen, wo die offiziellen Python-Wheels
+verfuegbar sind, und das offizielle Beispiel `naca_boundary_layer_3d.py`
+direkt als Ausgangspunkt verwenden. Bis dahin gilt: jedes Meshing-Ergebnis
+wird erst nach Pruefung der VOLLSTAENDIGEN Log-Ausgabe (nicht nur der
+letzten Zeilen) auf das Wort "Error" hin als erfolgreich gewertet, das wird
+als feste Vorgehensregel fuer alle weiteren Gmsh-Tests in diesem Projekt
+uebernommen.
 
 ## R2: MS-MPI-Prozessbeendigung unter Windows Job Object nicht spezifisch belegt
 

@@ -11,12 +11,13 @@
   Validierungsfaelle aus Phase 2.
 - Genauer EULA-Wortlaut von MS-MPI und WebView2 (RISKS.md, R4): noch nicht
   aus den Installer-Paketen selbst gelesen.
-- Gmsh-Grenzschichtvernetzung an einer duennen Hinterkante wurde an einem
-  ersten realen NACA-0012-Testfall erfolgreich durchgefuehrt (RISKS.md,
-  R1), aber noch nicht mit einem vollstaendigen SU2-Loeserlauf (y+-Kontrolle
-  fehlt) und nicht mit anspruchsvolleren Geometrien (z. B. Fluegelspitze)
-  wiederholt. SU2-Laufzeiten wurden noch nicht systematisch gemessen, nur
-  ein einzelner Vernetzungslauf.
+- Gmsh-Grenzschichtvernetzung an einer duennen Hinterkante ist weiterhin
+  ungetestet (siehe RISKS.md, R1, dort auch die Korrektur eines eigenen
+  Fehlers: ein zunaechst als Erfolg gemeldeter Testlauf hat tatsaechlich gar
+  keine Grenzschicht erzeugt, nur ein isotropes Netz). Der richtige
+  Gmsh-Mechanismus fuer echte 3D-Grenzschichten (`extrudeBoundaryLayer`)
+  ist identifiziert, aber als reines `.geo`-Skript noch nicht funktionsfaehig
+  nachgebaut. SU2-Laufzeiten wurden noch nicht gemessen.
 
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 
