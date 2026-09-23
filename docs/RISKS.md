@@ -338,3 +338,19 @@ bevor 10 Grad versucht wird, (3) pruefen, ob eine kurze instationaere
 mit kontrolliertem y+ durchfuehren. Jedes cl/cd aus den bisherigen Laeufen
 dieser Sandbox bleibt ausdruecklich unbrauchbar als Ergebnis, nur als Beleg
 dass die Werkzeugkette technisch funktioniert.
+
+Update (Gesichert, per neu geschriebenem und getestetem
+`fosas_core.boundary_layer`, siehe core/tests/test_boundary_layer.py):
+Hypothese (a) ist bestaetigt. Die flache-Platte-Abschaetzung fuer y+=1 bei
+unseren Testbedingungen (Re=6e6, Sehnenlaenge 0,6 m) ergibt eine noetige
+erste Zellhoehe von rund 2,67 Mikrometern (0,00000267 m). Im Spike-Testfall
+wurde eine erste Zellhoehe von 0,3 mm verwendet, also mehr als das
+50-fache des noetigen Werts, das entspricht schaetzungsweise einem
+tatsaechlichen y+ von grob 50 bis 100 statt der fuer Spalart-Allmaras ohne
+Wandfunktion vorausgesetzten Groessenordnung von 1. Das ist eine sehr
+plausible Erklaerung fuer das beobachtete Nicht-Konvergieren: die
+Turbulenzmodellierung nahe der Wand war mit dieser Netzaufloesung schlicht
+nicht zulaessig eingesetzt. Naechster konkreter Schritt fuer Phase 1: die
+Gmsh-Grenzschichtparameter (`Size` am BoundaryLayer-Feld) aus
+`fosas_core.boundary_layer.first_cell_height` ableiten statt aus einem
+geratenen Wert, und den Testfall damit wiederholen.

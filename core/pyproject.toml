@@ -1,0 +1,23 @@
+[project]
+name = "fosas-core"
+version = "0.0.1"
+description = "FOSAS core library: geometry, meshing and solver orchestration, no UI dependencies"
+requires-python = ">=3.11"
+dependencies = [
+    "build123d>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
