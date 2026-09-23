@@ -8,9 +8,15 @@ Bisher enthalten:
   Ersteinschaetzung der ersten Zellhoehe fuer die Grenzschichtvernetzung.
 - `fosas_core.geometry`: STEP-Import und Wasserdichtheitspruefung ueber
   build123d, siehe ADR-0003 in `../docs/DECISIONS.md`.
+- `fosas_core.meshing`: Gmsh-Adapter (ausschliesslich externer Prozess,
+  siehe ADR-0002) fuer Koerper mit konstantem Querschnitt, mit echter
+  Grenzschicht (2D-Kurve plus Extrusion, siehe ADR-0007). Nutzt
+  `boundary_layer` fuer die erste Zellhoehe statt eines geratenen Werts.
 
-Noch nicht enthalten: Netzerzeugung (Gmsh-Adapter), Loeseraufruf
-(SU2-Adapter), Cache, Bericht.
+Noch nicht enthalten: Loeseraufruf (SU2-Adapter), Cache, Bericht. Offen:
+ob `meshing` auch mit einer aus einer STEP-Datei importierten Kontur
+funktioniert, bisher nur mit direkt uebergebenen Profilpunkten getestet
+(siehe `../docs/OPEN_QUESTIONS.md`).
 
 ## Einrichtung
 
@@ -29,6 +35,8 @@ Zusatzabhaengigkeiten.
 ## Tests
 
 ```
-pytest tests/
+export FOSAS_GMSH_EXECUTABLE=/pfad/zu/gmsh   # falls gmsh nicht im PATH liegt
+pytest tests/                # alle Tests, inklusive langsamer Gmsh-Laeufe
+pytest tests/ -m "not slow"  # nur die schnellen, ohne externe Prozesse
 ```
 

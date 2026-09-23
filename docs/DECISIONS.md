@@ -164,6 +164,16 @@ Alternativen: `extrudeBoundaryLayer` per Python-API (verworfen fuer den
 Moment, keine funktionierende Python-Umgebung verfuegbar). Isotropes Netz
 ohne echte Grenzschicht (verworfen, macht y+ und wandnahe Werte unbrauchbar).
 
+Update, in Code gegossen: Als `fosas_core.meshing.generate_constant_section_geo`
+plus `run_gmsh` implementiert und mit einem echten Gmsh-Lauf getestet
+(core/tests/test_meshing.py). Eine Erkenntnis aus der Implementierung: ein
+einzelner, in sich geschlossener Spline (erster Punkt gleich letzter
+Punkt) scheiterte mit "Could not create spline", zwei Splines die sich an
+gemeinsamen Endpunkten treffen (wie im urspruenglichen Testfall) funktionieren
+zuverlaessig. Die erste Zellhoehe kommt jetzt aus
+`fosas_core.boundary_layer.first_cell_height` (y+-basiert) statt aus einem
+geratenen Wert.
+
 Konsequenzen: Dieser Ansatz ist auf Koerper mit (stueckweise) konstantem
 Querschnitt beschraenkt, keine allgemeine Loesung fuer beliebige
 STEP-Geometrie mit Verjuengung, Pfeilung oder Fluegelspitzen. Ausserdem

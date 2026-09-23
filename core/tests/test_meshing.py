@@ -1,0 +1,139 @@
+from pathlib import Path
+
+import pytest
+
+from fosas_core.meshing import (
+    BoundaryLayerMeshParams,
+    ConstantSectionMeshParams,
+    MeshingError,
+    generate_constant_section_geo,
+    run_gmsh,
+)
+
+from .airfoils import naca4_points
+
+
+def _naca0012_mesh_params(span_layers=16, n_points=30):
+    return ConstantSectionMeshParams(
+        profile_points_xz=naca4_points(chord=0.6, n=n_points),
+        span=1.2,
+        chord=0.6,
+        boundary_layer=BoundaryLayerMeshParams(
+            first_cell_height=2.7e-6, growth_ratio=1.25, thickness=0.02
+        ),
+        span_layers=span_layers,
+    )
+
+
+def test_boundary_layer_params_reject_bad_ordering():
+    with pytest.raises(ValueError, match="growth_ratio"):
+        BoundaryLayerMeshParams(first_cell_height=1e-5, growth_ratio=0.9, thickness=0.01)
+    with pytest.raises(ValueError, match="thickness"):
+        BoundaryLayerMeshParams(first_cell_height=0.01, growth_ratio=1.2, thickness=0.005)
+
+
+def test_mesh_params_reject_too_few_profile_points():
+    with pytest.raises(ValueError, match="profile_points_xz"):
+        ConstantSectionMeshParams(
+            profile_points_xz=((0, 0), (1, 0)),
+            span=1.0,
+            chord=1.0,
+            boundary_layer=BoundaryLayerMeshParams(1e-5, 1.2, 0.01),
+        )
+
+
+def test_generate_constant_section_geo_contains_expected_building_blocks():
+    geo = generate_constant_section_geo(_naca0012_mesh_params(), Path("/tmp/unused.su2"))
+    assert "BoundaryLayer" in geo
+    assert "CurvesList" in geo
+    assert "FacesList" not in geo  # the known-invalid option, see RISKS.md R1
+    assert "Extrude" in geo
+    assert 'Physical Surface("airfoil")' in geo
+    assert 'Physical Surface("farfield")' in geo
+    assert 'Physical Volume("fluid")' in geo
+
+
+def test_run_gmsh_catches_error_even_when_process_exits_zero(tmp_path, gmsh_executable):
+    # Regression test for the exact mistake made during the Phase 0/1
+    # spikes (see docs/RISKS.md R1): Gmsh logs "Unknown option 'FacesList'"
+    # for the BoundaryLayer field but keeps running and exits 0 anyway.
+    broken_geo = """SetFactory("OpenCASCADE");
+Box(1) = {0,0,0,1,1,1};
+Field[1] = BoundaryLayer;
+Field[1].FacesList = {1};
+Mesh 3;
+"""
+    output = tmp_path / "broken.su2"
+    with pytest.raises(MeshingError, match="Unknown option"):
+        run_gmsh(broken_geo, output, gmsh_executable=gmsh_executable)
+
+
+def test_run_gmsh_rejects_missing_executable(tmp_path):
+    with pytest.raises(MeshingError, match="not found"):
+        run_gmsh("SetFactory(\"OpenCASCADE\");", tmp_path / "x.su2", gmsh_executable="not-a-real-gmsh-binary")
+
+
+@pytest.mark.slow
+def test_constant_section_mesh_produces_real_boundary_layer(tmp_path, gmsh_executable):
+    """End-to-end: generate a NACA0012 constant-section mesh and verify
+    the near-wall nodes actually form a graded layer, not an isotropic
+    mesh, the same check used manually during the Phase 1 spike.
+    """
+    params = _naca0012_mesh_params()
+    output = tmp_path / "naca0012.su2"
+    geo = generate_constant_section_geo(params, output)
+    info = run_gmsh(geo, output, gmsh_executable=gmsh_executable, timeout=180)
+
+    assert info.element_count > 0
+    assert set(info.markers) == {"airfoil", "farfield"}
+
+    offsets = _near_wall_offsets_at_mid_chord(output, chord=params.chord, span=params.span)
+    assert len(offsets) >= 3
+    # graded, increasing spacing, not a uniform/isotropic mesh
+    assert offsets[0] < offsets[1] < offsets[2]
+    assert offsets[0] < 5e-5  # first layer should be close to the ~2.7e-6 m target
+
+
+def _near_wall_offsets_at_mid_chord(su2_path: Path, chord: float, span: float, n: int = 60) -> list[float]:
+    xi = 0.5
+    surf_z = _naca0012_half_thickness(xi, chord)
+    x_target = xi * chord
+    y_mid = span / 2
+
+    npoin = 0
+    points = []
+    with open(su2_path) as f:
+        for line in f:
+            if line.startswith("NPOIN="):
+                npoin = int(line.split("=")[1])
+                continue
+            if npoin and len(points) < npoin:
+                parts = line.split()
+                if len(parts) >= 3:
+                    points.append((float(parts[0]), float(parts[1]), float(parts[2])))
+
+    candidates = [
+        surf_z - z
+        for x, y, z in points
+        if abs(x - x_target) < 0.01 * chord
+        and abs(y - y_mid) < 0.05 * span
+        and surf_z - 0.02 * chord < z <= surf_z + 1e-6
+    ]
+    return sorted(candidates)
+
+
+def _naca0012_half_thickness(xi: float, chord: float, thickness: float = 0.12) -> float:
+    import math
+
+    return (
+        5
+        * thickness
+        * (
+            0.2969 * math.sqrt(xi)
+            - 0.1260 * xi
+            - 0.3516 * xi**2
+            + 0.2843 * xi**3
+            - 0.1015 * xi**4
+        )
+        * chord
+    )
