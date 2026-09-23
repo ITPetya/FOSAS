@@ -297,8 +297,44 @@ implizite RANS-Loesung nennenswerten Arbeitsspeicher braucht und explizite
 Verfahren als Rueckfalloption deutlich mehr Iterationen bis zur Konvergenz
 brauchen als in einer kurzen Testsitzung praktikabel sind.
 
-Massnahme: Fuer Phase 1 auf ausreichend RAM und nach Moeglichkeit
-Mehrkern-MPI-Parallelisierung testen (in diesem Lauf nicht genutzt, nur 1
-Prozess), um implizite Konvergenz in praktikabler Zeit zu erreichen. Bis
-dahin gilt jedes cl/cd-Ergebnis aus dieser Sandbox als nicht konvergiert
-und nicht als Referenzwert verwendbar.
+Update, mit MPI (3 Prozesse) und implizitem Verfahren fortgesetzt (Gesichert,
+eigener Test): Mit 3 statt 1 MPI-Rang blieb der Speicherverbrauch bei
+implizitem Verfahren stabil (rund 3 GB), kein OOM mehr. Ueber insgesamt
+rund 3200 Iterationen (Neustart aus dem expliziten Lauf, dann zwei weitere
+Fortsetzungen) zeigte sich folgendes Muster: Nach dem Umschalten auf
+implizit mit hoeherer CFL-Zahl zunaechst eine stark gedaempfte Schwingung
+von CL und CD um Werte nahe der Referenz (CL-Ausschlaege 0,5 bis 1,03 in
+den ersten rund 600 Iterationen), die sich bis etwa Iteration 800 auf ein
+recheinerisch ruhiges Niveau (CL um 0,88, CD um 0,11) einzupendeln schien.
+Ab dort jedoch, ueber die naechsten rund 2400 Iterationen, eine langsame,
+gleichmaessige Drift weiter WEG von der Referenz statt einer weiteren
+Annaeherung (CL sinkt von 0,88 auf 0,65, CD steigt leicht von 0,11 auf
+0,13), waehrend der Restfehler (rms[P]) durchgehend flach bei etwa -4,3
+bis -4,5 verharrt, also weder weiter faellt noch der Vollkonvergenz (-8)
+naeherkommt.
+
+Status: Weiterhin offen, jetzt praeziser eingegrenzt. Das ist kein Fall
+von "braucht nur mehr Zeit", da der Restfehler nicht mehr sinkt, waehrend
+sich die Loesung selbst weiter aendert, das ist untypisch fuer eine
+schlicht langsame Konvergenz. Plausible Erklaerungen (nicht geprueft,
+Vermutung): (a) das Netz ist fuer eine belastbare Loesung bei diesem
+Anstellwinkel schlicht ungeeignet (kein kontrolliertes y+, willkuerlich
+gewaehlte erste Zellhoehe von 0,3 mm ohne Bezug zur tatsaechlichen
+Reynolds-Zahl), (b) die Fernfeldgrenze oder Aufloesung ausserhalb der
+Grenzschicht ist zu grob und beeinflusst die Loesung schleichend, (c) bei
+10 Grad Anstellwinkel liegt fuer dieses Netz eine schwache, echte
+Instationaritaet vor (z. B. eine langsam wandernde Ablöseblase), die ein
+stationaerer Loeser nicht sauber abbilden kann. Keine dieser Erklaerungen
+ist durch einen eigenen Test bestaetigt.
+
+Massnahme: Nicht weiter blind Iterationen anhaengen, das hat sich als
+wenig zielfuehrend erwiesen. Fuer Phase 1/2 stattdessen: (1) y+ aus der
+tatsaechlichen Reynolds-Zahl berechnen und die erste Zellhoehe entsprechend
+setzen statt eines geratenen Werts, (2) denselben Fall bei 0 Grad
+Anstellwinkel (einfacherer, symmetrischer Fall) zuerst zum Laufen bringen,
+bevor 10 Grad versucht wird, (3) pruefen, ob eine kurze instationaere
+(URANS) Rechnung eine echte, physikalisch reale Instationaritaet aufdeckt,
+(4) erst mit ausreichend Rechenleistung (siehe R3) eine echte Netzstudie
+mit kontrolliertem y+ durchfuehren. Jedes cl/cd aus den bisherigen Laeufen
+dieser Sandbox bleibt ausdruecklich unbrauchbar als Ergebnis, nur als Beleg
+dass die Werkzeugkette technisch funktioniert.
