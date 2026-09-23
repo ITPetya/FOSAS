@@ -152,9 +152,13 @@ Querschnitt entlang einer Achse (typisch fuer einen ungepfeilten,
 ungetaperten Fluegelabschnitt) wird die Grenzschicht in 2D am
 Querschnittsprofil erzeugt (`BoundaryLayer`-Feld mit `CurvesList`) und das
 Ergebnis anschliessend klassisch translatorisch entlang der Achse extrudiert
-(`Extrude {...} { Surface{s}; Layers{n}; }`), was automatisch Prismen
-erzeugt. Erfolgreich getestet an einem NACA-0012-Testfall, siehe RISKS.md
-R1.
+(`Extrude {...} { Surface{s}; Layers{n}; }`). Die resultierende `.su2`-Datei
+enthaelt allerdings, per eigener Pruefung der Rohdaten, durchgehend
+Tetraeder (Elementtypcode 10), keine Prismen wie urspruenglich angenommen,
+Gmsh zerlegt die Extrusionsschicht offenbar automatisch. Die Anisotropie
+der Grenzschicht bleibt davon unberuehrt, da sie an den Knotenpositionen
+haengt, nicht am Elementtyp. Erfolgreich getestet an einem
+NACA-0012-Testfall, siehe RISKS.md R1.
 
 Alternativen: `extrudeBoundaryLayer` per Python-API (verworfen fuer den
 Moment, keine funktionierende Python-Umgebung verfuegbar). Isotropes Netz

@@ -25,12 +25,13 @@
   Implizites Zeitschema fuehrte in dieser Sandbox zu einem
   Speicherueberlauf, explizites Schema ist stabil aber sehr langsam. Ein
   konvergiertes cl/cd fuer den NACA-0012-Testfall steht noch aus.
-- Digitalisierte Referenzwerte (Gregory-Experimentaldaten bzw.
-  NASA-TMR/CFL3D-Werte) fuer cl/cd bei Re=6 Mio. und 10 Grad Anstellwinkel
-  konnten in dieser Sitzung nicht abgerufen werden (die betreffende
-  NASA-TMR-Unterseite wurde umstrukturiert und leitet auf eine allgemeine
-  Seite um). Der Vergleich mit einer belastbaren Referenzzahl steht noch
-  aus.
+- Referenzwerte fuer cl/cd bei Re=6 Mio., Mach 0,15, 10 Grad Anstellwinkel
+  wurden gefunden (die NASA-TMR-Seite ist umgezogen nach
+  tmbwg.github.io/turbmodels, siehe ARCHITECTURE.md fuer die Zahlen aus
+  FUN3D/TAU/CFL3D). Offen bleibt: ein eigener, konvergierter Lauf mit
+  vergleichbarer Netzqualitaet (y+ < 1, Feingitter), um den Vergleich
+  tatsaechlich durchzufuehren, sowie der Abruf der experimentellen
+  Gregory-Daten als zusaetzlicher, unabhaengiger Referenzpunkt.
 
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 

@@ -86,7 +86,11 @@ Das ergab ein sauberes 2D-Netz mit 8447 Knoten, 16782 Elementen, ohne
 Fehler im vollstaendigen Log. Zweitens wird dieses 2D-Netz klassisch
 translatorisch entlang der Spannweite extrudiert (`Extrude {0,span,0}
 { Surface{s}; Layers{n}; }`), was aus den 2D-Dreieckselementen automatisch
-3D-Prismenelemente macht und die Grenzschichtstruktur mitnimmt. Ergebnis:
+3D-Elemente macht (per eigener Nachpruefung ueber die Rohdaten der
+`.su2`-Datei tatsaechlich Tetraeder, Elementtypcode 10, nicht Prismen wie
+zunaechst angenommen, vermutlich zerlegt Gmsh die Extrusions-Prismen
+automatisch; die Knotenpositionen und damit die Anisotropie der Schichten
+bleiben davon unberuehrt) und die Grenzschichtstruktur mitnimmt. Ergebnis:
 208343 Knoten, 1225358 Elemente, Vernetzungszeit nur rund 27 s (deutlich
 schneller als der fruehere, fehlerhafte isotrope Tetraeder-Ansatz). Die
 Randflaechen wurden erneut per Bounding-Box-Heuristik klassifiziert (2

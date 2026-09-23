@@ -93,6 +93,37 @@ Bereich nach dem Stall wird automatisch als unsicher gekennzeichnet.
 Ergebnis: "vertrauenswuerdig" oder "eingeschraenkt aussagekraeftig", mit
 Begruendung, nie eine unbegruendete Einzelzahl.
 
+## Referenzdaten fuer den NACA-0012-Validierungsfall
+
+Gesichert (NASA Turbulence Modeling Resource, umgezogen von
+turbmodels.larc.nasa.gov nach https://tmbwg.github.io/turbmodels/,
+Unterseite naca0012numerics_val_sa_withoutpv.html, Stand Abruf 2026-09-23):
+Fuer den Testfall Mach 0,15, Reynolds 6 Millionen, Anstellwinkel 10 Grad,
+Spalart-Allmaras, ohne Point-Vortex-Korrektur, liefern netzunabhaengig
+extrapolierte Werte aus drei unabhaengigen, etablierten CFD-Codes:
+
+| Code | CL | CD |
+|------|----|----|
+| FUN3D | 1,09102722 | 0,0122724643 |
+| TAU | 1,09104043 | 0,0122725244 |
+| CFL3D (2. Ordnung) | 1,09090004 | 0,0122702792 |
+
+Quellen mit Rohdaten (nicht selbst heruntergeladen, nur Seiteninhalt
+geprueft): fun3d_results_sa_nopv_withN.dat, cfl3d_results_sa_nopv_withN.dat,
+tau_results_sa_nopv_withN.dat unter demselben Verzeichnis, sowie gepackte
+Archive unter nasa.gov/wp-content/uploads. Bezug zu Experimentaldaten
+(Gregory) wird auf der Seite erwaehnt, aber in dieser Sitzung nicht mit
+Zahlenwert abgerufen.
+
+Wichtig fuer die Einordnung eigener Ergebnisse: Diese Werte stammen aus
+extrapolierten Feingitter-Rechnungen mit strukturierten C-Netzen (897x257
+Knoten laut fruehrerem Spike-Fund) und y+ deutlich unter 1. Unser aktueller
+Testfall (siehe RISKS.md, R1/R10) nutzt ein deutlich groeberes, nicht
+y+-kontrolliertes Netz und ist zudem noch nicht konvergiert. Ein direkter
+Zahlenvergleich mit dem aktuellen Testlauf ist daher nicht aussagekraeftig
+und wird erst mit einem netzstudien-faehigen, konvergierten Lauf in Phase 2
+sinnvoll.
+
 ## Version 1, Kernumfang nach Spike-Auswertung
 
 Bestaetigt fuer V1: Einzelzustand- und Polarenrechnung fuer beliebige
