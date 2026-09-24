@@ -354,3 +354,38 @@ nicht zulaessig eingesetzt. Naechster konkreter Schritt fuer Phase 1: die
 Gmsh-Grenzschichtparameter (`Size` am BoundaryLayer-Feld) aus
 `fosas_core.boundary_layer.first_cell_height` ableiten statt aus einem
 geratenen Wert, und den Testfall damit wiederholen.
+
+## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
+
+Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
+`Test_Spoiler.step`, STEP-Datei von Open CASCADE 7.7 erzeugt, automotive
+design schema): Der Import ergibt 182 einzelne, nicht verbundene
+Flaechen-Patches (182 Shells mit je 1 Face), null Solids, nicht
+mannigfaltig. Groessenordnung passt zu einem realen Heckspoiler
+(Bounding Box ca. 1521 x 331 x 217 mm, vermutlich mm als Einheit).
+Sewing-Reparatur (siehe ADR-0008) verbindet bei Toleranzen zwischen 0,05
+und 0,7 mm alle 182 Flaechen zu einer einzigen zusammenhaengenden Schale,
+aber es bleiben durchgehend 6 bis 8 offene Kanten uebrig, unabhaengig von
+der genauen Toleranz. Vier der offenen Kanten sind auffaellig lang (rund
+1490 bis 1516 mm, nahe der vollen Spannweite) und liegen alle nahe x=0,
+bei unterschiedlichen z-Hoehen (rund 15,5 mm, 24,3 mm doppelt, 45,5 mm),
+zwei davon fast deckungsgleich (Abstand unter 0,01 mm). Das deutet auf
+eine unvollstaendig vernaehte Vorder- oder Hinterkante ueber die gesamte
+Spannweite hin, plus moeglicherweise eine doppelt vorhandene, leicht
+versetzte Flaeche an einer Stelle. Die uebrigen 2 bis 4 offenen Kanten
+liegen nahe den beiden Enden (x nahe -750 bzw. +750), passend zu den
+Endplatten/Randbereichen eines Fluegelprofils.
+
+Status: Bestaetigt. Kein Fehler in FOSAS, sondern eine echte Luecke im
+Quellmodell, die automatische Reparatur nicht schliessen kann und auch
+nicht schliessen sollte (Projektregel: keine erfundene Geometrie).
+
+Massnahme: Keine, dies ist der erwartete, korrekte Ablehnungsfall.
+Wichtig als Validierung: Der Geometrie-Import-Code (`fosas_core.geometry`)
+verhaelt sich bei einer echten, "unordentlichen" Kundendatei genau wie
+vorgesehen, mit einer nuetzlichen, lokalisierten Fehlermeldung statt eines
+Absturzes oder einer stillen Fehlinterpretation. Getestete Vernetzung
+(`fosas_core.meshing`) mit dieser Datei ist erst moeglich, wenn entweder
+die Quelldatei repariert wird oder eine andere Testdatei vorliegt, das ist
+weiterhin offen (siehe OPEN_QUESTIONS.md, STEP-importierte Kontur fuer
+die Grenzschichtvernetzung).

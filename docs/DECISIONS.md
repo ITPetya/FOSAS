@@ -182,3 +182,40 @@ getestet, nicht mit einer aus einer STEP-Datei importierten Kontur (siehe
 OPEN_QUESTIONS.md). Fuer allgemeinere Geometrie bleibt der
 `extrudeBoundaryLayer`-Weg oder eine Windows/x86_64-Umgebung mit
 Python-Bindings notwendig zu klaeren.
+
+## ADR-0008: Optionale, offengelegte Sewing-Reparatur beim STEP-Import
+
+Kontext: Ein vom Projektinhaber bereitgestelltes reales STEP-Modell (ein
+Auto-Heckspoiler, `Test_Spoiler.step`) enthaelt 182 einzelne, nicht
+verbundene Flaechen-Patches und null Solids, ein sehr realistischer Fall
+fuer echte CAD-Exporte, der von der bisherigen strikten Ablehnung
+("kein Solid, keine Reparatur") korrekt, aber wenig hilfreich behandelt
+wurde. Ein Test mit `BRepBuilderAPI_Sewing` (verschiedene Toleranzen von
+0,05 bis 0,7 mm) zeigt: Vernetzung nur unverbundener, aber eigentlich
+passender Kanten ist damit grundsaetzlich moeglich und in unserem Testfall
+teilweise erfolgreich (182 Flaechen zu einer einzigen zusammenhaengenden
+Schale verbunden), aber bei diesem konkreten Modell bleiben bei jeder
+getesteten Toleranz 6 bis 8 Kanten offen, das ist eine echte Luecke im
+Quellmodell, kein reines Verbindungsproblem.
+
+Entscheidung: `fosas_core.geometry.import_step` bekommt einen optionalen
+Parameter `sewing_tolerance`. Ohne ihn bleibt das Verhalten unveraendert
+strikt (keine Reparatur). Wird er gesetzt, wird bei nicht-solidem Import
+automatisch genaeht, aber nur akzeptiert, wenn das Ergebnis danach
+tatsaechlich ein einzelnes, geschlossenes, mannigfaltiges Solid mit
+positivem Volumen ist. Der Reparaturversuch wird immer im Rueckgabewert
+offengelegt (`ImportedGeometry.repair_report`, mit Toleranz,
+Eingangsflaechenzahl und ob es geklappt hat). Schlaegt die Reparatur fehl,
+enthaelt die Fehlermeldung die Anzahl und ungefaehre Position der noch
+offenen Kanten, damit im Quell-CAD-System gezielt nachgebessert werden
+kann, statt nur "nicht wasserdicht" zu melden.
+
+Alternativen: Automatische Reparatur immer versuchen, ohne expliziten
+Parameter (verworfen, das waere ein stiller Fallback, der Ergebnisse
+veraendert, siehe Projektregel in CLAUDE.md). Gar keine Reparaturoption
+anbieten (verworfen, unnoetig unfreundlich fuer den haeufigen Fall
+einer nur unverbundenen, aber sonst passenden Flaechensammlung).
+
+Konsequenzen: Die konkrete Testdatei `Test_Spoiler.step` bleibt weiterhin
+abgelehnt (siehe RISKS.md), das ist korrekt so, keine Fehlfunktion. Die
+Fehlermeldung nennt jetzt aber, wo im Modell nachgebessert werden muesste.
