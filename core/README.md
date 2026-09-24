@@ -13,10 +13,11 @@ Bisher enthalten:
   Grenzschicht (2D-Kurve plus Extrusion, siehe ADR-0007). Nutzt
   `boundary_layer` fuer die erste Zellhoehe statt eines geratenen Werts.
 
-Noch nicht enthalten: Loeseraufruf (SU2-Adapter), Cache, Bericht. Offen:
-ob `meshing` auch mit einer aus einer STEP-Datei importierten Kontur
-funktioniert, bisher nur mit direkt uebergebenen Profilpunkten getestet
-(siehe `../docs/OPEN_QUESTIONS.md`).
+Noch nicht enthalten: Loeseraufruf (SU2-Adapter), Cache, Bericht.
+`meshing` funktioniert nachweislich sowohl mit direkt uebergebenen
+Profilpunkten als auch mit einer aus einer STEP-Datei importierten
+Kontur, aber nur fuer Koerper mit konstantem Querschnitt (siehe
+`../docs/ARCHITECTURE.md`, `../docs/OPEN_QUESTIONS.md`).
 
 ## Einrichtung
 

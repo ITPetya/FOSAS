@@ -15,11 +15,14 @@
   Fall eines Koerpers mit konstantem Querschnitt geloest (2D
   `CurvesList`-Feld plus translatorische Extrusion, siehe ADR-0007,
   RISKS.md R1), nachdem ein erster, faelschlich als erfolgreich gemeldeter
-  Versuch korrigiert werden musste. Offen bleibt: ob sich das auf eine aus
-  einer echten STEP-Datei importierte Kontur uebertragen laesst (der Test
-  hat die Kontur direkt in Gmsh neu aufgebaut, nicht die STEP-Datei
-  verwendet), und ob Koerper mit Verjuengung/Pfeilung/Fluegelspitzen einen
-  anderen Ansatz brauchen.
+  Versuch korrigiert werden musste. Die Frage, ob das auch mit einer aus
+  einer STEP-Datei importierten Kontur funktioniert (statt einer direkt in
+  Gmsh aufgebauten), ist jetzt beantwortet: ja, per eigenem Test bestaetigt
+  (`fosas_core.meshing.generate_constant_section_geo_from_step_profile`,
+  `core/tests/test_meshing.py::test_step_imported_profile_produces_real_boundary_layer`),
+  echte abgestufte Wandzellen auch bei importierter Kontur. Weiterhin
+  offen: ob Koerper mit Verjuengung/Pfeilung/Fluegelspitzen (kein
+  konstanter Querschnitt) einen anderen Ansatz brauchen.
 - Ein erster SU2-Loeserlauf mit korrekter Koordinatenkonvention und echter
   Grenzschicht lief, aber nicht bis zur Konvergenz (siehe RISKS.md, R10).
   Implizites Zeitschema fuehrte in dieser Sandbox zu einem

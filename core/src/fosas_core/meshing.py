@@ -7,10 +7,13 @@ a generated .geo script and the resulting .su2 mesh file on disk.
 
 The meshing technique implemented here (2D profile with a boundary layer,
 then translational extrusion along the span) only applies to bodies with
-a constant cross-section along one axis, see ADR-0007. It is validated
-against a profile built directly in this module; whether it also works
-for a profile imported from an arbitrary STEP file is still open, see
-docs/OPEN_QUESTIONS.md.
+a constant cross-section along one axis, see ADR-0007. It works both with
+a profile authored directly as Gmsh commands
+(generate_constant_section_geo) and with one imported from a STEP file
+via Gmsh's own OCC import (generate_constant_section_geo_from_step_profile),
+both confirmed by end-to-end tests with real graded near-wall spacing.
+Still open: bodies without a constant cross-section (taper, sweep, wing
+tips), see docs/OPEN_QUESTIONS.md.
 
 Every run's full output log is scanned for the literal string "Error"
 before the result is considered successful. Gmsh has been observed to
@@ -81,11 +84,9 @@ class MeshInfo:
 
 
 def generate_constant_section_geo(params: ConstantSectionMeshParams, output_su2_path: Path) -> str:
-    """Build the .geo script text for a constant-cross-section body."""
-    chord = params.chord
-    span = params.span
-    bl = params.boundary_layer
-
+    """Build the .geo script text for a constant-cross-section body,
+    with the profile authored directly as Gmsh Point/Spline commands.
+    """
     pts = list(params.profile_points_xz)
     if pts[0] == pts[-1]:
         pts = pts[:-1]  # de-duplicate; the loop is closed explicitly below
@@ -95,8 +96,6 @@ def generate_constant_section_geo(params: ConstantSectionMeshParams, output_su2_
     # own start point failed in testing ("Could not create spline"). Split
     # the profile into two arcs at roughly the halfway point instead.
     mid = len(pts) // 2
-    arc1 = pts[: mid + 1]
-    arc2 = pts[mid:] + [pts[0]]
 
     point_lines = []
     point_ids = []
@@ -107,17 +106,90 @@ def generate_constant_section_geo(params: ConstantSectionMeshParams, output_su2_
     arc1_ids = point_ids[: mid + 1]
     arc2_ids = point_ids[mid:] + [point_ids[0]]
 
-    margin_up = params.farfield_factor_upstream * chord
-    margin_down = params.farfield_factor_downstream * chord
-    margin_side = params.farfield_factor_side * chord
-    size_min = params.background_size_min_factor * chord
-    size_max = params.background_size_max_factor * chord
+    profile_setup = (
+        "\n".join(point_lines)
+        + f"\nprofile_arc1 = newl; Spline(profile_arc1) = {{{', '.join(arc1_ids)}}};"
+        + f"\nprofile_arc2 = newl; Spline(profile_arc2) = {{{', '.join(arc2_ids)}}};"
+    )
+    return _constant_section_geo_body(
+        profile_setup=profile_setup,
+        profile_curves_expr="profile_arc1, profile_arc2",
+        chord=params.chord,
+        span=params.span,
+        bl=params.boundary_layer,
+        span_layers=params.span_layers,
+        farfield_factor_upstream=params.farfield_factor_upstream,
+        farfield_factor_downstream=params.farfield_factor_downstream,
+        farfield_factor_side=params.farfield_factor_side,
+        background_size_min_factor=params.background_size_min_factor,
+        background_size_max_factor=params.background_size_max_factor,
+        output_su2_path=output_su2_path,
+    )
+
+
+def generate_constant_section_geo_from_step_profile(
+    profile_step_path: str | Path,
+    chord: float,
+    span: float,
+    boundary_layer: BoundaryLayerMeshParams,
+    output_su2_path: Path,
+    span_layers: int = 24,
+    farfield_factor_upstream: float = 5.0,
+    farfield_factor_downstream: float = 10.0,
+    farfield_factor_side: float = 6.0,
+    background_size_min_factor: float = 0.01,
+    background_size_max_factor: float = 0.5,
+) -> str:
+    """Same as generate_constant_section_geo, but the profile curve is
+    imported from a STEP file (via Gmsh's own OCC import) instead of
+    being authored as Python-side points. This is the technique that was
+    still untested as of ADR-0007; see docs/OPEN_QUESTIONS.md.
+
+    The STEP file must contain only the profile curve(s) in the X-Z
+    plane (X chordwise, Z vertical), nothing else, since all curves
+    present immediately after the Merge are taken to be the profile.
+    """
+    profile_setup = f'Merge "{profile_step_path}";\nprofileCurves() = Curve{{:}};'
+    return _constant_section_geo_body(
+        profile_setup=profile_setup,
+        profile_curves_expr="profileCurves()",
+        chord=chord,
+        span=span,
+        bl=boundary_layer,
+        span_layers=span_layers,
+        farfield_factor_upstream=farfield_factor_upstream,
+        farfield_factor_downstream=farfield_factor_downstream,
+        farfield_factor_side=farfield_factor_side,
+        background_size_min_factor=background_size_min_factor,
+        background_size_max_factor=background_size_max_factor,
+        output_su2_path=output_su2_path,
+    )
+
+
+def _constant_section_geo_body(
+    *,
+    profile_setup: str,
+    profile_curves_expr: str,
+    chord: float,
+    span: float,
+    bl: BoundaryLayerMeshParams,
+    span_layers: int,
+    farfield_factor_upstream: float,
+    farfield_factor_downstream: float,
+    farfield_factor_side: float,
+    background_size_min_factor: float,
+    background_size_max_factor: float,
+    output_su2_path: Path,
+) -> str:
+    margin_up = farfield_factor_upstream * chord
+    margin_down = farfield_factor_downstream * chord
+    margin_side = farfield_factor_side * chord
+    size_min = background_size_min_factor * chord
+    size_max = background_size_max_factor * chord
 
     return f"""SetFactory("OpenCASCADE");
 
-{chr(10).join(point_lines)}
-profile_arc1 = newl; Spline(profile_arc1) = {{{", ".join(arc1_ids)}}};
-profile_arc2 = newl; Spline(profile_arc2) = {{{", ".join(arc2_ids)}}};
+{profile_setup}
 
 margin_up = {margin_up!r};
 margin_down = {margin_down!r};
@@ -134,7 +206,7 @@ r_l2 = newl; Line(r_l2) = {{r_p2, r_p3}};
 r_l3 = newl; Line(r_l3) = {{r_p3, r_p4}};
 r_l4 = newl; Line(r_l4) = {{r_p4, r_p1}};
 cl_far = newcl; Curve Loop(cl_far) = {{r_l1, r_l2, r_l3, r_l4}};
-cl_profile = newcl; Curve Loop(cl_profile) = {{profile_arc1, profile_arc2}};
+cl_profile = newcl; Curve Loop(cl_profile) = {{{profile_curves_expr}}};
 
 s_fluid2d = news; Plane Surface(s_fluid2d) = {{cl_far, cl_profile}};
 
@@ -142,7 +214,7 @@ Mesh.MeshSizeMax = {size_max!r};
 Mesh.MeshSizeMin = {size_min!r};
 
 Field[1] = Distance;
-Field[1].CurvesList = {{profile_arc1, profile_arc2}};
+Field[1].CurvesList = {{{profile_curves_expr}}};
 Field[1].Sampling = 300;
 Field[2] = Threshold;
 Field[2].InField = 1;
@@ -152,7 +224,7 @@ Field[2].DistMin = {0.05 * chord!r};
 Field[2].DistMax = {3.0 * chord!r};
 
 Field[3] = BoundaryLayer;
-Field[3].CurvesList = {{profile_arc1, profile_arc2}};
+Field[3].CurvesList = {{{profile_curves_expr}}};
 Field[3].Size = {bl.first_cell_height!r};
 Field[3].Ratio = {bl.growth_ratio!r};
 Field[3].SizeFar = {size_max!r};
@@ -164,7 +236,7 @@ Background Field = 2;
 
 Mesh 2;
 
-ext[] = Extrude {{0, span, 0}} {{ Surface{{s_fluid2d}}; Layers{{{params.span_layers}}}; }};
+ext[] = Extrude {{0, span, 0}} {{ Surface{{s_fluid2d}}; Layers{{{span_layers}}}; }};
 
 allVols() = Volume{{:}};
 fluid_vol = allVols(0);

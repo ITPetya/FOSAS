@@ -174,6 +174,15 @@ zuverlaessig. Die erste Zellhoehe kommt jetzt aus
 `fosas_core.boundary_layer.first_cell_height` (y+-basiert) statt aus einem
 geratenen Wert.
 
+Update, offene Frage geklaert: Die Technik funktioniert nachweislich auch
+mit einer aus einer STEP-Datei importierten Kontur (Gmsh `Merge`, nicht
+nur mit direkt in Gmsh aufgebauten Kurven), per End-zu-Ende-Test mit
+echtem Nachweis abgestufter Wandzellen bestaetigt
+(`generate_constant_section_geo_from_step_profile`,
+core/tests/test_meshing.py). Damit ist ADR-0007 fuer den Fall
+"konstanter Querschnitt" vollstaendig validiert, unabhaengig davon, ob
+die Kontur aus Python-Code oder aus einer STEP-Datei stammt.
+
 Konsequenzen: Dieser Ansatz ist auf Koerper mit (stueckweise) konstantem
 Querschnitt beschraenkt, keine allgemeine Loesung fuer beliebige
 STEP-Geometrie mit Verjuengung, Pfeilung oder Fluegelspitzen. Ausserdem
