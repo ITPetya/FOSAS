@@ -228,3 +228,34 @@ einer nur unverbundenen, aber sonst passenden Flaechensammlung).
 Konsequenzen: Die konkrete Testdatei `Test_Spoiler.step` bleibt weiterhin
 abgelehnt (siehe RISKS.md), das ist korrekt so, keine Fehlfunktion. Die
 Fehlermeldung nennt jetzt aber, wo im Modell nachgebessert werden muesste.
+
+## ADR-0009: SU2-Fehlererkennung ueber Exit-Code, nicht per Log-Scan
+
+Kontext: Bei Gmsh reicht der Exit-Code nicht aus, um Fehler zu erkennen
+(siehe RISKS.md R1, ein ungueltiges Feld-Argument fuehrte zu einer
+Fehlermeldung mitten im Log, aber Exit-Code 0). Das legt nahe, dieselbe
+Vorsicht bei SU2 zu uebernehmen. Ein eigener Test mit absichtlich
+ungueltiger Konfiguration (`NONSENSE_OPTION_THAT_DOES_NOT_EXIST`) zeigt
+aber: SU2 bricht in diesem Fall zuverlaessig mit Exit-Code 1 ab (sowohl
+einzeln als auch unter `mpirun`), mit einer klar erkennbaren
+"Error in ...End Error Exit"-Bloc-Meldung. Ausserdem enthaelt harmlose
+MPI-Startup-Ausgabe (`osc_ucx_component.c ... Error: ...`) das Wort
+"Error", was einen reinen Text-Scan bei SU2 anfaelliger fuer
+Falsch-Positive machen wuerde als bei Gmsh.
+
+Entscheidung: `fosas_core.solver.run_su2` behandelt den Exit-Code als
+primaeres, verlaessliches Fehlersignal. Bei Exit-Code ungleich 0 wird
+zusaetzlich versucht, den spezifischen "Error in ..." Block aus der
+Ausgabe zu extrahieren, um eine praezise Fehlermeldung zu liefern, aber
+die Erkennung selbst haengt nicht davon ab, ob dieser Block gefunden
+wird.
+
+Alternativen: Denselben Volltext-Scan wie bei Gmsh uebernehmen (verworfen,
+haette wegen der harmlosen "Error:"-Zeile aus dem MPI-Startup zu
+Fehlalarmen fuehren koennen, durch eigenen Test widerlegt als noetig).
+
+Konsequenzen: Sollte sich in einer spaeteren SU2-Version herausstellen,
+dass der Exit-Code doch nicht immer verlaesslich ist, muss dieser ADR
+revidiert werden. Bis dahin gilt: fuer Gmsh gilt Log-Scan, fuer SU2 gilt
+Exit-Code, jeweils empirisch begruendet, nicht symmetrisch aus Vorsicht
+uebernommen.

@@ -339,6 +339,14 @@ mit kontrolliertem y+ durchfuehren. Jedes cl/cd aus den bisherigen Laeufen
 dieser Sandbox bleibt ausdruecklich unbrauchbar als Ergebnis, nur als Beleg
 dass die Werkzeugkette technisch funktioniert.
 
+Update: Der SU2-Adapter (`fosas_core.solver`) ist jetzt als getesteter,
+wiederverwendbarer Code vorhanden (siehe ADR-0009) und funktioniert
+mechanisch zuverlaessig (echter End-zu-Ende-Test Geometrie zu Netz zu
+Loeser zu auslesbarer History, core/tests/test_solver.py). Das hier
+beschriebene Konvergenzproblem ist also kein Fehler im Adapter, sondern
+weiterhin eine offene fachliche Frage zu Netzaufloesung/Domaingroesse
+bei diesem Testfall, siehe Massnahmen (1) bis (4) oben.
+
 Update (Gesichert, per neu geschriebenem und getestetem
 `fosas_core.boundary_layer`, siehe core/tests/test_boundary_layer.py):
 Hypothese (a) ist bestaetigt. Die flache-Platte-Abschaetzung fuer y+=1 bei

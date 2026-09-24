@@ -13,11 +13,22 @@ Bisher enthalten:
   Grenzschicht (2D-Kurve plus Extrusion, siehe ADR-0007). Nutzt
   `boundary_layer` fuer die erste Zellhoehe statt eines geratenen Werts.
 
-Noch nicht enthalten: Loeseraufruf (SU2-Adapter), Cache, Bericht.
+- `fosas_core.solver`: SU2-Adapter (ausschliesslich externer Prozess) fuer
+  inkompressibles RANS. Anders als bei Gmsh ist der Exit-Code bei SU2
+  ein verlaesslicher Fehlerindikator (eigener Test bestaetigt), deshalb
+  kein Scan des vollstaendigen Logs noetig, nur Auswertung von Exit-Code
+  und History-Datei.
+
 `meshing` funktioniert nachweislich sowohl mit direkt uebergebenen
 Profilpunkten als auch mit einer aus einer STEP-Datei importierten
 Kontur, aber nur fuer Koerper mit konstantem Querschnitt (siehe
 `../docs/ARCHITECTURE.md`, `../docs/OPEN_QUESTIONS.md`).
+
+Noch nicht enthalten: Cache, Bericht, automatische
+Konvergenzbeurteilung/Qualitaetsampel (siehe RISKS.md R10, ein Testlauf
+mit dieser Werkzeugkette konvergiert auf dem aktuellen Testnetz nicht
+zuverlaessig, das ist eine offene fachliche Frage, keine Einschraenkung
+des Solver-Adapters selbst).
 
 ## Einrichtung
 
