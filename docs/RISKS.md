@@ -363,6 +363,35 @@ Gmsh-Grenzschichtparameter (`Size` am BoundaryLayer-Feld) aus
 `fosas_core.boundary_layer.first_cell_height` ableiten statt aus einem
 geratenen Wert, und den Testfall damit wiederholen.
 
+Update, Hypothese (a) widerlegt (Gesichert, eigener Test mit korrigierter
+Zellhoehe): Mit dem tatsaechlich berechneten y+=1-Wert (2,674 Mikrometer,
+Netz mit 323500 Knoten statt vorher 208343, mehr Grenzschichtlagen wegen
+der kleineren ersten Zelle) tritt bei Iteration 1532 (implizit, 3
+MPI-Raenge) weiterhin ein Restfehler-Plateau auf, diesmal bei rund -3,4
+statt -8, sogar etwas schlechter als das fruehere Plateau bei -4,4 mit
+dem falschen y+-Wert. CL und CD sind bei diesem Zwischenstand 0,87 bzw.
+0,156, die Referenzwerte (1,091 bzw. 0,0123) werden also weiterhin klar
+verfehlt, CD um mehr als das Zehnfache. Fazit: Die falsche Zellhoehe war
+ein echter, es lohnt sich behobener Fehler, aber sie war nicht die
+(alleinige) Ursache des Konvergenzproblems. Das spricht jetzt fuer
+Hypothese (b) grobes Fernfeld oder (c) echte schwache Instationaritaet
+bei diesem Anstellwinkel, nicht mehr fuer (a).
+
+Nebenbefund zur Prozessverwaltung (relevant fuer R2): Ein zu knapp
+bemessener `timeout` in `subprocess.run` (2 Stunden fuer einen dann zu
+lange laufenden Fall) fuehrte zu einer `TimeoutExpired`-Ausnahme im
+Python-Code. Nach dieser Ausnahme lief zunaechst kein SU2-Prozess mehr
+(ueberprueft mit `pgrep`), die Prozessgruppe wurde also auch bei einem
+mit `mpirun` gestarteten Mehrprozess-Lauf sauber beendet, kein
+Prozessleichnam blieb zurueck. Das ist ein positiver Datenpunkt fuer
+Linux, aber keine Aussage ueber Windows/MS-MPI (R2 bleibt dort offen),
+und der genaue Zeitpunkt der Beendigung wurde nicht lueckenlos
+protokolliert (Annahme: Python/subprocess hat beim Timeout sauber
+durchgegriffen, nicht sicher von einer anderen Ursache unterschieden).
+
+Update, Test bei 0 Grad Anstellwinkel (Massnahme (2) aus R10): laeuft,
+Ergebnis folgt.
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
