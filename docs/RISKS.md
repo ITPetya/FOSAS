@@ -435,8 +435,47 @@ Sandbox (keine Gmsh-Python-Bindings, kein ParaView) erlaubt aktuell eine
 direkte Pruefung der Zellqualitaet im Uebergangsbereich, das bleibt eine
 Werkzeuglücke.
 
-Update, Test mit dreifach vergroessertem Fernfeld (15/25/15 Sehnenlaengen
-statt 5/10/6): laeuft, Ergebnis folgt.
+Update, Test mit dreifach vergroessertem Fernfeld abgeschlossen (Gesichert,
+eigener Test): Erster Versuch (gleiche Zellgroesse wie vorher, nur
+groesseres Gebiet) fuehrte zu 3,66 Mio. Elementen statt 1,84 Mio. und ging
+in einen Speicherueberlauf (Signal 9), bevor ueberhaupt eine Iteration
+lief, kein verwertbares Ergebnis. Nach Korrektur (Fernfeld 15/25/15
+Sehnenlaengen statt 5/10/6, aber Hintergrundnetz dort auch entsprechend
+groeber, background_size_max_factor 1,25 statt 0,5) ergab sich mit 313075
+Knoten eine zum bisherigen Testfall vergleichbare Netzgroesse. 1500
+Iterationen, gleiches Restfehler-Plateau wie zuvor (rms[P] pendelt sich
+bei rund -3,37 bis -3,40 ein, praktisch identisch zu den Faellen mit dem
+kleineren Fernfeld), CL=0,826, CD=0,150, beide weiterhin klar entfernt von
+der Referenz (1,091 bzw. 0,0123).
+
+Einordnung: Damit sind jetzt alle drei urspruenglichen Hypothesen aus
+diesem Risikoeintrag durch eigene Tests ueberprueft und keine einzelne
+konnte das Plateau erklaeren oder auch nur spuerbar veraendern: (a)
+falsches y+ widerlegt, (c) auftriebsbedingte Instationaritaet
+unwahrscheinlich (Plateau auch bei 0 Grad), (b) Fernfelddistanz widerlegt
+(dreifache Distanz aendert nichts). Der wahrscheinlichste verbleibende
+Verdaechtige ist eine tatsaechliche Netzqualitaetsschwaeche, am ehesten im
+Uebergangsbereich zwischen Grenzschicht und Aussenfeld oder an den
+Vorder-/Hinterkanten-Ecken (siehe die "curve 444444"-Beobachtung oben),
+aber das ist in dieser Sandbox mangels Werkzeug (keine
+Gmsh-Python-Bindings fuer Zellqualitaetsabfragen, kein ParaView fuer
+visuelle Kontrolle) nicht direkt nachweisbar.
+
+Status: Drei von drei getesteten Hypothesen widerlegt oder stark
+entkraeftet, die verbleibende, wahrscheinlichste Erklaerung (Netzqualitaet)
+ist mit der aktuellen Werkzeugausstattung nicht weiter pruefbar. Weiteres
+blindes Ausprobieren an dieser Stelle ist nicht mehr zielfuehrend.
+
+Massnahme, fuer eine spaetere Fortsetzung: Entweder (1) eine x86_64-Umgebung
+mit echten Gmsh-Python-Bindings und/oder ParaView beschaffen, um die
+Zellqualitaet im Uebergangsbereich direkt zu messen und sichtbar zu
+machen, oder (2) den alternativen `extrudeBoundaryLayer`-Vernetzungsweg
+ausprobieren (bisher nur per Python-API demonstriert, siehe ADR-0007),
+der die Eckbehandlung eventuell anders und robuster loest, oder (3) den
+Vergleichsfall exakt wie im SU2-Tutorial nachbauen (strukturiertes
+C-Netz statt unseres unstrukturierten Ansatzes), um auszuschliessen,
+dass die Unstrukturiertheit selbst die Ursache ist. Alle drei sind
+groessere, eigene Arbeitspakete, keine schnelle naechste Aktion.
 
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
