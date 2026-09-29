@@ -415,6 +415,29 @@ der naechste sinnvolle Untersuchungspunkt (Netzqualitaetskennzahlen im
 Uebergangsbereich pruefen, Fernfeld verfeinern oder vergroessern), aber
 noch nicht durchgefuehrt.
 
+Update, zwei neue Verdachtspunkte, beide unbestaetigt (Gesichert nur als
+Beobachtung, Interpretation ist Vermutung): Beim Vernetzen mit
+`generate_constant_section_geo` erscheinen durchgehend 12 Warnungen
+"Skipping curve with no begin or end point" fuer eine interne
+Platzhalterkurve (Tag 444444, "Discrete curve"), vermutlich Teil der
+Eck-/Fan-Behandlung des `BoundaryLayer`-Felds an Vorder- und Hinterkante.
+Nicht bekannt, ob das ein bekanntes, harmloses Gmsh-Verhalten ist oder auf
+tatsaechlich fehlerhafte Zellen an genau der aerodynamisch wichtigsten
+Stelle hindeutet, dazu wurde keine Quelle gefunden. Zusaetzlich faellt
+auf: Der "Optimizing mesh"-Schritt nach der Extrusion braucht nur rund
+27 Millisekunden bei ueber 100000 Knoten, das ist zu schnell fuer eine
+echte Qualitaetsoptimierung und deutet darauf hin, dass der
+Extrusionsvernetzungsweg (anders als der urspruengliche isotrope
+Tetraeder-Ansatz aus R1, der eine sichtbare, mehrere Sekunden dauernde
+Optimierung mit Qualitaetshistogramm durchlief) keine echte
+Nachbearbeitung der Zellqualitaet bekommt. Kein Werkzeug in dieser
+Sandbox (keine Gmsh-Python-Bindings, kein ParaView) erlaubt aktuell eine
+direkte Pruefung der Zellqualitaet im Uebergangsbereich, das bleibt eine
+Werkzeuglücke.
+
+Update, Test mit dreifach vergroessertem Fernfeld (15/25/15 Sehnenlaengen
+statt 5/10/6): laeuft, Ergebnis folgt.
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
