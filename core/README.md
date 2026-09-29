@@ -24,7 +24,10 @@ Profilpunkten als auch mit einer aus einer STEP-Datei importierten
 Kontur, aber nur fuer Koerper mit konstantem Querschnitt (siehe
 `../docs/ARCHITECTURE.md`, `../docs/OPEN_QUESTIONS.md`).
 
-Noch nicht enthalten: Cache, Bericht, automatische
+- `fosas_core.cache`: inhaltsadressierter Cache (Hash aus Geometrie-Datei
+  plus Netz-/Loeser-Parametern), mit Metadaten fuer Rueckverfolgbarkeit.
+
+Noch nicht enthalten: Bericht, automatische
 Konvergenzbeurteilung/Qualitaetsampel (siehe RISKS.md R10, ein Testlauf
 mit dieser Werkzeugkette konvergiert auf dem aktuellen Testnetz nicht
 zuverlaessig, das ist eine offene fachliche Frage, keine Einschraenkung
