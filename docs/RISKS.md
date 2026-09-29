@@ -389,8 +389,31 @@ und der genaue Zeitpunkt der Beendigung wurde nicht lueckenlos
 protokolliert (Annahme: Python/subprocess hat beim Timeout sauber
 durchgegriffen, nicht sicher von einer anderen Ursache unterschieden).
 
-Update, Test bei 0 Grad Anstellwinkel (Massnahme (2) aus R10): laeuft,
-Ergebnis folgt.
+Update, Test bei 0 Grad Anstellwinkel abgeschlossen (Gesichert, eigener
+Test, gleiches Netz wie oben, 1200 Iterationen, implizit, 3 MPI-Raenge):
+Der Restfehler pendelt sich erneut bei fast demselben Niveau ein (rms[P]
+rund -3,53, gegenueber -3,4 bei 10 Grad), also praktisch unveraendert
+trotz voelig anderem Anstellwinkel. CL ergibt sich zu rund -0,002, also
+korrekt nahe null, wie es die Symmetrie eines NACA-0012-Profils bei 0
+Grad physikalisch verlangt, das ist ein gutes Zeichen fuer die generelle
+Kraftauswertung. CD liegt bei rund 0,030, damit naeher an plausiblen
+Werten fuer den Nullauftriebsfall als der 10-Grad-Fall an seiner
+Referenz war, aber immer noch deutlich erhoeht gegenueber literatur-
+ueblichen Cd-Werten fuer NACA0012 bei Re=6e6 und 0 Grad (Groessenordnung
+0,006 bis 0,008 fuer einen sauber konvergierten Fall, hier nicht mit
+Primaerquelle belegt, als Einordnung/Vermutung markiert).
+
+Einordnung: Da das Restfehler-Plateau bei einem symmetrischen,
+physikalisch unauffaelligen Nullauftriebsfall genauso auftritt wie bei
+10 Grad, ist Hypothese (c) (auftriebsbedingte Instationaritaet) als
+alleinige oder Haupt-Ursache unwahrscheinlicher geworden. Das Plateau
+haengt offenbar nicht am Anstellwinkel, sondern ist wahrscheinlich in der
+Netz- oder Domainkonfiguration selbst begruendet (Hypothese b), zum
+Beispiel im Uebergangsbereich zwischen Grenzschichtnetz und dem groeberen
+isotropen Aussenfeld, oder in der Fernfeldaufloesung/-distanz. Das ist
+der naechste sinnvolle Untersuchungspunkt (Netzqualitaetskennzahlen im
+Uebergangsbereich pruefen, Fernfeld verfeinern oder vergroessern), aber
+noch nicht durchgefuehrt.
 
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
