@@ -1,0 +1,29 @@
+[project]
+name = "fosas-engine"
+version = "0.0.1"
+description = "FOSAS engine: local FastAPI service wrapping fosas_core"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: end-to-end tests that invoke external tools (Gmsh, SU2) and take longer to run",
+]
