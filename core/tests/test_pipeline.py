@@ -56,4 +56,8 @@ def test_run_case_end_to_end_on_a_real_step_file(tmp_path, gmsh_executable, su2_
     assert result.node_count > 0
     assert result.cl != 0.0  # would be exactly 0 if the axis convention were wrong again, see ARCHITECTURE.md
     assert result.convergence.converged is False  # known for this short/coarse case
+    assert result.surface.num_points > 0
+    assert "Pressure_Coefficient" in result.surface.columns
+    assert result.mean_y_plus > 0
+    assert result.max_y_plus >= result.mean_y_plus
     assert isinstance(result.convergence.message, str) and result.convergence.message

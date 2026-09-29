@@ -106,8 +106,27 @@ class IterationHistory:
 
 
 @dataclass(frozen=True)
+class SurfaceData:
+    """Per-point wall data from the final iteration (Cp, y+, skin
+    friction, coordinates), one row per surface node.
+    """
+
+    columns: dict[str, tuple[float, ...]] = field(default_factory=dict)
+
+    def column(self, name: str) -> tuple[float, ...]:
+        if name not in self.columns:
+            raise KeyError(f"Column '{name}' not in surface data. Available: {sorted(self.columns)}")
+        return self.columns[name]
+
+    @property
+    def num_points(self) -> int:
+        return len(next(iter(self.columns.values()), ()))
+
+
+@dataclass(frozen=True)
 class SolverResult:
     history: IterationHistory
+    surface: SurfaceData
     output_dir: Path
     config_path: Path
 
@@ -181,6 +200,16 @@ SURFACE_FILENAME= {output_dir}/surface_flow
 OUTPUT_WRT_FREQ= 100
 SCREEN_OUTPUT= (INNER_ITER, RMS_PRESSURE, RMS_VELOCITY-X, RMS_NU_TILDE, LIFT, DRAG)
 HISTORY_OUTPUT= (ITER, RMS_RES, AERO_COEFF)
+
+% Surface CSV (Cp, y+, skin friction per wall point). WRT_RESTART_COMPACT
+% must be NO: SU2's compact-restart mode otherwise restricts the surface
+% CSV writer to only the fields needed to resume a run (PointID, x, y,
+% z, Pressure, Velocity, Nu_Tilde), silently dropping Pressure_Coefficient
+% and Y_Plus. Confirmed by reading SU2_CFD/src/output/COutput.cpp
+% (WriteToFile, OUTPUT_TYPE::SURFACE_CSV case) in the SU2 8.5.0 source.
+OUTPUT_FILES= (SURFACE_CSV)
+VOLUME_OUTPUT= (COORDINATES, SOLUTION, PRIMITIVE)
+WRT_RESTART_COMPACT= NO
 """
 
 
@@ -238,15 +267,22 @@ def run_su2(
             f"SU2 exited successfully but the expected history file "
             f"'{history_path}' was not created."
         )
+    surface_path = output_dir / "surface_flow.csv"
+    if not surface_path.exists():
+        raise SolverError(
+            f"SU2 exited successfully but the expected surface file "
+            f"'{surface_path}' was not created."
+        )
 
     return SolverResult(
-        history=_read_history_csv(history_path),
+        history=IterationHistory(columns=_read_csv_columns(history_path)),
+        surface=SurfaceData(columns=_read_csv_columns(surface_path)),
         output_dir=output_dir,
         config_path=config_path,
     )
 
 
-def _read_history_csv(path: Path) -> IterationHistory:
+def _read_csv_columns(path: Path) -> dict[str, tuple[float, ...]]:
     with open(path) as f:
         header_line = f.readline()
         column_names = [name.strip().strip('"') for name in header_line.split(",")]
@@ -256,4 +292,4 @@ def _read_history_csv(path: Path) -> IterationHistory:
                 continue
             for i, raw in enumerate(line.split(",")):
                 values[i].append(float(raw))
-    return IterationHistory(columns={name: tuple(vals) for name, vals in zip(column_names, values)})
+    return {name: tuple(vals) for name, vals in zip(column_names, values)}

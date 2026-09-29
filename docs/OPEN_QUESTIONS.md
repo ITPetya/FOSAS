@@ -40,6 +40,18 @@
   vergleichbarer Netzqualitaet (y+ < 1, Feingitter), um den Vergleich
   tatsaechlich durchzufuehren, sowie der Abruf der experimentellen
   Gregory-Daten als zusaetzlicher, unabhaengiger Referenzpunkt.
+- cp-Verteilung ist jetzt technisch verfuegbar (ADR-0010,
+  `fosas_core.solver.SurfaceData`, `CaseResult.surface`, auch ueber die
+  Engine-API), inklusive tatsaechlich erreichtem y+ pro Punkt. Was noch
+  fehlt: eine konkrete, belastbare Referenz-cp-Kurve fuer den
+  NACA-0012-Testfall, um den in Abschnitt 3 geforderten Vergleich "cp
+  gegen Referenzdaten" tatsaechlich durchzufuehren, nicht nur die Rohdaten
+  bereitzustellen. Ausserdem noch nicht genutzt: der jetzt verfuegbare
+  tatsaechliche y+ pro Punkt wurde noch nicht mit dem y+=1-Ziel aus
+  `fosas_core.boundary_layer` verglichen, das koennte die R10-Untersuchung
+  weiterbringen (z. B. falls das tatsaechliche y+ stark vom Ziel abweicht,
+  waere das ein weiterer Hinweis auf ein Netzproblem statt nur eine
+  Vermutung).
 
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 

@@ -29,10 +29,12 @@ Kontur, aber nur fuer Koerper mit konstantem Querschnitt (siehe
 - `fosas_core.quality`: Konvergenzbewertung (Restfehler gegen Ziel,
   Plateau-Erkennung), nicht die vollstaendige Qualitaetsampel.
 - `fosas_core.pipeline`: verbindet alle obigen Module zu einer einzigen
-  `run_case`-Funktion, STEP-Datei rein, cl/cd und Konvergenzbewertung
-  raus. V1-Annahmen: Geometrie bereits in der Achsenkonvention X
-  stromab, Y spannweitig, Z vertikal (siehe ARCHITECTURE.md), konstanter
-  Querschnitt (ADR-0007), Referenzgroessen aus der Bounding Box.
+  `run_case`-Funktion, STEP-Datei rein, cl/cd, cp-Verteilung
+  (`CaseResult.surface`, inklusive tatsaechlich erreichtem y+ pro Punkt)
+  und Konvergenzbewertung raus. V1-Annahmen: Geometrie bereits in der
+  Achsenkonvention X stromab, Y spannweitig, Z vertikal (siehe
+  ARCHITECTURE.md), konstanter Querschnitt (ADR-0007), Referenzgroessen
+  aus der Bounding Box.
 
 Noch nicht enthalten: Bericht, automatische
 Konvergenzbeurteilung/Qualitaetsampel (siehe RISKS.md R10, ein Testlauf

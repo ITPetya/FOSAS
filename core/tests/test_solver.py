@@ -137,3 +137,6 @@ def test_end_to_end_mesh_and_solve_produces_parseable_history(tmp_path, gmsh_exe
     assert result.history.num_iterations == 15
     assert "CL" in result.history.columns
     assert "CD" in result.history.columns
+    assert result.surface.num_points > 0
+    assert "Pressure_Coefficient" in result.surface.columns
+    assert "Y_Plus" in result.surface.columns

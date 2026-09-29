@@ -259,3 +259,48 @@ dass der Exit-Code doch nicht immer verlaesslich ist, muss dieser ADR
 revidiert werden. Bis dahin gilt: fuer Gmsh gilt Log-Scan, fuer SU2 gilt
 Exit-Code, jeweils empirisch begruendet, nicht symmetrisch aus Vorsicht
 uebernommen.
+
+## ADR-0010: cp/y+-Oberflaechendaten ueber SURFACE_CSV mit WRT_RESTART_COMPACT=NO
+
+Kontext: Fuer die in Abschnitt 3 der urspruenglichen Anforderungen
+verlangte cp-Verteilung fehlte bisher jeder Zugriff auf
+Oberflaechen-Einzelwerte, nur integrierte cl/cd aus der History waren
+verfuegbar. Ein erster Versuch mit `OUTPUT_FILES= (SURFACE_CSV)` lieferte
+nur eine sehr schmale Spaltenauswahl (PointID, x, y, z, Pressure,
+Velocity, Nu_Tilde), ohne `Pressure_Coefficient` oder `Y_Plus`, obwohl
+diese Felder laut SU2-Quellcode (`CFlowIncOutput.cpp`,
+`AddVolumeOutput("PRESSURE_COEFF", ...)` und `AddVolumeOutput("Y_PLUS",
+...)`) zur Gruppe `PRIMITIVE` gehoeren, die im Standard-`VOLUME_OUTPUT`
+bereits enthalten ist. Ursache gefunden im SU2-Quellcode
+(`SU2_CFD/src/output/COutput.cpp`, `WriteToFile`, Fall
+`OUTPUT_TYPE::SURFACE_CSV`): Ist `WRT_RESTART_COMPACT` aktiv (das ist
+der Fall, sobald irgendein kompaktes Restart-Verhalten greift), wird die
+Oberflaechen-CSV auf `requiredVolumeFieldNames` beschraenkt, also nur die
+fuer einen Neustart noetigen Felder, nicht die vollen `PRIMITIVE`-Felder.
+
+Entscheidung: `fosas_core.solver.generate_config` setzt immer
+`OUTPUT_FILES= (SURFACE_CSV)`, `VOLUME_OUTPUT= (COORDINATES, SOLUTION,
+PRIMITIVE)` und `WRT_RESTART_COMPACT= NO`. Die Oberflaechendatei wird
+danach zuverlaessig mit `Pressure_Coefficient`, `Y_Plus`,
+`Skin_Friction_Coefficient_x/y/z` und weiteren Feldern geschrieben, per
+eigenem Test bestaetigt, nicht nur aus dem Quellcode abgeleitet.
+`fosas_core.pipeline.CaseResult` gibt diese Daten jetzt als `surface`
+(vollstaendige Punktliste) sowie `mean_y_plus`/`max_y_plus` weiter, auch
+ueber die FastAPI-Engine.
+
+Alternativen: Cp selbst aus der rohen `Pressure`-Spalte berechnen
+(verworfen, haette die genaue interne Referenzdruck-Konvention des
+inkompressiblen SU2-Loesers erfordert, die nicht mit ausreichender
+Sicherheit verifiziert werden konnte, siehe Projektregel "keine
+Schoenrederei"). Die von SU2 selbst mitgelieferte, bereits korrekt
+definierte `Pressure_Coefficient`-Spalte zu nutzen ist robuster und
+version-unabhaengiger.
+
+Konsequenzen: Ein echter Vergleich der cp-Verteilung gegen
+Referenzdaten (wie im urspruenglichen Scope gefordert) ist damit
+technisch moeglich, aber noch nicht umgesetzt, es fehlt weiterhin eine
+konkrete, belastbare Referenz-cp-Kurve fuer unseren Testfall (siehe
+docs/OPEN_QUESTIONS.md). Ausserdem laesst sich jetzt zum ersten Mal das
+tatsaechlich erreichte y+ direkt nachpruefen statt nur die Zielgroesse
+aus der Netzgenerierung zu kennen, das ist ein bisher fehlender
+Ruecklkopplungsschritt fuer die R10-Untersuchung.

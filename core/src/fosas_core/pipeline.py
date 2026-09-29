@@ -42,6 +42,7 @@ from .solver import (
     ReferenceValues,
     SolverError,
     SolverParams,
+    SurfaceData,
     generate_config,
     run_su2,
 )
@@ -99,6 +100,9 @@ class CaseResult:
     cl: float
     cd: float
     convergence: ConvergenceAssessment
+    surface: SurfaceData
+    mean_y_plus: float
+    max_y_plus: float
     mesh_path: Path
     solve_dir: Path
 
@@ -212,6 +216,10 @@ def run_case(
         residual_threshold=params.residual_threshold,
     )
 
+    y_plus_values = result.surface.column("Y_Plus")
+    mean_y_plus = sum(y_plus_values) / len(y_plus_values)
+    max_y_plus = max(y_plus_values)
+
     return CaseResult(
         chord=chord,
         span=span,
@@ -221,6 +229,9 @@ def run_case(
         cl=result.final("CL"),
         cd=result.final("CD"),
         convergence=convergence,
+        surface=result.surface,
+        mean_y_plus=mean_y_plus,
+        max_y_plus=max_y_plus,
         mesh_path=mesh_path,
         solve_dir=solve_dir,
     )

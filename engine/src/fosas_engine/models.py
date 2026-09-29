@@ -19,6 +19,14 @@ class ConvergenceOut(BaseModel):
     message: str
 
 
+class SurfacePointOut(BaseModel):
+    x: float
+    y: float
+    z: float
+    cp: float
+    y_plus: float
+
+
 class CaseResultOut(BaseModel):
     chord: float
     span: float
@@ -28,6 +36,9 @@ class CaseResultOut(BaseModel):
     cl: float
     cd: float
     convergence: ConvergenceOut
+    mean_y_plus: float
+    max_y_plus: float
+    surface: list[SurfacePointOut]
 
 
 class JobOut(BaseModel):
@@ -43,6 +54,16 @@ class JobOut(BaseModel):
     def from_job(cls, job: Job) -> "JobOut":
         result_out = None
         if job.result is not None:
+            surface = job.result.surface
+            xs = surface.column("x")
+            ys = surface.column("y")
+            zs = surface.column("z")
+            cps = surface.column("Pressure_Coefficient")
+            y_pluses = surface.column("Y_Plus")
+            surface_out = [
+                SurfacePointOut(x=xs[i], y=ys[i], z=zs[i], cp=cps[i], y_plus=y_pluses[i])
+                for i in range(surface.num_points)
+            ]
             result_out = CaseResultOut(
                 chord=job.result.chord,
                 span=job.result.span,
@@ -58,6 +79,9 @@ class JobOut(BaseModel):
                     is_plateaued=job.result.convergence.is_plateaued,
                     message=job.result.convergence.message,
                 ),
+                mean_y_plus=job.result.mean_y_plus,
+                max_y_plus=job.result.max_y_plus,
+                surface=surface_out,
             )
         return cls(
             id=job.id,
