@@ -444,8 +444,39 @@ Massnahme: Keine, dies ist der erwartete, korrekte Ablehnungsfall.
 Wichtig als Validierung: Der Geometrie-Import-Code (`fosas_core.geometry`)
 verhaelt sich bei einer echten, "unordentlichen" Kundendatei genau wie
 vorgesehen, mit einer nuetzlichen, lokalisierten Fehlermeldung statt eines
-Absturzes oder einer stillen Fehlinterpretation. Getestete Vernetzung
-(`fosas_core.meshing`) mit dieser Datei ist erst moeglich, wenn entweder
-die Quelldatei repariert wird oder eine andere Testdatei vorliegt, das ist
-weiterhin offen (siehe OPEN_QUESTIONS.md, STEP-importierte Kontur fuer
-die Grenzschichtvernetzung).
+Absturzes oder einer stillen Fehlinterpretation.
+
+## R12: Zweite reale Kundendatei (Fluegel, Autodesk Inventor), verjuengt
+
+Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
+`Tragflaeche_Halbsymmetrisches_Profil.stp`, Autodesk Inventor 2024,
+Einheit Millimeter): Anders als der Spoiler ist diese Datei ein gueltiger,
+wasserdichter Solid-Koerper (nur 5 Flaechen, sauberes Modell), also ein
+erfolgreicher Durchlauf durch `fosas_core.geometry.import_step` ohne
+jede Reparatur. Querschnittsvergleich an drei Spannweitenpositionen zeigt
+aber: Der Fluegel ist verjuengt (Sehnenlaenge sinkt von rund 100 mm an der
+Wurzel auf rund 75 mm an der Spitze, Flaeche von 689 auf 466 mm²), also
+kein Koerper mit konstantem Querschnitt im Sinne von ADR-0007.
+
+Als Naeherung wurde ein einzelner Querschnitt (Mittelspann, Sehnenlaenge
+87,5 mm) mit `fosas_core.geometry` extrahiert (`Shape.intersect(Plane)`)
+und mit der bestehenden Technik (`generate_constant_section_geo`)
+vernetzt, mit aus der echten Reynolds-Zahl berechneter Zellhoehe (Re=1,48e5
+bei angenommenen 25 m/s, y+=1 entspricht 1,21e-5 m). Ergebnis: 99583
+Knoten, 533640 Elemente, echte abgestufte Wandzellen mit Abstaenden von
+rund 1,2e-5 bis 1,5e-5 m nahe der Oberflaeche, passend zum berechneten
+Zielwert. Bestaetigt zusaetzlich zu R1/ADR-0007, dass die Technik auch
+mit einer aus einem echten Autodesk-Inventor-Export stammenden Kontur
+funktioniert, nicht nur mit selbst erzeugter Geometrie.
+
+Status: Der Mittelspann-Querschnitt ist ausdruecklich eine Naeherung, die
+Verjuengung wird dabei nicht abgebildet, das Ergebnis eines Loeserlaufs
+auf diesem Netz waere kein Ergebnis fuer den echten, verjuengten Fluegel.
+Echte Vernetzung eines verjuengten Koerpers (Loft zwischen mehreren
+Querschnitten mit Grenzschicht) ist nicht implementiert, siehe
+OPEN_QUESTIONS.md.
+
+Massnahme: Keine akute, dieser Fall ist als Naeherung klar gekennzeichnet
+und nicht fuer einen Loeserlauf verwendet worden. Echte Loft-Vernetzung
+fuer verjuengte Koerper bleibt ein groesseres, eigenes Arbeitspaket fuer
+eine spaetere Phase.

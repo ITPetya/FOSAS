@@ -22,7 +22,12 @@
   `core/tests/test_meshing.py::test_step_imported_profile_produces_real_boundary_layer`),
   echte abgestufte Wandzellen auch bei importierter Kontur. Weiterhin
   offen: ob Koerper mit Verjuengung/Pfeilung/Fluegelspitzen (kein
-  konstanter Querschnitt) einen anderen Ansatz brauchen.
+  konstanter Querschnitt) einen anderen Ansatz brauchen. Konkret bestaetigt
+  an einer zweiten realen Kundendatei (verjuengter Fluegel aus Autodesk
+  Inventor, siehe RISKS.md R12): ein einzelner Naeherungs-Querschnitt laesst
+  sich problemlos vernetzen, aber echte Loft-Vernetzung ueber mehrere
+  Querschnitte mit durchgehender Grenzschicht ist nicht implementiert,
+  das ist ein eigenes, noch nicht begonnenes Arbeitspaket.
 - Ein erster SU2-Loeserlauf mit korrekter Koordinatenkonvention und echter
   Grenzschicht lief, aber nicht bis zur Konvergenz (siehe RISKS.md, R10).
   Implizites Zeitschema fuehrte in dieser Sandbox zu einem
