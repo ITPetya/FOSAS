@@ -13,13 +13,15 @@ from .airfoils import naca4_points
 
 def naca0012_wing_step(path: Path, chord: float = 0.6, span: float = 1.2, n: int = 40) -> Path:
     """A constant-section NACA0012 wing, profile built from two smooth
-    splines (not a many-segment polyline), extruded along Z.
+    splines (not a many-segment polyline), extruded along Y (spanwise),
+    matching the SU2/engine axis convention: X chordwise, Y spanwise,
+    Z vertical (see docs/ARCHITECTURE.md).
     """
     pts = naca4_points(chord=chord, n=n)
     mid = len(pts) // 2
 
     with BuildPart() as wing:
-        with BuildSketch(Plane.XY):
+        with BuildSketch(Plane.XZ):
             with BuildLine():
                 Spline(*[(x, z) for x, z in pts[: mid + 1]])
                 Spline(*([(x, z) for x, z in pts[mid:]] + [pts[0]]))
