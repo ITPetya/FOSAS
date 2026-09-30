@@ -79,3 +79,54 @@ def test_run_case_end_to_end_on_a_real_step_file(tmp_path, gmsh_executable, su2_
     assert result.mean_y_plus > 0
     assert result.max_y_plus >= result.mean_y_plus
     assert isinstance(result.convergence.message, str) and result.convergence.message
+
+
+@pytest.mark.slow
+def test_run_case_resumes_instead_of_restarting_from_scratch(tmp_path, gmsh_executable, su2_executable, mpirun_executable):
+    """Simulates a crash by calling run_case twice with the same work_dir:
+    meshing must not run a second time (mesh.su2 mtime unchanged), and the
+    second solve must actually consume the first run's restart file.
+
+    Consumption is checked directly via SU2's own log line ("Read flow
+    solution from: <path>."), not indirectly via residual/CL values: an
+    earlier version of this test compared the first residual of run 1
+    against the first residual of run 2, expecting a cold start and a
+    warm start to visibly differ. That was flaky in practice, confirmed
+    by a real failure and follow-up investigation: this case's rms[P]
+    plateaus at a similar elevated level (see docs/RISKS.md R10) whether
+    SU2 starts from freestream or from a previous, already-run solution,
+    so the two residual values can coincidentally land within 1% of each
+    other even though the restart file genuinely was read (verified
+    separately by manually re-running SU2 on the same config and reading
+    its log). The log line is a direct statement from SU2 itself, not an
+    inference from noisy physics.
+    """
+    step_path = naca0012_wing_step(tmp_path / "wing.step", chord=0.6, span=1.2, n=25)
+    executables = ExecutablePaths(gmsh=gmsh_executable, su2=su2_executable, mpirun=mpirun_executable)
+    work_dir = tmp_path / "work"
+    params = CaseParams(
+        velocity=86.933,
+        aoa_deg=10.0,
+        density=2.13163,
+        dynamic_viscosity=1.853e-5,
+        span_layers=8,
+        # SU2 only writes its restart file every OUTPUT_WRT_FREQ (100)
+        # iterations, confirmed the hard way: 10 iterations produced no
+        # restart_flow.dat at all. Needs to clear that boundary for this
+        # test to actually exercise the resume path.
+        max_iterations=110,
+        mpi_ranks=1,
+        time_discretization="RUNGE-KUTTA_EXPLICIT",
+    )
+
+    result1 = run_case(step_path, params, work_dir, executables=executables, mesh_timeout=180, solve_timeout=300)
+    mesh_mtime_1 = result1.mesh_path.stat().st_mtime
+    restart_file = result1.solve_dir / "restart_flow.dat"
+    assert restart_file.exists()  # SU2's own checkpoint, the basis for resuming
+
+    result2 = run_case(step_path, params, work_dir, executables=executables, mesh_timeout=180, solve_timeout=300)
+    mesh_mtime_2 = result2.mesh_path.stat().st_mtime
+    assert mesh_mtime_2 == mesh_mtime_1  # proves Gmsh did not rerun
+
+    su2_log = (result2.solve_dir / "su2.log").read_text()
+    assert f"Read flow solution from: {restart_file}." in su2_log

@@ -10,8 +10,11 @@ bearer token generated fresh at every startup and printed to stdout
 - REST only, no WebSocket progress channel yet.
 - No cache integration yet (`fosas_core.cache` exists but is not wired
   into job execution).
-- Jobs run in-process, in-memory (a restart loses job history). No
-  server/multi-user mode.
+- Jobs run in-process; state is mirrored to `job_meta.json` in each
+  job's work_dir, so a restart resumes rather than loses job history
+  (see `../docs/ARCHITECTURE.md`, "Job-Persistenz und geteilte
+  Sitzung"). Still single-server, no per-job access control, no
+  multi-user mode.
 - Same V1 assumptions as `fosas_core.pipeline`: geometry already in the
   X chordwise / Y spanwise / Z vertical convention, constant
   cross-section only.

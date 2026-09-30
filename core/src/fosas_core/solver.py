@@ -213,7 +213,12 @@ HISTORY_OUTPUT= (ITER, RMS_RES, AERO_COEFF)
 % z, Pressure, Velocity, Nu_Tilde), silently dropping Pressure_Coefficient
 % and Y_Plus. Confirmed by reading SU2_CFD/src/output/COutput.cpp
 % (WriteToFile, OUTPUT_TYPE::SURFACE_CSV case) in the SU2 8.5.0 source.
-OUTPUT_FILES= (SURFACE_CSV)
+% RESTART must stay in this list explicitly: OUTPUT_FILES replaces SU2's
+% default (RESTART, PARAVIEW, SURFACE_PARAVIEW) rather than adding to it,
+% so listing only SURFACE_CSV here silently stopped restart_flow.dat from
+% ever being written, discovered only when a resume-after-crash feature
+% needed it and found no checkpoint had been saved at all.
+OUTPUT_FILES= (RESTART, SURFACE_CSV)
 VOLUME_OUTPUT= (COORDINATES, SOLUTION, PRIMITIVE)
 WRT_RESTART_COMPACT= NO
 """
@@ -268,8 +273,15 @@ def run_su2(
             "timeout, reduce max_iterations, or check for a stalled run."
         ) from exc
 
+    full_log = (result.stdout or "") + (result.stderr or "")
+    # Always kept, not just on failure: this is the only place that shows
+    # whether SU2 actually consumed a given RESTART_SOL/SOLUTION_FILENAME
+    # (it prints "Read flow solution from: <path>."), which a resumed job
+    # needs to be able to verify directly instead of inferring it
+    # indirectly from residual values, see docs/RISKS.md R14.
+    (output_dir / "su2.log").write_text(full_log)
+
     if result.returncode != 0:
-        full_log = (result.stdout or "") + (result.stderr or "")
         match = _ERROR_BLOCK_RE.search(full_log)
         detail = match.group(0) if match else full_log[-4000:]
         raise SolverError(f"SU2 exited with code {result.returncode}:\n{detail}")

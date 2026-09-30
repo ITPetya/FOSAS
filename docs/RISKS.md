@@ -585,3 +585,70 @@ der urspruenglichen Anforderung vorgesehene, aber noch nicht gebaute
 urspruenglichen Anforderungen). Bis dahin schuetzt die neue Pruefung nur
 vor Ressourcenverschwendung und gibt eine verstaendliche Fehlermeldung,
 loest das eigentliche UX-Problem aber nicht automatisch.
+
+## R14: Kein Absturzschutz, Auftragsstatus an einen einzelnen Browser-Tab gebunden (in Arbeit)
+
+Anlass: Der Projektinhaber hat nach dem Server-Neustart (siehe R13,
+notwendig zur Fehlerbehebung) direkt zwei reale Probleme erlebt. Erstens
+einen abgelaufenen Token nach dem Neustart (401 "Missing or invalid
+bearer token"), weil die Engine bei jedem Start ein neues Zufallstoken
+erzeugt (siehe ARCHITECTURE.md) und die offene Webseite noch das alte
+Token im Speicher hatte. Zweitens die grundsaetzliche Frage, ob ein
+Absturz waehrend der Rechnung den gesamten Fortschritt vernichtet, und ob
+der Auftragsstatus von einem anderen Geraet aus einsehbar ist, ohne den
+urspruenglichen Tab offen zu halten.
+
+Status: In Arbeit, drei Teile vom Projektinhaber ausdruecklich alle drei
+gleichzeitig beauftragt ("Alle drei jetzt umsetzen"):
+
+1. Auftrags-ID landet in der Webadresse (`?job=<id>`), damit ein Link auch
+   von einem anderen Geraet aus denselben Auftrag anzeigt.
+2. Auftragsdaten werden auf die Festplatte geschrieben, nicht nur im
+   Arbeitsspeicher der Engine gehalten, damit sie einen Engine-Neustart
+   ueberleben.
+3. Nach einem Absturz waehrend der Rechnung wird beim naechsten Versuch
+   automatisch an SU2s eigener Zwischenspeicherung fortgesetzt, statt bei
+   Iteration 0 neu zu beginnen.
+
+Teil 3 ist in `fosas_core.pipeline.run_case` umgesetzt und durch
+`test_run_case_resumes_instead_of_restarting_from_scratch` bestaetigt.
+Dabei wurden zwei eigene, unabhaengige Fehler gefunden und behoben:
+
+- ADR-0013: OUTPUT_FILES hat RESTART seit ADR-0010 stillschweigend
+  deaktiviert, es gab bis dahin ueberhaupt keine Zwischenspeicherung.
+- Der Test selbst war flakig: Der erste Testentwurf hat geprueft, ob
+  sich der erste Restfehler (rms[P]) von Lauf 2 vom ersten Restfehler
+  von Lauf 1 unterscheidet, in der Annahme, ein Kaltstart und ein
+  fortgesetzter Lauf muessten sich sichtbar unterscheiden. Bei einer
+  echten Testausfuehrung ist dieser Vergleich unerwartet fehlgeschlagen
+  (2.1544 gegen 2.1581, unter der 1-Prozent-Toleranz). Ursache: Genau
+  dieser Fall zeigt das aus R10 bekannte Restfehler-Plateau, das
+  Restfehlerniveau liegt unabhaengig von Kalt- oder Warmstart in einem
+  aehnlichen erhoehten Bereich (durch manuellen SU2-Nachlauf auf
+  demselben Config bestaetigt: 2.4528 bei einem dritten, garantiert
+  warmgestarteten Lauf, ebenfalls im selben Bereich). Der Restfehler ist
+  fuer diesen Testfall also kein verlaessliches Kriterium fuer
+  Kalt-/Warmstart. Ersetzt durch eine direkte Pruefung von SU2s eigener
+  Log-Ausgabe ("Read flow solution from: <Pfad>."), die zweifelsfrei
+  zeigt, ob die Restart-Datei tatsaechlich gelesen wurde, statt es aus
+  Restfehlerwerten zu erschliessen. Dazu schreibt `run_su2` jetzt immer
+  eine `su2.log`-Datei ins Ausgabeverzeichnis (Rohausgabe von SU2,
+  bisher verworfen).
+
+Teile 1 und 2 (Engine-Persistenz in `fosas_engine.jobs`, Wiederanmeldung
+laufender Auftraege beim Engine-Start in `fosas_engine.app`, URL-Handling
+in `clients/web/index.html`) sind zum Zeitpunkt dieses Eintrags noch nicht
+umgesetzt.
+
+Bekannte Grenze, bereits jetzt absehbar: Die Wiederaufnahme in
+`run_case` prueft nur, ob `mesh.su2` beziehungsweise `restart_flow.dat`
+bereits existieren, es gibt keine Pruefung, ob sie zu denselben Parametern
+gehoeren wie der aktuelle Aufruf. Wird ein Auftrag mit demselben
+Arbeitsverzeichnis, aber geaenderten Parametern (z. B. anderer
+Anstellwinkel) erneut gestartet, wuerde faelschlich das alte Netz und der
+alte Restart-Stand weiterverwendet. Fuer V1 unkritisch, da jeder Auftrag
+ein eigenes, per Auftrags-ID benanntes Arbeitsverzeichnis bekommt und
+Parameter pro Auftrag nicht nachtraeglich geaendert werden koennen, aber
+in ARCHITECTURE.md/OPEN_QUESTIONS.md festzuhalten, falls das V1-Modell
+(ein Auftrag, ein Arbeitsverzeichnis, unveraenderliche Parameter) je
+aufgeweicht wird.

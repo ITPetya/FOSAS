@@ -28,6 +28,25 @@ so entworfen, dass Auth spaeter eingehaengt werden kann, ohne die
 API-Form zu brechen). Die automatisch erzeugte interaktive
 OpenAPI-Dokumentation dient von Phase 1 an als browserbasierte Testflaeche.
 
+**Job-Persistenz und geteilte Sitzung (seit Phase 1, siehe RISKS.md R14).**
+Es gibt bewusst kein Nutzerkonto und keine Browser-Sitzung im ueblichen
+Sinn: Ein Auftrag gehoert nicht einem Tab oder Geraet, sondern ist ueber
+seine Auftrags-ID identifizierbar, die die Weboberflaeche in die
+Webadresse schreibt (`?job=<id>`). Wer den Link oeffnet, egal auf welchem
+Geraet, sieht denselben Status, da der Zustand serverseitig in
+`fosas_engine.jobs.JobStore` gehalten und zusaetzlich als `job_meta.json`
+im jeweiligen Arbeitsverzeichnis des Auftrags auf die Festplatte
+gespiegelt wird. Das ist fuer den vorgesehenen Einzelnutzer-Betrieb
+(ein Server, eine Person, siehe CLAUDE.md Phasenregel) ausreichend, aber
+kein Mehrnutzer-Modell: Es gibt keine Zugriffskontrolle pro Auftrag,
+jeder mit dem Bearer-Token sieht alle Auftraege (`GET /jobs`). Ein
+Engine-Neustart laedt beim Start alle Auftraege von der Festplatte
+(`JobStore.load_from_disk`) und stoesst dabei automatisch jeden Auftrag,
+der beim letzten Stopp noch "running" war, erneut an; `run_case` erkennt
+selbst, ob Netz oder SU2-Zwischenspeicherung schon vorliegen, und setzt
+dort fort statt neu zu beginnen (siehe RISKS.md R14 fuer die bekannte
+Grenze dieses Mechanismus).
+
 **Schicht 3, Clients.** Web-UI (trame mit VTK/vtk.js, Eignung fuer begehbare
 Animation mit vielen Zustaenden noch nicht durch Spike bestaetigt, siehe
 OPEN_QUESTIONS.md), CLI, KI-Zugriff (MCP-Server oder Tool-Schema aus

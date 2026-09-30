@@ -248,10 +248,25 @@ function renderResult(result) {
   drawCpChart(result.surface);
 }
 
+function reloadToRefreshToken() {
+  // The engine issues a new random token on every start (see
+  // docs/ARCHITECTURE.md); an old page kept open across a restart is
+  // still holding the previous one. Reloading re-fetches "/", which
+  // serves the current token, while the job id stays in the URL, so
+  // the reload lands right back on the same job's status instead of
+  // an empty form, see docs/RISKS.md R14.
+  window.location.reload();
+}
+
 async function pollJob(jobId) {
   const statusEl = document.getElementById("status");
   while (true) {
     const res = await fetch("/jobs/" + jobId, { headers: authHeaders() });
+    if (res.status === 401) {
+      statusEl.textContent = "Token abgelaufen (Engine wurde neu gestartet), lade Seite neu ...";
+      reloadToRefreshToken();
+      return;
+    }
     if (!res.ok) { setError("Fehler beim Abfragen des Jobs (" + res.status + ")"); return; }
     const job = await res.json();
     if (job.status === "pending" || job.status === "running") {
@@ -268,6 +283,19 @@ async function pollJob(jobId) {
     renderResult(job.result);
     return;
   }
+}
+
+function getJobIdFromUrl() {
+  return new URLSearchParams(window.location.search).get("job");
+}
+
+const resumeJobId = getJobIdFromUrl();
+if (resumeJobId) {
+  // Reopening a link (another device, or the same tab after closing it)
+  // shows the status of the existing job right away instead of an empty
+  // upload form, see docs/RISKS.md R14.
+  document.getElementById("status").textContent = "Lade Status von Job " + resumeJobId + " ...";
+  pollJob(resumeJobId);
 }
 
 document.getElementById("case-form").addEventListener("submit", async (e) => {
@@ -289,12 +317,21 @@ document.getElementById("case-form").addEventListener("submit", async (e) => {
     }
 
     const res = await fetch("/jobs", { method: "POST", headers: authHeaders(), body: form });
+    if (res.status === 401) {
+      document.getElementById("status").textContent = "Token abgelaufen (Engine wurde neu gestartet), lade Seite neu ...";
+      reloadToRefreshToken();
+      return;
+    }
     if (!res.ok) {
       const detail = await res.text();
       setError("Konnte Job nicht starten (" + res.status + "): " + detail);
       return;
     }
     const job = await res.json();
+    // Put the job id in the address bar so this exact status page can be
+    // reopened from any device by reusing the link, and survives closing
+    // this tab, see docs/RISKS.md R14.
+    history.replaceState(null, "", "?job=" + job.id);
     document.getElementById("status").textContent = "Job " + job.id + " gestartet.";
     await pollJob(job.id);
   } catch (err) {

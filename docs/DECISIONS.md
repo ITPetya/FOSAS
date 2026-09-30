@@ -374,3 +374,37 @@ wenn die Kernaussage von R10 (Restfehler-Plateau weit ueber dem
 Konvergenzziel) davon nicht beruehrt sein sollte, da die grossen
 Validierungslaeufe in R10 mit explizit gesetzter CFL-Zahl liefen, nicht
 mit dem betroffenen Standardwert.
+
+## ADR-0013: OUTPUT_FILES ueberschreibt SU2-Standardliste statt sie zu erweitern, RESTART war seit ADR-0010 stillschweigend aus
+
+Kontext: Beim Bau der Absturzsicherheit (Wiederaufnahme nach Abbruch,
+siehe RISKS.md R14) wurde ein Test geschrieben, der `run_case` zweimal
+mit demselben Arbeitsverzeichnis aufruft und erwartet, dass der zweite
+Lauf an SU2s eigener Zwischenspeicherung (`restart_flow.dat`) fortsetzt.
+Auch nach 110 Iterationen (ueber `OUTPUT_WRT_FREQ`, Standard 100, hinaus)
+wurde nie eine `restart_flow.dat` geschrieben.
+
+Ursache gefunden: In `fosas_core/solver.py` steht seit ADR-0010 (Cp- und
+y+-Ausgabe fuer die Weboberflaeche) `OUTPUT_FILES= (SURFACE_CSV)` in der
+generierten SU2-Konfiguration. Der SU2-Schluessel `OUTPUT_FILES` ERSETZT
+die eingebaute Standardliste `(RESTART, PARAVIEW, SURFACE_PARAVIEW)`,
+er erweitert sie nicht. Das bedeutet: seit ADR-0010 hat kein einziger
+SU2-Lauf in FOSAS jemals eine Restart-Datei geschrieben, unabhaengig von
+Iterationszahl. Das war bisher unbemerkt, weil vorher niemand versucht
+hat, eine Wiederaufnahme zu testen.
+
+Entscheidung: `OUTPUT_FILES= (RESTART, SURFACE_CSV)` gesetzt, mit
+erklaerendem Kommentar direkt im generierten Konfigurationstext, damit
+dieselbe stille Falle nicht bei der naechsten Erweiterung der Ausgabe
+(z. B. weitere Feldgroessen) wieder zuschlaegt. Durch
+`test_run_case_resumes_instead_of_restarting_from_scratch` abgesichert
+(bestaetigt: Netz wird wiederverwendet, zweiter Lauf startet nachweislich
+nicht beim Anfangsrestfehler neu, sondern dort, wo der erste aufgehoert
+hat).
+
+Konsequenzen: PARAVIEW/SURFACE_PARAVIEW-Ausgabedateien werden weiterhin
+nicht geschrieben (waren schon seit ADR-0010 weg, das war so beabsichtigt
+und aendert sich hier nicht). Keine sonstigen Verhaltensaenderungen fuer
+bestehende, nicht wiederaufgenommene Faelle, da RESTART lediglich eine
+zusaetzliche Ausgabedatei ist und den eigentlichen Loesungsverlauf nicht
+beeinflusst.

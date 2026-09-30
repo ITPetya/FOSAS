@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 
-from fosas_engine.jobs import JobStore
+from fosas_engine.jobs import JobStore, new_job_id
 from fosas_engine.models import JobOut
 from fosas_engine.settings import Settings
 
@@ -40,9 +40,18 @@ def create_app(settings: Settings) -> FastAPI:
         version="0.0.1",
     )
     app.state.settings = settings
-    app.state.jobs = JobStore()
-    app.state.executor = ThreadPoolExecutor(max_workers=settings.max_concurrent_jobs)
     settings.work_root.mkdir(parents=True, exist_ok=True)
+    app.state.jobs = JobStore.load_from_disk(settings.work_root)
+    app.state.executor = ThreadPoolExecutor(max_workers=settings.max_concurrent_jobs)
+
+    # A job that was still "running" when the engine last stopped (crash
+    # or deliberate restart) never got to call mark_done/mark_failed. Its
+    # own work is not lost (fosas_core.pipeline.run_case picks up the
+    # existing mesh/restart file, see docs/RISKS.md R14), but nothing
+    # will resume it unless it is resubmitted here.
+    for job in app.state.jobs.list():
+        if job.status in ("pending", "running"):
+            app.state.executor.submit(_execute_job, app, job.id, job.step_path, job.params, job.work_dir)
 
     def require_token(authorization: str | None = Header(default=None)) -> None:
         expected = f"Bearer {settings.token}"
@@ -105,12 +114,13 @@ def create_app(settings: Settings) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        job = app.state.jobs.create(params, step_file.filename or "geometry.step")
-        work_dir = settings.work_root / job.id
+        job_id = new_job_id()
+        work_dir = settings.work_root / job_id
         work_dir.mkdir(parents=True, exist_ok=True)
         step_path = work_dir / "input.step"
         step_path.write_bytes(await step_file.read())
 
+        job = app.state.jobs.create(job_id, params, step_file.filename or "geometry.step", step_path, work_dir)
         app.state.executor.submit(_execute_job, app, job.id, step_path, params, work_dir)
         return JobOut.from_job(job)
 

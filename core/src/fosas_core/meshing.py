@@ -324,13 +324,16 @@ def run_gmsh(
             f"output file '{output_su2_path}' was not created."
         )
 
-    node_count, element_count, markers = _read_su2_header(output_su2_path)
-    return MeshInfo(
-        su2_path=output_su2_path,
-        node_count=node_count,
-        element_count=element_count,
-        markers=markers,
-    )
+    return read_mesh_info(output_su2_path)
+
+
+def read_mesh_info(su2_path: Path) -> MeshInfo:
+    """Read node/element/marker counts from an already-written .su2 file,
+    without invoking Gmsh. Used to resume a job whose mesh already exists
+    from a previous, interrupted attempt (see fosas_core.pipeline).
+    """
+    node_count, element_count, markers = _read_su2_header(su2_path)
+    return MeshInfo(su2_path=su2_path, node_count=node_count, element_count=element_count, markers=markers)
 
 
 def _read_su2_header(su2_path: Path) -> tuple[int, int, tuple[str, ...]]:

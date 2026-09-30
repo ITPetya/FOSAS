@@ -34,11 +34,13 @@ from .meshing import (
     ConstantSectionMeshParams,
     MeshingError,
     generate_constant_section_geo,
+    read_mesh_info,
     run_gmsh,
 )
 from .quality import ConvergenceAssessment, assess_convergence
 from .solver import (
     FreestreamConditions,
+    IterationHistory,
     ReferenceValues,
     SolverError,
     SolverParams,
@@ -100,6 +102,7 @@ class CaseResult:
     cl: float
     cd: float
     convergence: ConvergenceAssessment
+    history: IterationHistory
     surface: SurfaceData
     mean_y_plus: float
     max_y_plus: float
@@ -197,14 +200,28 @@ def run_case(
         span_layers=params.span_layers,
     )
     mesh_path = work_dir / "mesh.su2"
-    try:
-        geo = generate_constant_section_geo(mesh_params, mesh_path)
-        mesh_info = run_gmsh(geo, mesh_path, gmsh_executable=executables.gmsh, timeout=mesh_timeout)
-    except MeshingError as exc:
-        raise PipelineError("meshing", str(exc)) from exc
+    if mesh_path.exists():
+        # Resuming a job that got this far before (crash, engine restart,
+        # see docs/ARCHITECTURE.md job persistence): re-meshing an
+        # unchanged geometry with the same parameters would just
+        # reproduce the same file, so reuse it instead of redoing
+        # potentially expensive work.
+        mesh_info = read_mesh_info(mesh_path)
+    else:
+        try:
+            geo = generate_constant_section_geo(mesh_params, mesh_path)
+            mesh_info = run_gmsh(geo, mesh_path, gmsh_executable=executables.gmsh, timeout=mesh_timeout)
+        except MeshingError as exc:
+            raise PipelineError("meshing", str(exc)) from exc
 
     vx = params.velocity * math.cos(math.radians(params.aoa_deg))
     vz = params.velocity * math.sin(math.radians(params.aoa_deg))
+    solve_dir = work_dir / "solve"
+    # If a previous attempt got partway through solving before being
+    # interrupted (crash, engine restart), SU2 will have written its own
+    # periodic restart file; picking it up here means a retry continues
+    # from there instead of losing that work and starting at iteration 0.
+    previous_restart = solve_dir / "restart_flow.dat"
     solver_params = SolverParams(
         mesh_su2_path=mesh_path,
         freestream=FreestreamConditions(
@@ -216,8 +233,8 @@ def run_case(
         reference=ReferenceValues(length=chord, area=chord * span, moment_origin=(chord / 2, mid_y, 0.0)),
         max_iterations=params.max_iterations,
         time_discretization=params.time_discretization,
+        restart_solution_path=previous_restart if previous_restart.exists() else None,
     )
-    solve_dir = work_dir / "solve"
     try:
         config_text = generate_config(solver_params, solve_dir)
         result = run_su2(
@@ -249,6 +266,7 @@ def run_case(
         cl=result.final("CL"),
         cd=result.final("CD"),
         convergence=convergence,
+        history=result.history,
         surface=result.surface,
         mean_y_plus=mean_y_plus,
         max_y_plus=max_y_plus,
