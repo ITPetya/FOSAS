@@ -9,6 +9,7 @@ from fosas_core.solver import (
     ReferenceValues,
     SolverError,
     SolverParams,
+    count_completed_iterations,
     generate_config,
     run_su2,
 )
@@ -142,3 +143,25 @@ def test_end_to_end_mesh_and_solve_produces_parseable_history(tmp_path, gmsh_exe
     assert result.surface.num_points > 0
     assert "Pressure_Coefficient" in result.surface.columns
     assert "Y_Plus" in result.surface.columns
+
+
+def test_count_completed_iterations_reports_zero_when_nothing_exists_yet(tmp_path):
+    assert count_completed_iterations(tmp_path / "does_not_exist") == 0
+    empty_dir = tmp_path / "solve"
+    empty_dir.mkdir()
+    assert count_completed_iterations(empty_dir) == 0  # SU2 started but has not written history.csv yet
+
+
+def test_count_completed_iterations_counts_only_complete_rows(tmp_path):
+    output_dir = tmp_path / "solve"
+    output_dir.mkdir()
+    history = output_dir / "history.csv"
+    header = '"Time_Iter","Inner_Iter","rms[P]"\n'
+    complete_rows = "0,0,-1.0\n0,1,-1.5\n0,2,-1.8\n"
+    history.write_text(header + complete_rows)
+    assert count_completed_iterations(output_dir) == 3
+
+    # A live SU2 process can be caught mid-write of its next line: fewer
+    # fields than the header (the write was cut off before finishing).
+    history.write_text(header + complete_rows + "0,3")
+    assert count_completed_iterations(output_dir) == 3

@@ -9,6 +9,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from fosas_engine.jobs import Job, JobStatus
+from fosas_engine.progress import compute_progress
 
 
 class ConvergenceOut(BaseModel):
@@ -41,6 +42,15 @@ class CaseResultOut(BaseModel):
     surface: list[SurfacePointOut]
 
 
+class ProgressOut(BaseModel):
+    phase: str
+    current_iteration: int | None
+    max_iterations: int | None
+    percent: float | None
+    elapsed_seconds: float
+    eta_seconds: float | None
+
+
 class JobOut(BaseModel):
     id: str
     status: JobStatus
@@ -49,6 +59,7 @@ class JobOut(BaseModel):
     stage: str | None = None
     error: str | None = None
     result: CaseResultOut | None = None
+    progress: ProgressOut | None = None
 
     @classmethod
     def from_job(cls, job: Job) -> "JobOut":
@@ -83,6 +94,19 @@ class JobOut(BaseModel):
                 max_y_plus=job.result.max_y_plus,
                 surface=surface_out,
             )
+        progress = compute_progress(job)
+        progress_out = (
+            ProgressOut(
+                phase=progress.phase,
+                current_iteration=progress.current_iteration,
+                max_iterations=progress.max_iterations,
+                percent=progress.percent,
+                elapsed_seconds=progress.elapsed_seconds,
+                eta_seconds=progress.eta_seconds,
+            )
+            if progress is not None
+            else None
+        )
         return cls(
             id=job.id,
             status=job.status,
@@ -91,4 +115,5 @@ class JobOut(BaseModel):
             stage=job.stage,
             error=job.error,
             result=result_out,
+            progress=progress_out,
         )

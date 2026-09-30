@@ -7,7 +7,11 @@ bearer token generated fresh at every startup and printed to stdout
 
 ## Scope of this version
 
-- REST only, no WebSocket progress channel yet.
+- REST only, no WebSocket yet. A running job's progress (phase, current
+  iteration, percent, ETA) is still available: `GET /jobs/{id}` computes
+  it on every call by reading the job's own files (mesh.su2's existence,
+  history.csv's growing row count), see `fosas_engine/progress.py`. No
+  progress percentage for the meshing phase, since Gmsh reports none.
 - No cache integration yet (`fosas_core.cache` exists but is not wired
   into job execution).
 - Jobs run in-process; state is mirrored to `job_meta.json` in each

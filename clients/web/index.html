@@ -82,6 +82,33 @@
   .legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
   .error { color: var(--bad); font-size: 0.9rem; margin-top: 12px; white-space: pre-wrap; }
   .hint { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+  .steps { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .steps li {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 0.88rem; color: var(--muted);
+  }
+  .steps li .dot {
+    width: 18px; height: 18px; border-radius: 50%; flex: 0 0 auto;
+    border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; color: var(--muted);
+  }
+  .steps li.done .dot { background: var(--ok); border-color: var(--ok); color: #06240f; }
+  .steps li.done { color: var(--text); }
+  .steps li.current .dot { border-color: var(--accent); color: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  .steps li.current { color: var(--text); font-weight: 600; }
+  .steps li.failed .dot { background: var(--bad); border-color: var(--bad); color: #2a0000; }
+  .steps li.failed { color: var(--bad); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .progress-track {
+    margin-top: 14px; height: 10px; border-radius: 999px; background: #0d0f13;
+    border: 1px solid var(--border); overflow: hidden; position: relative;
+  }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.4s ease; }
+  .progress-fill.indeterminate {
+    width: 35%; position: absolute; animation: indeterminate 1.3s ease-in-out infinite;
+  }
+  @keyframes indeterminate { 0% { left: -35%; } 100% { left: 100%; } }
+  .progress-meta { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -147,6 +174,20 @@
       <button type="submit" id="submit-btn">Rechnung starten</button>
     </form>
     <div class="status" id="status"></div>
+    <div id="progress-panel" hidden>
+      <ul class="steps" id="steps-list">
+        <li id="step-geometry"><span class="dot"></span><span>Geometrie pruefen</span></li>
+        <li id="step-meshing"><span class="dot"></span><span>Vernetzen</span></li>
+        <li id="step-solving"><span class="dot"></span><span>Stroemung berechnen</span></li>
+      </ul>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-meta">
+        <span id="progress-label"></span>
+        <span id="progress-eta"></span>
+      </div>
+    </div>
     <div class="error" id="error" hidden></div>
   </div>
 
@@ -248,6 +289,84 @@ function renderResult(result) {
   drawCpChart(result.surface);
 }
 
+function formatDuration(seconds) {
+  if (seconds == null || !isFinite(seconds) || seconds < 0) return "unbekannt";
+  seconds = Math.round(seconds);
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+function setStep(id, state) {
+  // state: "pending" | "current" | "done" | "failed"
+  const el = document.getElementById(id);
+  el.className = state === "pending" ? "" : state;
+  el.querySelector(".dot").textContent = state === "done" ? "✓" : state === "failed" ? "✕" : "";
+}
+
+function renderProgress(job) {
+  const panel = document.getElementById("progress-panel");
+  const fill = document.getElementById("progress-fill");
+  const label = document.getElementById("progress-label");
+  const etaEl = document.getElementById("progress-eta");
+
+  if (job.status === "done") {
+    panel.hidden = true;
+    return;
+  }
+
+  panel.hidden = false;
+
+  if (job.status === "pending") {
+    setStep("step-geometry", "current");
+    setStep("step-meshing", "pending");
+    setStep("step-solving", "pending");
+    fill.className = "progress-fill indeterminate";
+    label.textContent = "Wird gestartet ...";
+    etaEl.textContent = "";
+    return;
+  }
+
+  if (job.status === "failed") {
+    const failedAt = job.stage;
+    setStep("step-geometry", failedAt === "geometry" ? "failed" : "done");
+    setStep("step-meshing", failedAt === "meshing" ? "failed" : (failedAt === "geometry" ? "pending" : "done"));
+    setStep("step-solving", failedAt === "solving" ? "failed" : (failedAt === "geometry" || failedAt === "meshing" ? "pending" : "done"));
+    fill.className = "progress-fill";
+    fill.style.width = "0%";
+    label.textContent = "Fehlgeschlagen in Phase '" + failedAt + "'";
+    etaEl.textContent = "";
+    return;
+  }
+
+  // status === "running"
+  const progress = job.progress;
+  const phase = progress ? progress.phase : "meshing";
+  setStep("step-geometry", "done");
+
+  if (phase === "meshing") {
+    setStep("step-meshing", "current");
+    setStep("step-solving", "pending");
+    fill.className = "progress-fill indeterminate";
+    // Gmsh reports no progress percentage FOSAS can read while it runs,
+    // so this phase honestly shows elapsed time only, not a guessed ETA.
+    label.textContent = "Vernetzung laeuft (" + formatDuration(progress ? progress.elapsed_seconds : null) + ")";
+    etaEl.textContent = "";
+  } else {
+    setStep("step-meshing", "done");
+    setStep("step-solving", "current");
+    fill.className = "progress-fill";
+    const pct = progress && progress.percent != null ? progress.percent : 0;
+    fill.style.width = pct.toFixed(1) + "%";
+    const cur = progress ? progress.current_iteration : 0;
+    const max = progress ? progress.max_iterations : "?";
+    label.textContent = "Iteration " + cur + " / " + max + " (" + pct.toFixed(1) + "%)";
+    etaEl.textContent = progress && progress.eta_seconds != null
+      ? "noch ca. " + formatDuration(progress.eta_seconds)
+      : "Restzeit noch unbekannt";
+  }
+}
+
 function reloadToRefreshToken() {
   // The engine issues a new random token on every start (see
   // docs/ARCHITECTURE.md); an old page kept open across a restart is
@@ -269,8 +388,9 @@ async function pollJob(jobId) {
     }
     if (!res.ok) { setError("Fehler beim Abfragen des Jobs (" + res.status + ")"); return; }
     const job = await res.json();
+    renderProgress(job);
     if (job.status === "pending" || job.status === "running") {
-      statusEl.textContent = "Status: " + job.status + " ... (kein Live-Fortschritt in dieser Version, siehe engine/README.md)";
+      statusEl.textContent = "Job " + jobId;
       await new Promise(r => setTimeout(r, 2000));
       continue;
     }
@@ -302,6 +422,7 @@ document.getElementById("case-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   setError(null);
   document.getElementById("result-panel").hidden = true;
+  document.getElementById("progress-panel").hidden = true;
   const btn = document.getElementById("submit-btn");
   btn.disabled = true;
   document.getElementById("status").textContent = "Lade Datei hoch und starte Job ...";

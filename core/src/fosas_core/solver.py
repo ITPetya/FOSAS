@@ -307,6 +307,41 @@ def run_su2(
     )
 
 
+def count_completed_iterations(output_dir: Path) -> int:
+    """How many full iteration rows SU2 has written to history.csv so
+    far, for a run that may still be in progress.
+
+    Confirmed empirically (real run on the AWS server, watched live):
+    SU2 writes and flushes history.csv incrementally, one row per
+    completed inner iteration, not just once at the end. That makes it
+    a reliable basis for progress reporting without any new IPC channel
+    (see docs/ARCHITECTURE.md, job progress tracking). The read must
+    tolerate two things a live, growing file can show: no file yet
+    (SU2 has not gotten past its own startup), and a torn last line
+    (this function's caller can run concurrently with SU2's own write of
+    that same line) - both are treated as "not yet counted", not errors.
+    """
+    if not output_dir.exists():
+        return 0
+    history_path = output_dir / "history.csv"
+    if not history_path.exists():
+        return 0
+    with open(history_path) as f:
+        header_line = f.readline()
+        expected_fields = len(header_line.split(","))
+        count = 0
+        for line in f:
+            fields = line.split(",")
+            if len(fields) != expected_fields:
+                continue  # torn last line, still being written
+            try:
+                float(fields[0])
+            except ValueError:
+                continue
+            count += 1
+    return count
+
+
 def _read_csv_columns(path: Path) -> dict[str, tuple[float, ...]]:
     with open(path) as f:
         header_line = f.readline()

@@ -47,6 +47,20 @@ selbst, ob Netz oder SU2-Zwischenspeicherung schon vorliegen, und setzt
 dort fort statt neu zu beginnen (siehe RISKS.md R14 fuer die bekannte
 Grenze dieses Mechanismus).
 
+**Fortschrittsanzeige waehrend der Rechnung.** Kein WebSocket, kein
+neuer Kanal: `GET /jobs/{id}` berechnet den Fortschritt bei jedem Aufruf
+neu aus dem Dateisystem (`fosas_engine/progress.py`), abgeleitet aus
+Zustand, den `fosas_core` ohnehin schreibt. Zwei Phasen, mehr nicht:
+"meshing" (solange `mesh.su2` noch nicht existiert) und "solving"
+(danach). Fuer "solving" liefert SU2s eigene, waehrend der Rechnung
+laufend geschriebene `history.csv` die Zeilenzahl als Iterationsstand,
+daraus Prozent und eine grobe ETA (Restzeit = bisherige Zeit pro
+Iteration mal verbleibende Iterationen). Fuer "meshing" gibt es
+bewusst keine Prozentanzeige: Gmsh gibt waehrend des Laufs keinen fuer
+FOSAS auslesbaren Fortschrittswert aus, eine erfundene Prozentzahl waere
+eine stille Falschangabe. Die Weboberflaeche zeigt in dem Fall nur die
+verstrichene Zeit.
+
 **Schicht 3, Clients.** Web-UI (trame mit VTK/vtk.js, Eignung fuer begehbare
 Animation mit vielen Zustaenden noch nicht durch Spike bestaetigt, siehe
 OPEN_QUESTIONS.md), CLI, KI-Zugriff (MCP-Server oder Tool-Schema aus

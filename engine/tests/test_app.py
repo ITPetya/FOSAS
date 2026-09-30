@@ -41,6 +41,42 @@ def test_unknown_job_is_404(client, settings):
     assert response.status_code == 404
 
 
+def test_get_job_reports_solving_progress(client, settings, tmp_path):
+    from fosas_core.pipeline import CaseParams
+
+    work_dir = tmp_path / "cases" / "fake-job"
+    solve_dir = work_dir / "solve"
+    solve_dir.mkdir(parents=True)
+    (work_dir / "mesh.su2").write_text("fake mesh")
+    (solve_dir / "config.cfg").write_text("fake config")
+    header = '"Time_Iter","Inner_Iter","rms[P]"\n'
+    rows = "\n".join(f"0,{i},-1.0" for i in range(30)) + "\n"
+    (solve_dir / "history.csv").write_text(header + rows)
+
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    app.state.jobs.create(
+        "fake-job",
+        CaseParams(velocity=30, aoa_deg=5, max_iterations=100),
+        "wing.step",
+        work_dir / "input.step",
+        work_dir,
+    )
+    app.state.jobs.mark_running("fake-job")
+
+    response = client.get("/jobs/fake-job", headers={"Authorization": f"Bearer {settings.token}"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "running"
+    assert body["progress"]["phase"] == "solving"
+    assert body["progress"]["current_iteration"] == 30
+    assert body["progress"]["max_iterations"] == 100
+    assert body["progress"]["percent"] == 30.0
+    assert body["progress"]["eta_seconds"] is not None
+
+
 def test_create_job_rejects_invalid_params(client, settings, tmp_path):
     step_path = naca0012_wing_step(tmp_path / "wing.step")
     with open(step_path, "rb") as f:
