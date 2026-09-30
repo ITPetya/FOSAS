@@ -137,12 +137,32 @@ def run_case(
     bbox = geometry.shape.bounding_box()
     chord = bbox.max.X - bbox.min.X
     span = bbox.max.Y - bbox.min.Y
+    thickness = bbox.max.Z - bbox.min.Z
     if chord <= 0 or span <= 0:
         raise PipelineError(
             "geometry",
             f"Bounding box gives chord={chord:.4g}, span={span:.4g}. FOSAS V1 "
             "assumes the geometry already uses X chordwise, Y spanwise, Z "
             "vertical (see docs/ARCHITECTURE.md); check the input orientation.",
+        )
+    # Sanity check, added after a real incident: a STEP file with the
+    # actual span along Z (not Y) passed the check above (Y and X were
+    # both positive, just the wrong physical quantities) and produced a
+    # nonsensical lengthwise cross-section, which made Gmsh consume
+    # essentially all available RAM before the OOM killer stepped in.
+    # A real wing's span is essentially always larger than its chord,
+    # and its Y-extent (assumed thickness-free span) should not be
+    # dramatically smaller than its Z-extent if Z really is vertical.
+    if span < 0.5 * chord or thickness > 2 * span:
+        raise PipelineError(
+            "geometry",
+            f"Bounding box looks implausible for the assumed axis convention "
+            f"(X chordwise={chord:.4g}, Y spanwise={span:.4g}, Z vertical="
+            f"{thickness:.4g}). A real wing's span is normally larger than its "
+            "chord, and clearly larger than its thickness. This usually means "
+            "the geometry's span is actually along a different axis (often Z). "
+            "Re-export or rotate the geometry so X is chordwise, Y is "
+            "spanwise, and Z is vertical, see docs/ARCHITECTURE.md.",
         )
     mid_y = (bbox.min.Y + bbox.max.Y) / 2
 

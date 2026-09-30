@@ -4,7 +4,19 @@ import pytest
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 
-from .fixtures import naca0012_wing_step
+from .fixtures import naca0012_wing_step, naca0012_wing_step_wrong_axes
+
+
+def test_run_case_rejects_geometry_with_span_along_the_wrong_axis(tmp_path):
+    # Regression test for a real incident: this shape of mistake made
+    # Gmsh consume all available RAM on a real customer file before the
+    # OOM killer intervened, see docs/RISKS.md. Must be caught before
+    # meshing is even attempted, not after the machine runs out of memory.
+    step_path = naca0012_wing_step_wrong_axes(tmp_path / "wrong_axes.step", chord=0.6, span=1.2, n=25)
+    params = CaseParams(velocity=50, aoa_deg=5)
+    with pytest.raises(PipelineError, match="implausible") as exc_info:
+        run_case(step_path, params, tmp_path / "work")
+    assert exc_info.value.stage == "geometry"
 
 
 def test_case_params_reject_invalid_input():

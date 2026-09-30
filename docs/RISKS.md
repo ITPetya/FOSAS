@@ -542,3 +542,46 @@ Massnahme: Keine akute, dieser Fall ist als Naeherung klar gekennzeichnet
 und nicht fuer einen Loeserlauf verwendet worden. Echte Loft-Vernetzung
 fuer verjuengte Koerper bleibt ein groesseres, eigenes Arbeitspaket fuer
 eine spaetere Phase.
+
+## R13: Falsch orientierte Geometrie fuehrte zu echtem Speicherueberlauf (behoben)
+
+Beleg (echter Vorfall, eigene Webflaeche, dieselbe Datei wie R12): Der
+Projektinhaber hat die reale Fluegel-Datei ueber die neue Weboberflaeche
+hochgeladen, mit Standardeinstellungen (Geschwindigkeit 30 m/s,
+Anstellwinkel 5 Grad). Die Datei hat die Spannweite tatsaechlich entlang
+Z (rund 500 mm), nicht entlang Y wie von `fosas_core.pipeline.run_case`
+angenommen (Y ist bei dieser Datei die Dickenrichtung, nur rund 10 mm).
+Die bisherige Pruefung (`chord <= 0 or span <= 0`) hat das nicht erkannt,
+da beide Werte positiv waren, nur die falsche physikalische Groesse
+gemessen wurde. Die Pipeline hat daraufhin einen Querschnitt quer durch
+die Dickenrichtung ueber die volle Laenge geschnitten, eine unsinnige,
+sehr komplexe Kontur. Gmsh hat beim Versuch, das zu vernetzen, fast den
+gesamten verfuegbaren Arbeitsspeicher (8 GB auf dem AWS-Server)
+aufgebraucht, bis der Linux-OOM-Killer den Gmsh-Prozess beendet hat
+(bestaetigt per `dmesg`, "Out of memory: Killed process ... (python)
+... anon-rss:6651276kB").
+
+Status: Behoben. `run_case` prueft jetzt zusaetzlich, ob die berechnete
+Spannweite plausibel im Verhaeltnis zur Sehnenlaenge und Dicke steht
+(Spannweite muss mindestens die halbe Sehnenlaenge betragen, Dicke darf
+nicht mehr als doppelt so gross wie die Spannweite sein), und bricht bei
+Verdacht auf falsche Achsenzuordnung sofort mit einer klaren Fehlermeldung
+ab, bevor ueberhaupt vernetzt wird. Mit einem eigenen Regressionstest
+abgesichert (`test_run_case_rejects_geometry_with_span_along_the_wrong_axis`,
+absichtlich falsch orientierte Testgeometrie, reproduziert dieselbe
+Verwechslung wie im echten Vorfall).
+
+Wichtig zur Einordnung: Der Webserver selbst (FastAPI/Uvicorn) blieb
+beim OOM-Vorfall unberuehrt und lief weiter, nur der einzelne
+Gmsh-Kindprozess wurde beendet. Das Zugriffsproblem, das der
+Projektinhaber danach hatte, war ein separates, unabhaengiges Problem
+(abgebrochener SSH-Tunnel auf dem iPad), keine Folge des OOM-Vorfalls.
+
+Massnahme: Die eigentliche Ursache (kein automatischer
+Ausrichtungsschritt fuer beliebig orientierte STEP-Dateien) bleibt
+bestehen, das ist ADR-mässig weiterhin genau die vom Projektinhaber in
+der urspruenglichen Anforderung vorgesehene, aber noch nicht gebaute
+"Ausrichtung per 3D-Vorschau bestaetigt" (Abschnitt 3 der
+urspruenglichen Anforderungen). Bis dahin schuetzt die neue Pruefung nur
+vor Ressourcenverschwendung und gibt eine verstaendliche Fehlermeldung,
+loest das eigentliche UX-Problem aber nicht automatisch.
