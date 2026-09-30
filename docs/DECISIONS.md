@@ -489,3 +489,51 @@ angenommen wurde; da build123d/OCCT jede STEP-Datei unabhaengig von ihrer
 deklarierten Einheit auf dieselbe interne Millimeter-Konvention normiert,
 ist die Millimeter-Annahme kein Rateschritt, sondern eine feste,
 bibliotheksweite Tatsache, die fuer jede STEP-Datei gleichermassen gilt.
+
+## ADR-0015: Aufbewahrungsregeln fuer Auftraege (Archiv, automatisches Loeschen)
+
+Kontext: Mit mehreren Nutzern/Geraeten auf derselben geteilten
+Auftragsliste (siehe ARCHITECTURE.md, Job-Persistenz) wuerde die Liste
+sonst unbegrenzt mit alten Auftraegen vollaufen. Vom Projektinhaber
+explizit beauftragt: erfolgreiche Auftraege nach 5 Stunden automatisch
+archivieren, fehlgeschlagene schon nach 1,5 Stunden, fehlgeschlagene
+zusaetzlich nach 24 Stunden endgueltig loeschen, erfolgreiche nie
+automatisch loeschen (nur archivieren oder von Hand loeschen). Manuelles
+Archivieren/Loeschen soll jederzeit frueher moeglich sein.
+
+Entscheidung, mit Begruendung fuer jede nicht ganz triviale Wahl:
+
+- Die Frist wird ab `finished_at` gemessen (Zeitpunkt, an dem ein Auftrag
+  "running" verlassen hat), nicht ab `created_at`. Sonst wuerde ein
+  legitim mehrstuendiger Lauf mitten in der Rechnung archiviert werden,
+  nur weil er vor langer Zeit gestartet wurde, siehe R17 fuer ein
+  Beispiel, wie lange ein einzelner Lauf real dauern kann.
+- Archivieren aendert nur Sichtbarkeit (faellt aus der Standardliste,
+  taucht im Archiv auf), nicht die Datei- oder Datensatzexistenz.
+  Loeschen entfernt das Arbeitsverzeichnis wirklich von der Platte
+  (`shutil.rmtree`) und ist nicht rueckgaengig zu machen, deshalb in der
+  Weboberflaeche mit einer Bestaetigungsabfrage abgesichert.
+- Kein Hintergrund-Scheduler/Cron: Die Regeln werden bei jedem Lesezugriff
+  auf den `JobStore` frisch angewendet (`_sweep`, aufgerufen von `list`
+  und `get`). Bei der erwarteten Anzahl Auftraege fuer dieses Werkzeug ist
+  das guenstig genug, und es gibt keinen zusaetzlichen Prozess/Thread zu
+  verwalten oder der beim Absturz haengen bleiben koennte.
+- Reihenfolge beim Loeschen bewusst: erst Dateisystem, dann
+  Speicherstruktur. Schlaegt `shutil.rmtree` fehl, bleibt der Auftrag im
+  Speicher bestehen (Fehler wird weitergereicht, kein stilles Schlucken):
+  Waere die Reihenfolge umgekehrt und die Dateientfernung schluege fehl,
+  bliebe ein Verzeichnis mit `job_meta.json` zurueck, das
+  `JobStore.load_from_disk` beim naechsten Engine-Neustart faelschlich
+  wieder als aktiven Auftrag einlesen wuerde, ein "geloeschter" Auftrag
+  waere also wiederauferstanden.
+- Loeschen (und auch Archivieren) ist fuer `pending`/`running` Auftraege
+  gesperrt (`JobNotDeletableError`): Ihr Arbeitsverzeichnis kann noch von
+  einem laufenden Gmsh/SU2-Subprozess beschrieben werden, siehe R14 zur
+  Rolle des Arbeitsverzeichnisses als Zustandsquelle.
+
+Konsequenzen: `GET /jobs` liefert standardmaessig nur nicht archivierte
+Auftraege, `GET /jobs?archived=true` nur archivierte. Neue Endpunkte
+`POST /jobs/{id}/archive`, `POST /jobs/{id}/unarchive`,
+`DELETE /jobs/{id}`. Kein Weg, einen laufenden Auftrag ueber die API
+abzubrechen, das war schon vorher nicht moeglich und bleibt ein anderes,
+eigenes Thema.

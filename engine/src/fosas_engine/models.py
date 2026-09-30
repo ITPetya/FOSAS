@@ -55,6 +55,8 @@ class JobOut(BaseModel):
     id: str
     status: JobStatus
     created_at: datetime
+    finished_at: datetime | None = None
+    archived: bool = False
     step_filename: str
     stage: str | None = None
     error: str | None = None
@@ -111,6 +113,8 @@ class JobOut(BaseModel):
             id=job.id,
             status=job.status,
             created_at=job.created_at,
+            finished_at=job.finished_at,
+            archived=job.archived,
             step_filename=job.step_filename,
             stage=job.stage,
             error=job.error,

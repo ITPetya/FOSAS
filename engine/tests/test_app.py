@@ -41,6 +41,110 @@ def test_unknown_job_is_404(client, settings):
     assert response.status_code == 404
 
 
+def _fake_case_result(work_dir):
+    from fosas_core.pipeline import CaseResult
+    from fosas_core.quality import ConvergenceAssessment
+    from fosas_core.solver import IterationHistory, SurfaceData
+
+    return CaseResult(
+        chord=0.6,
+        span=1.2,
+        node_count=1234,
+        element_count=5678,
+        markers=("airfoil", "farfield"),
+        cl=1.29,
+        cd=0.08,
+        convergence=ConvergenceAssessment(
+            converged=False, final_residual=-3.5, residual_threshold=-8.0,
+            is_plateaued=True, message="did not converge",
+        ),
+        history=IterationHistory(columns={"rms[P]": (-1.0, -2.0, -3.5)}),
+        surface=SurfaceData(columns={
+            "x": (0.0, 0.6), "y": (0.0, 0.0), "z": (0.0, 0.01),
+            "Pressure_Coefficient": (0.5, -0.3), "Y_Plus": (1.0, 1.2),
+        }),
+        mean_y_plus=0.9,
+        max_y_plus=1.4,
+        mesh_path=work_dir / "mesh.su2",
+        solve_dir=work_dir / "solve",
+    )
+
+
+def _create_finished_job(app, work_root, job_id, status="done"):
+    from fosas_core.pipeline import CaseParams
+
+    work_dir = work_root / job_id
+    work_dir.mkdir(parents=True)
+    (work_dir / "input.step").write_bytes(b"dummy")
+    job = app.state.jobs.create(job_id, CaseParams(velocity=30, aoa_deg=5), "wing.step", work_dir / "input.step", work_dir)
+    app.state.jobs.mark_running(job.id)
+    if status == "done":
+        app.state.jobs.mark_done(job.id, _fake_case_result(work_dir))
+    else:
+        app.state.jobs.mark_failed(job.id, stage="solving", error="boom")
+    return work_dir
+
+
+def test_archive_unarchive_and_list_filtering(client, settings, tmp_path):
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    _create_finished_job(app, settings.work_root, "job1")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+
+    assert [j["id"] for j in client.get("/jobs", headers=headers).json()] == ["job1"]
+
+    resp = client.post("/jobs/job1/archive", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["archived"] is True
+    assert client.get("/jobs", headers=headers).json() == []
+    assert [j["id"] for j in client.get("/jobs?archived=true", headers=headers).json()] == ["job1"]
+
+    resp = client.post("/jobs/job1/unarchive", headers=headers)
+    assert resp.json()["archived"] is False
+    assert [j["id"] for j in client.get("/jobs", headers=headers).json()] == ["job1"]
+
+
+def test_archive_unknown_job_is_404(client, settings):
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    assert client.post("/jobs/does-not-exist/archive", headers=headers).status_code == 404
+    assert client.post("/jobs/does-not-exist/unarchive", headers=headers).status_code == 404
+    assert client.delete("/jobs/does-not-exist", headers=headers).status_code == 404
+
+
+def test_delete_job_removes_it(client, settings, tmp_path):
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    work_dir = _create_finished_job(app, settings.work_root, "job1", status="failed")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+
+    resp = client.delete("/jobs/job1", headers=headers)
+    assert resp.status_code == 200
+    assert client.get("/jobs/job1", headers=headers).status_code == 404
+    assert not work_dir.exists()
+
+
+def test_delete_running_job_is_rejected(client, settings, tmp_path):
+    from fosas_core.pipeline import CaseParams
+
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    work_dir = settings.work_root / "job1"
+    work_dir.mkdir(parents=True)
+    app.state.jobs.create("job1", CaseParams(velocity=30, aoa_deg=5), "wing.step", work_dir / "input.step", work_dir)
+    app.state.jobs.mark_running("job1")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+
+    resp = client.delete("/jobs/job1", headers=headers)
+    assert resp.status_code == 409
+    assert work_dir.exists()
+
+
 def test_execute_job_scales_solve_timeout_with_max_iterations(client, settings, tmp_path, monkeypatch):
     """Regression test for a real incident (docs/RISKS.md R17): a job
     explicitly asking for 5000 iterations was killed by run_case's fixed

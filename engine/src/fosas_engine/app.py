@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 
-from fosas_engine.jobs import JobStore, new_job_id
+from fosas_engine.jobs import JobNotDeletableError, JobStore, new_job_id
 from fosas_engine.models import JobOut
 from fosas_engine.settings import Settings
 
@@ -125,8 +125,11 @@ def create_app(settings: Settings) -> FastAPI:
         return JobOut.from_job(job)
 
     @app.get("/jobs", response_model=list[JobOut], dependencies=[Depends(require_token)])
-    def list_jobs():
-        return [JobOut.from_job(job) for job in app.state.jobs.list()]
+    def list_jobs(archived: bool = False):
+        # Auto-archive/auto-delete (see docs/DECISIONS.md ADR-0015) is
+        # applied lazily inside JobStore.list on every call, not by a
+        # background scheduler: cheap at the job counts this tool expects.
+        return [JobOut.from_job(job) for job in app.state.jobs.list(include_archived=archived)]
 
     @app.get("/jobs/{job_id}", response_model=JobOut, dependencies=[Depends(require_token)])
     def get_job(job_id: str):
@@ -134,6 +137,30 @@ def create_app(settings: Settings) -> FastAPI:
         if job is None:
             raise HTTPException(status_code=404, detail="No such job")
         return JobOut.from_job(job)
+
+    @app.post("/jobs/{job_id}/archive", response_model=JobOut, dependencies=[Depends(require_token)])
+    def archive_job(job_id: str):
+        if app.state.jobs.get(job_id) is None:
+            raise HTTPException(status_code=404, detail="No such job")
+        app.state.jobs.archive(job_id)
+        return JobOut.from_job(app.state.jobs.get(job_id))
+
+    @app.post("/jobs/{job_id}/unarchive", response_model=JobOut, dependencies=[Depends(require_token)])
+    def unarchive_job(job_id: str):
+        if app.state.jobs.get(job_id) is None:
+            raise HTTPException(status_code=404, detail="No such job")
+        app.state.jobs.unarchive(job_id)
+        return JobOut.from_job(app.state.jobs.get(job_id))
+
+    @app.delete("/jobs/{job_id}", dependencies=[Depends(require_token)])
+    def delete_job(job_id: str):
+        if app.state.jobs.get(job_id) is None:
+            raise HTTPException(status_code=404, detail="No such job")
+        try:
+            app.state.jobs.delete(job_id)
+        except JobNotDeletableError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"deleted": job_id}
 
     @app.exception_handler(PipelineError)
     def _unhandled_pipeline_error(request, exc: PipelineError):

@@ -137,6 +137,19 @@
   .job-row .job-file { font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .job-row .job-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
   .jobs-empty { font-size: 0.85rem; color: var(--muted); }
+  .jobs-header { display: flex; align-items: center; justify-content: space-between; }
+  .archive-toggle-btn {
+    margin: 0; width: auto; background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 6px 14px; font-size: 0.8rem; border-radius: 999px;
+  }
+  .archive-toggle-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .job-row .job-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+  .job-row .job-action-btn {
+    margin: 0; width: auto; padding: 5px 10px; font-size: 0.72rem;
+    background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 6px;
+  }
+  .job-row .job-action-btn:hover { border-color: var(--accent); color: var(--text); }
+  .job-row .job-action-btn.danger:hover { border-color: var(--bad); color: var(--bad); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/examples/js/controls/OrbitControls.js"></script>
@@ -151,11 +164,16 @@
   </p>
 
   <div class="panel">
-    <h2 style="margin-top:0;font-size:1.1rem;">Auftraege</h2>
-    <p class="hint" style="margin:0 0 10px;">
+    <div class="jobs-header">
+      <h2 id="jobs-title" style="margin:0;font-size:1.1rem;">Auftraege</h2>
+      <button type="button" class="archive-toggle-btn" id="archive-toggle-btn">Archiv</button>
+    </div>
+    <p class="hint" style="margin:6px 0 10px;">
       Alle Auftraege auf diesem Server, fuer jeden mit dem Zugangslink
       sichtbar (kein Login pro Person, siehe docs/ARCHITECTURE.md).
-      Anklicken oeffnet den Status.
+      Anklicken oeffnet den Status. Erfolgreiche werden nach 5h, fehlgeschlagene
+      nach 1,5h automatisch ins Archiv verschoben, fehlgeschlagene nach 24h
+      endgueltig geloescht.
     </p>
     <div id="jobs-list"></div>
   </div>
@@ -617,11 +635,39 @@ function selectJob(jobId) {
   pollJob(jobId);
 }
 
+let showingArchived = false;
+
+async function archiveJob(jobId) {
+  await fetch("/jobs/" + jobId + "/archive", { method: "POST", headers: authHeaders() });
+  loadJobsList();
+}
+
+async function unarchiveJob(jobId) {
+  await fetch("/jobs/" + jobId + "/unarchive", { method: "POST", headers: authHeaders() });
+  loadJobsList();
+}
+
+async function deleteJobPrompt(jobId, filename) {
+  if (!confirm("Auftrag \"" + filename + "\" endgueltig loeschen? Das entfernt auch alle zugehoerigen Dateien (Netz, Ergebnisse) und kann nicht rueckgaengig gemacht werden.")) {
+    return;
+  }
+  await fetch("/jobs/" + jobId, { method: "DELETE", headers: authHeaders() });
+  loadJobsList();
+}
+
+document.getElementById("archive-toggle-btn").addEventListener("click", () => {
+  showingArchived = !showingArchived;
+  document.getElementById("archive-toggle-btn").className = "archive-toggle-btn" + (showingArchived ? " active" : "");
+  document.getElementById("jobs-title").textContent = showingArchived ? "Archiv" : "Auftraege";
+  loadJobsList();
+});
+
 async function loadJobsList() {
   const listEl = document.getElementById("jobs-list");
   let jobs;
   try {
-    const res = await fetch("/jobs", { headers: authHeaders() });
+    const url = showingArchived ? "/jobs?archived=true" : "/jobs";
+    const res = await fetch(url, { headers: authHeaders() });
     if (res.status === 401) { reloadToRefreshToken(); return; }
     if (!res.ok) return; // transient hiccup: leave the previously shown list as-is
     jobs = await res.json();
@@ -633,7 +679,7 @@ async function loadJobsList() {
     listEl.innerHTML = "";
     const empty = document.createElement("p");
     empty.className = "jobs-empty";
-    empty.textContent = "Noch keine Auftraege.";
+    empty.textContent = showingArchived ? "Archiv ist leer." : "Noch keine Auftraege.";
     listEl.appendChild(empty);
     return;
   }
@@ -658,8 +704,33 @@ async function loadJobsList() {
     main.appendChild(fileEl);
     main.appendChild(metaEl);
 
+    const actions = document.createElement("div");
+    actions.className = "job-actions";
+    const canModify = job.status === "done" || job.status === "failed";
+    if (canModify) {
+      const toggleBtn = document.createElement("button");
+      toggleBtn.type = "button";
+      toggleBtn.className = "job-action-btn";
+      toggleBtn.textContent = showingArchived ? "Wiederherstellen" : "Archivieren";
+      toggleBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        showingArchived ? unarchiveJob(job.id) : archiveJob(job.id);
+      });
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "job-action-btn danger";
+      deleteBtn.textContent = "Loeschen";
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteJobPrompt(job.id, job.step_filename);
+      });
+      actions.appendChild(toggleBtn);
+      actions.appendChild(deleteBtn);
+    }
+
     row.appendChild(dot);
     row.appendChild(main);
+    row.appendChild(actions);
     row.addEventListener("click", () => selectJob(job.id));
     listEl.appendChild(row);
   }

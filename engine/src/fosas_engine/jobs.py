@@ -10,15 +10,25 @@ iteration 0, see docs/RISKS.md R14. This is still a single-process,
 single-machine store: it is not safe for multiple engine instances
 writing the same work_root concurrently, which is fine for V1's
 single-user, single-server scope (see docs/ARCHITECTURE.md).
+
+Retention policy (see docs/DECISIONS.md ADR-0015): a finished job (done
+or failed) is auto-archived some time after it *finished*, not after it
+was created, so a long-running job is never archived out from under
+itself while still active. Archiving only changes visibility (it moves
+out of the default job list into the archive view); the underlying files
+and the job's own record stay untouched and restorable. Only failed jobs
+are ever auto-deleted (their files actually removed from disk); a
+successful job's result is kept until a person explicitly deletes it.
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -29,6 +39,16 @@ from fosas_core.solver import IterationHistory, SurfaceData
 JobStatus = Literal["pending", "running", "done", "failed"]
 
 _META_FILENAME = "job_meta.json"
+
+# Measured from finished_at (when a job left "running"), never from
+# created_at: a job that legitimately runs for many hours must not be
+# archived mid-run just because it is "old". A failed job is archived
+# sooner than a successful one on the assumption that a failure is
+# usually looked at quickly and then no longer needs to sit in the main
+# list, while a successful result is more likely to still be wanted.
+_ARCHIVE_AFTER_DONE = timedelta(hours=5)
+_ARCHIVE_AFTER_FAILED = timedelta(hours=1.5)
+_DELETE_FAILED_AFTER = timedelta(hours=24)
 
 
 def new_job_id() -> str:
@@ -47,6 +67,8 @@ class Job:
     stage: str | None = None
     error: str | None = None
     result: CaseResult | None = None
+    finished_at: datetime | None = None
+    archived: bool = False
 
 
 def _case_result_to_dict(result: CaseResult) -> dict[str, Any]:
@@ -83,6 +105,8 @@ def _job_to_dict(job: Job) -> dict[str, Any]:
         "stage": job.stage,
         "error": job.error,
         "result": _case_result_to_dict(job.result) if job.result is not None else None,
+        "finished_at": job.finished_at.isoformat() if job.finished_at is not None else None,
+        "archived": job.archived,
     }
 
 
@@ -98,6 +122,8 @@ def _job_from_dict(data: dict[str, Any]) -> Job:
         stage=data.get("stage"),
         error=data.get("error"),
         result=_case_result_from_dict(data["result"]) if data.get("result") is not None else None,
+        finished_at=datetime.fromisoformat(data["finished_at"]) if data.get("finished_at") else None,
+        archived=data.get("archived", False),
     )
 
 
@@ -110,6 +136,11 @@ def _write_job_meta(job: Job) -> None:
     tmp_path = meta_path.with_suffix(".json.tmp")
     tmp_path.write_text(json.dumps(_job_to_dict(job), indent=2))
     tmp_path.replace(meta_path)
+
+
+class JobNotDeletableError(Exception):
+    """Raised when trying to delete a job that is still pending/running:
+    its work_dir may still be written to by a subprocess."""
 
 
 class JobStore:
@@ -151,12 +182,17 @@ class JobStore:
         return job
 
     def get(self, job_id: str) -> Job | None:
+        self._sweep()
         with self._lock:
             return self._jobs.get(job_id)
 
-    def list(self) -> list[Job]:
+    def list(self, include_archived: bool = False) -> list[Job]:
+        self._sweep()
         with self._lock:
-            return list(self._jobs.values())
+            jobs = list(self._jobs.values())
+        if include_archived:
+            return [j for j in jobs if j.archived]
+        return [j for j in jobs if not j.archived]
 
     def mark_running(self, job_id: str) -> None:
         with self._lock:
@@ -169,6 +205,7 @@ class JobStore:
             job = self._jobs[job_id]
             job.status = "done"
             job.result = result
+            job.finished_at = datetime.now(timezone.utc)
             _write_job_meta(job)
 
     def mark_failed(self, job_id: str, stage: str, error: str) -> None:
@@ -177,4 +214,66 @@ class JobStore:
             job.status = "failed"
             job.stage = stage
             job.error = error
+            job.finished_at = datetime.now(timezone.utc)
             _write_job_meta(job)
+
+    def archive(self, job_id: str) -> None:
+        with self._lock:
+            job = self._jobs[job_id]
+            job.archived = True
+            _write_job_meta(job)
+
+    def unarchive(self, job_id: str) -> None:
+        with self._lock:
+            job = self._jobs[job_id]
+            job.archived = False
+            _write_job_meta(job)
+
+    def delete(self, job_id: str) -> None:
+        """Permanently removes a finished job's files and its record.
+        Refuses a pending/running job: a subprocess may still be writing
+        into its work_dir, see docs/RISKS.md R14 for why that directory
+        is trusted as the source of truth for job state.
+
+        Filesystem deletion happens before the in-memory record is
+        dropped, and any failure to remove the directory aborts here
+        instead of silently dropping the record: an un-removed directory
+        still has a job_meta.json, which load_from_disk would otherwise
+        resurrect on the next engine restart, letting a "deleted" job
+        come back from the dead.
+        """
+        with self._lock:
+            job = self._jobs[job_id]
+            if job.status in ("pending", "running"):
+                raise JobNotDeletableError(f"Job {job_id} is still {job.status}, cannot be deleted")
+            shutil.rmtree(job.work_dir)
+            del self._jobs[job_id]
+
+    def _sweep(self) -> None:
+        """Applies the retention policy (see module docstring and
+        docs/DECISIONS.md ADR-0015): auto-archive a finished job once it
+        has sat long enough, auto-delete a failed job once it is old
+        enough. Called on every read so no background thread/scheduler
+        is needed; cheap for the job counts this tool expects.
+        """
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            jobs = list(self._jobs.values())
+        for job in jobs:
+            if job.finished_at is None:
+                continue
+            age = now - job.finished_at
+            if job.status == "failed" and age >= _DELETE_FAILED_AFTER:
+                try:
+                    self.delete(job.id)
+                except (JobNotDeletableError, FileNotFoundError, KeyError):
+                    pass
+                continue
+            if not job.archived:
+                threshold = _ARCHIVE_AFTER_FAILED if job.status == "failed" else _ARCHIVE_AFTER_DONE
+                if age >= threshold:
+                    with self._lock:
+                        current = self._jobs.get(job.id)
+                        if current is not None and not current.archived:
+                            current.archived = True
+                            _write_job_meta(current)
