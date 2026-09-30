@@ -724,3 +724,39 @@ Gmsh-Skript fuer zwei verschiedene Werte direkt vergleicht (ohne echten
 Gmsh/SU2-Lauf), sowie durch die volle langsame Testsuite, um zu
 bestaetigen, dass der neue Standardwert (60 statt der bisher faktisch
 immer verwendeten 40 pro Kante) keine echten Laeufe destabilisiert.
+
+## R17: Engine-Standard-Timeout (7200 s) ignoriert die angeforderte Iterationszahl, echter Abbruch bei 5000 Iterationen (behoben)
+
+Beleg (echter Vorfall, eigene Webflaeche, AWS-Server): Der Projektinhaber
+hat "just for fun" denselben realen Fluegel mit `max_iterations=5000`
+gestartet. Nach genau 7200 Sekunden (2 Stunden) ist der Auftrag mit
+`[solving] SU2 did not finish within 7200.0 seconds` fehlgeschlagen,
+nach 2961 von 5000 Iterationen (Restfehler zu dem Zeitpunkt: -5,84,
+weiter fallend, kein haengender Lauf).
+
+Ursache: `fosas_engine.app._execute_job` hat `fosas_core.pipeline.run_case`
+ohne `solve_timeout` aufgerufen, also immer dessen festen Vorgabewert
+(7200 s) verwendet, unabhaengig von `params.max_iterations`. Bei der
+beobachteten Rechengeschwindigkeit (rund 2 bis 3 s pro Iteration auf dem
+AWS-Referenzserver) reicht das fuer gut 2500-3500 Iterationen, aber nicht
+fuer 5000. Kein Datenverlust, da SU2 sein eigenes Zwischenergebnis
+(`restart_flow.dat`, `history.csv`) bereits regelmaessig (`OUTPUT_WRT_FREQ`)
+geschrieben hatte: Manuell mit hoeherem Timeout ueber `run_case` direkt
+fortgesetzt (auf demselben Arbeitsverzeichnis, siehe R14-Mechanismus),
+kein Neustart von vorne noetig.
+
+Entscheidung: `_execute_job` berechnet den Timeout jetzt aus
+`params.max_iterations` (10 Sekunden pro Iteration als bewusst
+grosszuegige Obergrenze, deutlich ueber der beobachteten echten Rate,
+mit 7200 s als Mindestwert fuer kleine Faelle). Das ist eine
+Betriebsgrenze (wie lange gewartet wird, bevor ehrlich aufgegeben wird),
+keine Annahme, die ein Rechenergebnis veraendert. Abgesichert durch
+einen Test, der `run_case` abfaengt und prueft, dass der uebergebene
+Timeout mit `max_iterations` skaliert statt am festen Standardwert zu
+kleben.
+
+Offener Punkt: Es gibt weiterhin keinen Weg, einen an diesem Timeout
+(oder sonst wie) unterbrochenen Auftrag ueber die API selbst
+fortzusetzen, nur manuell wie in diesem Vorfall. Eine "Fortsetzen"-Aktion
+pro Auftrag waere ein sinnvoller, aber eigener Ausbauschritt, siehe
+OPEN_QUESTIONS.md.

@@ -144,10 +144,24 @@ def create_app(settings: Settings) -> FastAPI:
     return app
 
 
+# run_case's own default (7200s) is only enough for a few thousand
+# iterations at typical per-iteration cost observed so far (roughly 2-3s
+# on the reference AWS instance, see docs/RISKS.md R17); a job explicitly
+# asking for many more iterations must not be silently held to a ceiling
+# sized for the common case. 10s/iteration is a deliberately generous
+# per-iteration allowance (several times the observed rate) so this only
+# extends the ceiling for genuinely long requests, confirmed the hard way:
+# a real 5000-iteration run hit the fixed 7200s default and was killed
+# with ~2960 iterations done, recovered only via the resume mechanism.
+_SOLVE_SECONDS_PER_ITERATION = 10.0
+_SOLVE_TIMEOUT_FLOOR = 7200.0
+
+
 def _execute_job(app: FastAPI, job_id: str, step_path: Path, params: CaseParams, work_dir: Path) -> None:
     settings: Settings = app.state.settings
     jobs: JobStore = app.state.jobs
     jobs.mark_running(job_id)
+    solve_timeout = max(_SOLVE_TIMEOUT_FLOOR, params.max_iterations * _SOLVE_SECONDS_PER_ITERATION)
     try:
         result = run_case(
             step_path,
@@ -158,6 +172,7 @@ def _execute_job(app: FastAPI, job_id: str, step_path: Path, params: CaseParams,
                 su2=settings.su2_executable,
                 mpirun=settings.mpirun_executable,
             ),
+            solve_timeout=solve_timeout,
         )
     except PipelineError as exc:
         jobs.mark_failed(job_id, stage=exc.stage, error=str(exc))

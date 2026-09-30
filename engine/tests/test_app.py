@@ -41,6 +41,46 @@ def test_unknown_job_is_404(client, settings):
     assert response.status_code == 404
 
 
+def test_execute_job_scales_solve_timeout_with_max_iterations(client, settings, tmp_path, monkeypatch):
+    """Regression test for a real incident (docs/RISKS.md R17): a job
+    explicitly asking for 5000 iterations was killed by run_case's fixed
+    7200s default solve_timeout after completing only ~2960 of them.
+    _execute_job must scale the timeout it passes to run_case with the
+    job's own max_iterations instead of relying on that fixed default.
+    """
+    import fosas_engine.app as app_module
+
+    captured = {}
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        captured["solve_timeout"] = solve_timeout
+        captured["max_iterations"] = params.max_iterations
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/jobs",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_deg": "5", "max_iterations": "5000"},
+        )
+    assert response.status_code == 200
+    job_id = response.json()["id"]
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and "solve_timeout" not in captured:
+        time.sleep(0.05)
+
+    assert captured["max_iterations"] == 5000
+    assert captured["solve_timeout"] >= 5000 * 10.0  # generous per-iteration allowance, not the fixed 7200s default
+
+    job = client.get(f"/jobs/{job_id}", headers={"Authorization": f"Bearer {settings.token}"}).json()
+    assert job["status"] == "failed"
+
+
 def test_get_job_reports_solving_progress(client, settings, tmp_path):
     from fosas_core.pipeline import CaseParams
 
