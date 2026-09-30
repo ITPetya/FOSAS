@@ -90,6 +90,8 @@ class CaseParams:
             raise ValueError("velocity must be positive")
         if self.max_iterations <= 0:
             raise ValueError("max_iterations must be positive")
+        if self.n_profile_points < 3:
+            raise ValueError("n_profile_points must be at least 3")
 
 
 @dataclass(frozen=True)
@@ -110,11 +112,19 @@ class CaseResult:
     solve_dir: Path
 
 
-def _sample_wire_points(wire) -> tuple[tuple[float, float], ...]:
+def _sample_wire_points(wire, n: int) -> tuple[tuple[float, float], ...]:
+    """Sample n points per edge of the wire (not n total): a wire coming
+    from a real, external STEP file can have more than the two edges a
+    synthetic upper/lower-surface split assumes (confirmed on a real
+    customer file, see docs/RISKS.md R12/R15: three edges, not two), and
+    n is the resolution along each of them, not a total budget to divide
+    up. n was hardcoded to 40 here regardless of CaseParams.n_profile_points
+    until this was noticed: the GUI's "Profilpunkte" field had no effect
+    on the actual mesh at all.
+    """
     edges = wire.edges()
     points = []
     for edge in edges:
-        n = 40
         for i in range(n):
             p = edge.position_at(i / n)
             points.append((p.X, p.Z))
@@ -179,7 +189,7 @@ def run_case(
     if not section:
         raise PipelineError("geometry", "Cross-section at mid-span is empty.")
 
-    profile_points_native = _sample_wire_points(section[0].outer_wire())
+    profile_points_native = _sample_wire_points(section[0].outer_wire(), params.n_profile_points)
 
     # build123d/OCCT's internal working length unit is millimeters,
     # regardless of what unit a source STEP file declares in its own

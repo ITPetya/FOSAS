@@ -57,6 +57,35 @@ def test_case_params_reject_invalid_input():
         CaseParams(velocity=0, aoa_deg=0)
     with pytest.raises(ValueError, match="max_iterations"):
         CaseParams(velocity=10, aoa_deg=0, max_iterations=0)
+    with pytest.raises(ValueError, match="n_profile_points"):
+        CaseParams(velocity=10, aoa_deg=0, n_profile_points=2)
+
+
+def test_run_case_actually_uses_n_profile_points(tmp_path, monkeypatch):
+    """Regression test: n_profile_points (the GUI's "Profilpunkte" field)
+    used to have zero effect, _sample_wire_points hardcoded 40 points per
+    edge regardless of what CaseParams said. Confirmed here by comparing
+    the actual point count embedded in the generated .geo script for two
+    different values, without needing a real Gmsh/SU2 run.
+    """
+    step_path = naca0012_wing_step(tmp_path / "wing.step", chord=0.6, span=1.2, n=10)
+
+    def count_points_used(n_profile_points):
+        captured = {}
+
+        def fake_run_gmsh(geo_script, output_su2_path, **kwargs):
+            captured["geo_script"] = geo_script
+            raise MeshingError("stop before actually invoking Gmsh")
+
+        monkeypatch.setattr("fosas_core.pipeline.run_gmsh", fake_run_gmsh)
+        params = CaseParams(velocity=30, aoa_deg=5, n_profile_points=n_profile_points)
+        with pytest.raises(PipelineError):
+            run_case(step_path, params, tmp_path / f"work_{n_profile_points}")
+        return len(re.findall(r"^p\d+ = newp;", captured["geo_script"], re.MULTILINE))
+
+    points_with_10 = count_points_used(10)
+    points_with_20 = count_points_used(20)
+    assert points_with_20 > points_with_10
 
 
 def test_run_case_reports_geometry_error_for_missing_file(tmp_path):

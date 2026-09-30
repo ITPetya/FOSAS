@@ -704,3 +704,23 @@ die Groessenverhaeltnisse realistisch waren, was die urspruengliche
 vermutlich ein Symptom des extremen Groessenverhaeltnisses (numerische
 Rundungsprobleme bei der Kurvendiskretisierung ueber viele
 Groessenordnungen hinweg), nicht eine eigene, unabhaengige Ursache.
+
+## R16: GUI-Feld "Profilpunkte" hatte keinerlei Wirkung (behoben)
+
+Beleg: `fosas_core.pipeline._sample_wire_points` hatte die Anzahl
+Stuetzpunkte pro Kante fest auf 40 verdrahtet, unabhaengig davon, was
+`CaseParams.n_profile_points` sagte, das die Weboberflaeche als
+"Profilpunkte" anzeigt und dem Nutzer zur Aenderung anbietet. Wer diesen
+Wert in der Weboberflaeche geaendert hat, bekam also stillschweigend
+immer dieselbe Aufloesung, unabhaengig vom eingegebenen Wert, das war
+kein sichtbarer Fehler, sondern ein wirkungsloses Eingabefeld.
+
+Status: Behoben, `n_profile_points` wird jetzt tatsaechlich durchgereicht.
+Zusaetzlich eine Untergrenze (mindestens 3) in `CaseParams.__post_init__`
+ergaenzt, damit ein zu kleiner Wert eine klare Fehlermeldung statt einen
+kryptischen Fehler tiefer in der Vernetzung ausloest. Abgesichert durch
+einen neuen, schnellen Regressionstest, der die Punktanzahl im erzeugten
+Gmsh-Skript fuer zwei verschiedene Werte direkt vergleicht (ohne echten
+Gmsh/SU2-Lauf), sowie durch die volle langsame Testsuite, um zu
+bestaetigen, dass der neue Standardwert (60 statt der bisher faktisch
+immer verwendeten 40 pro Kante) keine echten Laeufe destabilisiert.
