@@ -122,6 +122,21 @@
   }
   .colorbar-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.75rem; color: var(--muted); }
   .colorbar { flex: 1; height: 10px; border-radius: 999px; background: linear-gradient(to right, #2f6fed, #e6e8eb, #e0523f); }
+  .job-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+    cursor: pointer; background: #0d0f13; transition: border-color 0.15s;
+  }
+  .job-row:hover { border-color: var(--accent); }
+  .job-row .job-status-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+  .job-row .job-status-dot.pending { background: var(--muted); }
+  .job-row .job-status-dot.running { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+  .job-row .job-status-dot.done { background: var(--ok); }
+  .job-row .job-status-dot.failed { background: var(--bad); }
+  .job-row .job-main { flex: 1; min-width: 0; }
+  .job-row .job-file { font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .job-row .job-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .jobs-empty { font-size: 0.85rem; color: var(--muted); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/examples/js/controls/OrbitControls.js"></script>
@@ -134,6 +149,16 @@
     in der Achsenkonvention X stromab, Y spannweitig, Z vertikal vorliegen
     und einen konstanten Querschnitt haben, siehe docs/ARCHITECTURE.md.
   </p>
+
+  <div class="panel">
+    <h2 style="margin-top:0;font-size:1.1rem;">Auftraege</h2>
+    <p class="hint" style="margin:0 0 10px;">
+      Alle Auftraege auf diesem Server, fuer jeden mit dem Zugangslink
+      sichtbar (kein Login pro Person, siehe docs/ARCHITECTURE.md).
+      Anklicken oeffnet den Status.
+    </p>
+    <div id="jobs-list"></div>
+  </div>
 
   <div class="panel">
     <form id="case-form">
@@ -525,10 +550,19 @@ function reloadToRefreshToken() {
   window.location.reload();
 }
 
+let activePollToken = 0;
+
 async function pollJob(jobId) {
+  // Selecting a different job from the jobs list while one is already
+  // being polled must not leave two loops racing to update the same DOM
+  // (whichever request happened to resolve last would silently "win").
+  // Each call claims a token; a loop that is no longer the current one
+  // quietly stops instead of continuing to render.
+  const myToken = ++activePollToken;
   const statusEl = document.getElementById("status");
   while (true) {
     const res = await fetch("/jobs/" + jobId, { headers: authHeaders() });
+    if (myToken !== activePollToken) return;
     if (res.status === 401) {
       statusEl.textContent = "Token abgelaufen (Engine wurde neu gestartet), lade Seite neu ...";
       reloadToRefreshToken();
@@ -536,10 +570,12 @@ async function pollJob(jobId) {
     }
     if (!res.ok) { setError("Fehler beim Abfragen des Jobs (" + res.status + ")"); return; }
     const job = await res.json();
+    if (myToken !== activePollToken) return;
     renderProgress(job);
     if (job.status === "pending" || job.status === "running") {
       statusEl.textContent = "Job " + jobId;
       await new Promise(r => setTimeout(r, 2000));
+      if (myToken !== activePollToken) return;
       continue;
     }
     if (job.status === "failed") {
@@ -552,6 +588,85 @@ async function pollJob(jobId) {
     return;
   }
 }
+
+function formatRelativeTime(isoString) {
+  const diffSeconds = Math.round((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (diffSeconds < 60) return "gerade eben";
+  const diffMinutes = Math.round(diffSeconds / 60);
+  if (diffMinutes < 60) return "vor " + diffMinutes + " Min.";
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return "vor " + diffHours + " Std.";
+  return "vor " + Math.round(diffHours / 24) + " Tg.";
+}
+
+function statusLabel(job) {
+  if (job.status === "running") {
+    if (job.progress && job.progress.phase === "solving" && job.progress.percent != null) {
+      return "laeuft (" + job.progress.percent.toFixed(0) + "%)";
+    }
+    return "laeuft (Vernetzung)";
+  }
+  return { pending: "wartet", done: "fertig", failed: "fehlgeschlagen" }[job.status] || job.status;
+}
+
+function selectJob(jobId) {
+  history.replaceState(null, "", "?job=" + jobId);
+  document.getElementById("result-panel").hidden = true;
+  setError(null);
+  document.getElementById("status").textContent = "Lade Status von Job " + jobId + " ...";
+  pollJob(jobId);
+}
+
+async function loadJobsList() {
+  const listEl = document.getElementById("jobs-list");
+  let jobs;
+  try {
+    const res = await fetch("/jobs", { headers: authHeaders() });
+    if (res.status === 401) { reloadToRefreshToken(); return; }
+    if (!res.ok) return; // transient hiccup: leave the previously shown list as-is
+    jobs = await res.json();
+  } catch (err) {
+    return; // offline for a moment: same, do not clobber the visible list
+  }
+
+  if (jobs.length === 0) {
+    listEl.innerHTML = "";
+    const empty = document.createElement("p");
+    empty.className = "jobs-empty";
+    empty.textContent = "Noch keine Auftraege.";
+    listEl.appendChild(empty);
+    return;
+  }
+
+  jobs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  listEl.innerHTML = "";
+  for (const job of jobs) {
+    const row = document.createElement("div");
+    row.className = "job-row";
+
+    const dot = document.createElement("span");
+    dot.className = "job-status-dot " + job.status;
+
+    const main = document.createElement("div");
+    main.className = "job-main";
+    const fileEl = document.createElement("div");
+    fileEl.className = "job-file";
+    fileEl.textContent = job.step_filename; // textContent, not innerHTML: this is a user-supplied filename
+    const metaEl = document.createElement("div");
+    metaEl.className = "job-meta";
+    metaEl.textContent = statusLabel(job) + " · " + formatRelativeTime(job.created_at);
+    main.appendChild(fileEl);
+    main.appendChild(metaEl);
+
+    row.appendChild(dot);
+    row.appendChild(main);
+    row.addEventListener("click", () => selectJob(job.id));
+    listEl.appendChild(row);
+  }
+}
+
+loadJobsList();
+setInterval(loadJobsList, 4000);
 
 function getJobIdFromUrl() {
   return new URLSearchParams(window.location.search).get("job");
@@ -602,6 +717,7 @@ document.getElementById("case-form").addEventListener("submit", async (e) => {
     // this tab, see docs/RISKS.md R14.
     history.replaceState(null, "", "?job=" + job.id);
     document.getElementById("status").textContent = "Job " + job.id + " gestartet.";
+    loadJobsList();
     await pollJob(job.id);
   } catch (err) {
     setError("Unerwarteter Fehler: " + err);
