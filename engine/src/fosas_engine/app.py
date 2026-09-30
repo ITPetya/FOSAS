@@ -28,6 +28,7 @@ from fosas_engine.models import JobOut
 from fosas_engine.settings import Settings
 
 _WEB_CLIENT_PATH = Path(__file__).resolve().parents[3] / "clients" / "web" / "index.html"
+_VIEWER_CLIENT_PATH = Path(__file__).resolve().parents[3] / "clients" / "web" / "viewer.html"
 
 
 def create_app(settings: Settings) -> FastAPI:
@@ -74,6 +75,17 @@ def create_app(settings: Settings) -> FastAPI:
                 detail=f"Web client not found at {_WEB_CLIENT_PATH}. Use /docs instead.",
             )
         html = _WEB_CLIENT_PATH.read_text()
+        return html.replace("__FOSAS_TOKEN__", settings.token)
+
+    @app.get("/viewer", response_class=HTMLResponse)
+    def viewer():
+        # Same trust boundary as "/", see the comment there. Opened in a
+        # new tab from the main page's 3D view (?job=<id> in the URL);
+        # not linked to a specific job here, it reads that from its own
+        # URL like the main page's ?job= resume flow does.
+        if not _VIEWER_CLIENT_PATH.exists():
+            raise HTTPException(status_code=500, detail=f"Viewer client not found at {_VIEWER_CLIENT_PATH}.")
+        html = _VIEWER_CLIENT_PATH.read_text()
         return html.replace("__FOSAS_TOKEN__", settings.token)
 
     @app.post("/jobs", response_model=JobOut, dependencies=[Depends(require_token)])

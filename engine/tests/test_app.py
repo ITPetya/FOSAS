@@ -20,6 +20,13 @@ def client(settings):
     return TestClient(app)
 
 
+def test_viewer_route_serves_html_with_token_injected(client, settings):
+    response = client.get("/viewer")
+    assert response.status_code == 200
+    assert settings.token in response.text
+    assert "__FOSAS_TOKEN__" not in response.text
+
+
 def test_health_needs_no_token(client):
     response = client.get("/health")
     assert response.status_code == 200

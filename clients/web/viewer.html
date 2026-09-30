@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>FOSAS, 3D-Vollbildansicht</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #2a2f3a; --text: #e6e8eb;
+    --muted: #9aa3af; --accent: #4f8cff; --ok: #2fbf71; --warn: #e0a72f; --bad: #e05252;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  #canvas-wrap { position: fixed; inset: 0; }
+  #canvas-wrap canvas { display: block; touch-action: none; user-select: none; }
+
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 20;
+    display: flex; align-items: center; gap: 12px; padding: 0 16px;
+    background: rgba(15,17,21,0.85); border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(6px);
+  }
+  #topbar h1 { font-size: 0.95rem; margin: 0; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #topbar a.back-link { color: var(--muted); text-decoration: none; font-size: 0.85rem; border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; }
+  #topbar a.back-link:hover { color: var(--text); border-color: var(--accent); }
+  .tool-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 12px; font-size: 0.8rem; border-radius: 6px; cursor: pointer;
+  }
+  .tool-btn:hover { border-color: var(--accent); color: var(--text); }
+  .tool-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  #sidebar {
+    position: fixed; top: 52px; right: 0; bottom: 0; width: 280px; z-index: 15;
+    background: rgba(23,26,33,0.9); border-left: 1px solid var(--border);
+    backdrop-filter: blur(6px); padding: 16px; overflow-y: auto; font-size: 0.85rem;
+  }
+  #sidebar h2 { font-size: 0.9rem; margin: 0 0 10px; }
+  #sidebar h3 { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 16px 0 6px; }
+  #sidebar .row { display: flex; justify-content: space-between; padding: 3px 0; }
+  #sidebar .row .k { color: var(--muted); }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+  .badge.ok { background: var(--ok); color: #06240f; }
+  .badge.warn { background: var(--warn); color: #2a1d00; }
+  .badge.bad { background: var(--bad); color: #2a0000; }
+  .badge.muted { background: var(--border); color: var(--muted); }
+
+  #probe {
+    position: fixed; z-index: 30; pointer-events: none;
+    background: rgba(16,19,26,0.92); border: 1px solid var(--accent); border-radius: 6px;
+    padding: 8px 10px; font-size: 0.75rem; line-height: 1.5; white-space: nowrap;
+  }
+  #probe .k { color: var(--muted); margin-right: 6px; }
+
+  #chart-overlay {
+    position: fixed; left: 24px; bottom: 24px; width: min(520px, calc(100vw - 320px));
+    z-index: 18; background: rgba(20,23,30,0.5); backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+  }
+  #chart-overlay h3 { margin: 0 0 8px; font-size: 0.85rem; }
+  #chart-overlay svg { width: 100%; height: auto; background: rgba(13,15,19,0.4); border-radius: 8px; }
+
+  #status-message {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 0.95rem; text-align: center; padding: 40px;
+  }
+  .hint { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/three@0.140.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.140.2/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+<div id="topbar">
+  <a class="back-link" href="javascript:window.close()">&larr; Schliessen</a>
+  <h1 id="job-title">FOSAS 3D-Vollbildansicht</h1>
+  <button type="button" class="tool-btn" id="tool-color-cp">Farbe: cp</button>
+  <button type="button" class="tool-btn" id="tool-color-yplus">Farbe: y+</button>
+  <button type="button" class="tool-btn" id="tool-axes">Achsen</button>
+  <button type="button" class="tool-btn" id="tool-chart">Diagramm</button>
+  <button type="button" class="tool-btn" id="tool-reset">Ansicht zuruecksetzen</button>
+</div>
+
+<div id="canvas-wrap"></div>
+<div id="probe" hidden></div>
+<div id="chart-overlay" hidden>
+  <h3>cp-Verteilung (Sehnenschnitt)</h3>
+  <svg id="cp-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
+</div>
+
+<div id="sidebar">
+  <h2>Auftrag</h2>
+  <div id="job-info">Laedt ...</div>
+</div>
+
+<div id="status-message" hidden></div>
+
+<script>
+const TOKEN = "__FOSAS_TOKEN__";
+
+function authHeaders() {
+  return { "Authorization": "Bearer " + TOKEN };
+}
+
+function getJobIdFromUrl() {
+  return new URLSearchParams(window.location.search).get("job");
+}
+
+function cpToColor(value, vMin, vMax) {
+  const t = vMax > vMin ? (value - vMin) / (vMax - vMin) : 0.5;
+  const stops = [[0.0, [47, 111, 237]], [0.5, [230, 232, 235]], [1.0, [224, 82, 63]]];
+  let a = stops[0], b = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i][0] && t <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
+  }
+  const span = b[0] - a[0];
+  const localT = span > 0 ? (t - a[0]) / span : 0;
+  const lerp = (i) => (a[1][i] + (b[1][i] - a[1][i]) * localT) / 255;
+  return [lerp(0), lerp(1), lerp(2)];
+}
+
+function statusBadgeHtml(status) {
+  const map = { pending: ["wartet", "muted"], running: ["laeuft", "warn"], done: ["fertig", "ok"], failed: ["fehlgeschlagen", "bad"] };
+  const [text, cls] = map[status] || [status, "muted"];
+  return '<span class="badge ' + cls + '">' + text + '</span>';
+}
+
+function renderSidebar(job) {
+  const el = document.getElementById("job-info");
+  const p = job.params;
+  let html = "";
+  html += '<div class="row"><span class="k">Datei</span><span>' + escapeHtml(job.step_filename) + '</span></div>';
+  html += '<div class="row"><span class="k">Status</span>' + statusBadgeHtml(job.status) + '</div>';
+  html += '<h3>Eingaben</h3>';
+  html += '<div class="row"><span class="k">Geschwindigkeit</span><span>' + p.velocity + ' m/s</span></div>';
+  html += '<div class="row"><span class="k">Anstellwinkel</span><span>' + p.aoa_deg + ' deg</span></div>';
+  html += '<div class="row"><span class="k">Zeitintegration</span><span>' + p.time_discretization + '</span></div>';
+  html += '<div class="row"><span class="k">Max. Iterationen</span><span>' + p.max_iterations + '</span></div>';
+  if (job.result) {
+    const r = job.result;
+    html += '<h3>Ergebnis</h3>';
+    html += '<div class="row"><span class="k">CL</span><span>' + r.cl.toFixed(4) + '</span></div>';
+    html += '<div class="row"><span class="k">CD</span><span>' + r.cd.toFixed(4) + '</span></div>';
+    html += '<div class="row"><span class="k">mittleres y+</span><span>' + r.mean_y_plus.toFixed(2) + '</span></div>';
+    html += '<div class="row"><span class="k">Knoten</span><span>' + r.node_count + '</span></div>';
+    html += '<div class="row"><span class="k">Konvergenz</span>' +
+      (r.convergence.converged ? '<span class="badge ok">konvergiert</span>' : '<span class="badge warn">nicht konvergiert</span>') +
+      '</div>';
+    html += '<p class="hint">' + escapeHtml(r.convergence.message) + '</p>';
+  }
+  if (job.progress) {
+    html += '<h3>Fortschritt</h3>';
+    html += '<div class="row"><span class="k">Phase</span><span>' + job.progress.phase + '</span></div>';
+    if (job.progress.percent != null) {
+      html += '<div class="row"><span class="k">Prozent</span><span>' + job.progress.percent.toFixed(1) + '%</span></div>';
+    }
+  }
+  el.innerHTML = html;
+  document.getElementById("job-title").textContent = job.step_filename + " (" + job.status + ")";
+}
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function drawCpChart(surface) {
+  const svg = document.getElementById("cp-chart");
+  svg.innerHTML = "";
+  if (!surface || surface.length === 0) return;
+  const xs = surface.map(p => p.x), cps = surface.map(p => p.cp);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const cpMin = Math.min(...cps), cpMax = Math.max(...cps);
+  const padX = 40, padY = 20, W = 600, H = 320;
+  const sx = (x) => padX + (x - xMin) / (xMax - xMin || 1) * (W - 2 * padX);
+  const sy = (cp) => padY + (cp - cpMax) / (cpMin - cpMax || 1) * (H - 2 * padY);
+  const ns = "http://www.w3.org/2000/svg";
+  for (const p of surface) {
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", sx(p.x)); c.setAttribute("cy", sy(p.cp)); c.setAttribute("r", 2.2);
+    c.setAttribute("fill", p.z >= 0 ? "#4f8cff" : "#e0a72f"); c.setAttribute("opacity", "0.85");
+    svg.appendChild(c);
+  }
+}
+
+async function main() {
+  const jobId = getJobIdFromUrl();
+  const statusMsg = document.getElementById("status-message");
+  if (!jobId) {
+    statusMsg.hidden = false;
+    statusMsg.textContent = "Kein Auftrag angegeben. Diese Ansicht wird ueber den (i)-Link bei einem fertigen Auftrag geoeffnet.";
+    return;
+  }
+
+  const res = await fetch("/jobs/" + jobId, { headers: authHeaders() });
+  if (!res.ok) {
+    statusMsg.hidden = false;
+    statusMsg.textContent = "Auftrag konnte nicht geladen werden (" + res.status + ").";
+    return;
+  }
+  const job = await res.json();
+  renderSidebar(job);
+
+  if (job.status !== "done" || !job.result) {
+    statusMsg.hidden = false;
+    statusMsg.textContent = job.status === "failed"
+      ? "Dieser Auftrag ist fehlgeschlagen, keine 3D-Daten vorhanden."
+      : "Dieser Auftrag ist noch nicht fertig, die 3D-Ansicht zeigt erst das Endergebnis.";
+    return;
+  }
+
+  drawCpChart(job.result.surface);
+  setupViewer(job.result.surface);
+}
+
+function setupViewer(surface) {
+  const container = document.getElementById("canvas-wrap");
+  if (typeof THREE === "undefined") {
+    document.getElementById("status-message").hidden = false;
+    document.getElementById("status-message").textContent = "3D-Bibliothek konnte nicht geladen werden.";
+    return;
+  }
+
+  const cpValues = surface.map(p => p.cp);
+  const yPlusValues = surface.map(p => p.y_plus);
+  const ranges = {
+    cp: [Math.min(...cpValues), Math.max(...cpValues)],
+    y_plus: [Math.min(...yPlusValues), Math.max(...yPlusValues)],
+  };
+  let colorField = "cp";
+
+  const xs = surface.map(p => p.x), ys = surface.map(p => p.y), zs = surface.map(p => p.z);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+  const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), Math.max(...zs) - Math.min(...zs), 1e-6);
+
+  const positions = new Float32Array(surface.length * 3);
+  const colors = new Float32Array(surface.length * 3);
+  surface.forEach((p, i) => {
+    positions[i * 3 + 0] = (p.x - cx) / extent;
+    positions[i * 3 + 1] = (p.z - cz) / extent;
+    positions[i * 3 + 2] = (p.y - cy) / extent;
+  });
+
+  function applyColors() {
+    const [vMin, vMax] = ranges[colorField];
+    surface.forEach((p, i) => {
+      const [r, g, b] = cpToColor(p[colorField], vMin, vMax);
+      colors[i * 3 + 0] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
+    });
+    geometry.attributes.color.needsUpdate = true;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const material = new THREE.PointsMaterial({ size: 0.015, vertexColors: true, sizeAttenuation: true });
+  const points = new THREE.Points(geometry, material);
+  applyColors();
+
+  const scene = new THREE.Scene();
+  scene.add(points);
+  const axes = new THREE.AxesHelper(0.7);
+  axes.visible = false;
+  scene.add(axes);
+
+  const initialCameraPos = new THREE.Vector3(1.8, 1.3, 1.8);
+  const width = container.clientWidth, height = container.clientHeight;
+  const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 100);
+  camera.position.copy(initialCameraPos);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  container.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.update();
+
+  function onResize() {
+    const w = container.clientWidth, h = container.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  window.addEventListener("resize", onResize);
+  requestAnimationFrame(onResize);
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Measurement probe: a real click (pointerdown+up close together, not
+  // a drag) raycasts against the point cloud and shows that point's own
+  // data, not an interpolated/guessed value.
+  const raycaster = new THREE.Raycaster();
+  raycaster.params.Points.threshold = 0.02;
+  const mouse = new THREE.Vector2();
+  let downPos = null;
+
+  renderer.domElement.addEventListener("pointerdown", (e) => { downPos = { x: e.clientX, y: e.clientY }; });
+  renderer.domElement.addEventListener("pointerup", (e) => {
+    if (!downPos) return;
+    const moved = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+    downPos = null;
+    if (moved > 5) return; // was a drag/rotate, not a probe click
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const hit = raycaster.intersectObject(points)[0];
+    const probe = document.getElementById("probe");
+    if (!hit) { probe.hidden = true; return; }
+    const p = surface[hit.index];
+    probe.innerHTML =
+      '<div><span class="k">x</span>' + p.x.toFixed(4) + '</div>' +
+      '<div><span class="k">y</span>' + p.y.toFixed(4) + '</div>' +
+      '<div><span class="k">z</span>' + p.z.toFixed(4) + '</div>' +
+      '<div><span class="k">cp</span>' + p.cp.toFixed(4) + '</div>' +
+      '<div><span class="k">y+</span>' + p.y_plus.toFixed(4) + '</div>';
+    probe.style.left = (e.clientX + 14) + "px";
+    probe.style.top = (e.clientY + 14) + "px";
+    probe.hidden = false;
+  });
+
+  function setColorButtonsActive() {
+    document.getElementById("tool-color-cp").className = "tool-btn" + (colorField === "cp" ? " active" : "");
+    document.getElementById("tool-color-yplus").className = "tool-btn" + (colorField === "y_plus" ? " active" : "");
+  }
+  document.getElementById("tool-color-cp").addEventListener("click", () => { colorField = "cp"; applyColors(); setColorButtonsActive(); });
+  document.getElementById("tool-color-yplus").addEventListener("click", () => { colorField = "y_plus"; applyColors(); setColorButtonsActive(); });
+  setColorButtonsActive();
+
+  document.getElementById("tool-axes").addEventListener("click", (e) => {
+    axes.visible = !axes.visible;
+    e.target.className = "tool-btn" + (axes.visible ? " active" : "");
+  });
+
+  document.getElementById("tool-reset").addEventListener("click", () => {
+    camera.position.copy(initialCameraPos);
+    controls.target.set(0, 0, 0);
+    controls.update();
+  });
+
+  document.getElementById("tool-chart").addEventListener("click", (e) => {
+    const overlay = document.getElementById("chart-overlay");
+    overlay.hidden = !overlay.hidden;
+    e.target.className = "tool-btn" + (!overlay.hidden ? " active" : "");
+  });
+}
+
+main();
+</script>
+</body>
+</html>

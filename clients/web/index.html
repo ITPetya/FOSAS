@@ -294,7 +294,10 @@
     </div>
     <p class="msg" id="convergence-msg"></p>
 
-    <h3 style="font-size:0.95rem;" data-info="viewer3d">3D-Ansicht (cp auf der Oberflaeche)</h3>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="font-size:0.95rem;margin:0;" data-info="viewer3d">3D-Ansicht (cp auf der Oberflaeche)</h3>
+      <a id="fullscreen-link" href="#" target="_blank" rel="noopener" class="archive-toggle-btn" style="text-decoration:none;">Vollbild &#8599;</a>
+    </div>
     <div id="viewer3d-wrap">
       <div id="viewer3d"></div>
       <p class="viewer3d-note" id="viewer3d-note" hidden></p>
@@ -780,7 +783,11 @@ function renderSurface3D(surface) {
   viewer3dState = { renderer, controls, container, onResize, get frameHandle() { return frameHandle; } };
 }
 
-function renderResult(result) {
+let currentResultJobId = null;
+
+function renderResult(result, jobId) {
+  currentResultJobId = jobId;
+  document.getElementById("fullscreen-link").href = "/viewer?job=" + jobId;
   document.getElementById("result-panel").hidden = false;
   document.getElementById("cl-value").textContent = result.cl.toFixed(4);
   document.getElementById("cd-value").textContent = result.cd.toFixed(4);
@@ -920,7 +927,7 @@ async function pollJob(jobId) {
       return;
     }
     statusEl.textContent = "Fertig.";
-    renderResult(job.result);
+    renderResult(job.result, job.id);
     return;
   }
 }
