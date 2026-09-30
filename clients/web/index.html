@@ -160,6 +160,31 @@
   }
   .job-row .job-action-btn:hover { border-color: var(--accent); color: var(--text); }
   .job-row .job-action-btn.danger:hover { border-color: var(--bad); color: var(--bad); }
+  [data-info] { position: relative; }
+  .info-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; margin-left: 5px; padding: 0;
+    border-radius: 50%; border: 1px solid var(--muted); background: transparent;
+    color: var(--muted); font-size: 0.68rem; font-style: italic; font-family: Georgia, serif;
+    cursor: pointer; vertical-align: middle; line-height: 1;
+  }
+  .info-btn:hover, .info-btn:focus { border-color: var(--accent); color: var(--accent); }
+  .info-popover {
+    position: absolute; z-index: 50; max-width: 320px;
+    background: #10131a; border: 1px solid var(--accent); border-radius: 8px;
+    padding: 12px 14px; font-size: 0.8rem; line-height: 1.5; color: var(--text);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .info-popover h4 { margin: 0 0 6px; font-size: 0.85rem; color: var(--accent); }
+  .info-popover p { margin: 0 0 8px; }
+  .info-popover p:last-child { margin-bottom: 0; }
+  .info-popover .example { color: var(--muted); font-size: 0.75rem; }
+  .info-popover .tag {
+    display: inline-block; font-size: 0.65rem; padding: 1px 6px; border-radius: 999px;
+    margin-bottom: 6px; font-weight: 600;
+  }
+  .info-popover .tag.gesichert { background: rgba(47,191,113,0.18); color: var(--ok); }
+  .info-popover .tag.annahme { background: rgba(224,167,47,0.18); color: var(--warn); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/examples/js/controls/OrbitControls.js"></script>
@@ -190,16 +215,16 @@
 
   <div class="panel">
     <form id="case-form">
-      <label class="first">STEP-Datei</label>
+      <label class="first" data-info="step_file">STEP-Datei</label>
       <input type="file" id="step_file" accept=".step,.stp" required>
 
       <div class="row">
         <div>
-          <label>Anstroemgeschwindigkeit (m/s)</label>
+          <label data-info="velocity">Anstroemgeschwindigkeit (m/s)</label>
           <input type="number" id="velocity" value="30" step="any" required>
         </div>
         <div>
-          <label>Anstellwinkel (Grad)</label>
+          <label data-info="aoa_deg">Anstellwinkel (Grad)</label>
           <input type="number" id="aoa_deg" value="5" step="any" required>
         </div>
       </div>
@@ -207,34 +232,34 @@
       <details>
         <summary>Erweiterte Einstellungen</summary>
         <div class="row">
-          <div><label>Luftdichte (kg/m^3)</label><input type="number" id="density" value="1.225" step="any"></div>
-          <div><label>Dynamische Viskositaet (Pa*s)</label><input type="number" id="dynamic_viscosity" value="0.0000181" step="any"></div>
+          <div><label data-info="density">Luftdichte (kg/m^3)</label><input type="number" id="density" value="1.225" step="any"></div>
+          <div><label data-info="dynamic_viscosity">Dynamische Viskositaet (Pa*s)</label><input type="number" id="dynamic_viscosity" value="0.0000181" step="any"></div>
         </div>
         <div class="row">
-          <div><label>Temperatur (K)</label><input type="number" id="temperature" value="288.15" step="any"></div>
-          <div><label>Ziel y+</label><input type="number" id="target_y_plus" value="1.0" step="any"></div>
+          <div><label data-info="temperature">Temperatur (K)</label><input type="number" id="temperature" value="288.15" step="any"></div>
+          <div><label data-info="target_y_plus">Ziel y+</label><input type="number" id="target_y_plus" value="1.0" step="any"></div>
         </div>
         <div class="row">
-          <div><label>Wachstumsrate Grenzschicht</label><input type="number" id="growth_ratio" value="1.2" step="any"></div>
-          <div><label>Grenzschichtdicke (Faktor mal Sehnenlaenge)</label><input type="number" id="bl_thickness_factor" value="0.05" step="any"></div>
+          <div><label data-info="growth_ratio">Wachstumsrate Grenzschicht</label><input type="number" id="growth_ratio" value="1.2" step="any"></div>
+          <div><label data-info="bl_thickness_factor">Grenzschichtdicke (Faktor mal Sehnenlaenge)</label><input type="number" id="bl_thickness_factor" value="0.05" step="any"></div>
         </div>
         <div class="row">
-          <div><label>Spannweiten-Schichten</label><input type="number" id="span_layers" value="24" step="1"></div>
-          <div><label>Profilpunkte</label><input type="number" id="n_profile_points" value="60" step="1"></div>
+          <div><label data-info="span_layers">Spannweiten-Schichten</label><input type="number" id="span_layers" value="24" step="1"></div>
+          <div><label data-info="n_profile_points">Profilpunkte</label><input type="number" id="n_profile_points" value="60" step="1"></div>
         </div>
         <div class="row">
-          <div><label>Max. Iterationen</label><input type="number" id="max_iterations" value="500" step="1"></div>
-          <div><label>MPI-Prozesse</label><input type="number" id="mpi_ranks" value="1" step="1"></div>
+          <div><label data-info="max_iterations">Max. Iterationen</label><input type="number" id="max_iterations" value="500" step="1"></div>
+          <div><label data-info="mpi_ranks">MPI-Prozesse</label><input type="number" id="mpi_ranks" value="1" step="1"></div>
         </div>
         <div class="row">
           <div>
-            <label>Zeitintegration</label>
+            <label data-info="time_discretization">Zeitintegration</label>
             <select id="time_discretization">
               <option value="EULER_IMPLICIT">Implizit (schneller pro Iteration, mehr Speicher)</option>
               <option value="RUNGE-KUTTA_EXPLICIT">Explizit (weniger Speicher, mehr Iterationen noetig)</option>
             </select>
           </div>
-          <div><label>Konvergenzziel (Restfehler)</label><input type="number" id="residual_threshold" value="-8" step="any"></div>
+          <div><label data-info="residual_threshold">Konvergenzziel (Restfehler)</label><input type="number" id="residual_threshold" value="-8" step="any"></div>
         </div>
         <p class="hint">Voreinstellungen passen fuer einen kleinen Testfall. Bei eigenen Geometrien Sehnenlaenge/Reynolds-Zahl im Kopf behalten, siehe docs/RISKS.md R10 zur bekannten Konvergenzfrage.</p>
       </details>
@@ -261,15 +286,15 @@
 
   <div class="panel" id="result-panel" hidden>
     <h2 style="margin-top:0;font-size:1.1rem;">Ergebnis</h2>
-    <div id="convergence-badge"></div>
+    <div id="convergence-badge" data-info="convergence"></div>
     <div class="metrics">
-      <div class="metric"><div class="value" id="cl-value">-</div><div class="label">CL</div></div>
-      <div class="metric"><div class="value" id="cd-value">-</div><div class="label">CD</div></div>
-      <div class="metric"><div class="value" id="yplus-value">-</div><div class="label">mittleres y+</div></div>
+      <div class="metric"><div class="value" id="cl-value">-</div><div class="label" data-info="cl">CL</div></div>
+      <div class="metric"><div class="value" id="cd-value">-</div><div class="label" data-info="cd">CD</div></div>
+      <div class="metric"><div class="value" id="yplus-value">-</div><div class="label" data-info="mean_y_plus">mittleres y+</div></div>
     </div>
     <p class="msg" id="convergence-msg"></p>
 
-    <h3 style="font-size:0.95rem;">3D-Ansicht (cp auf der Oberflaeche)</h3>
+    <h3 style="font-size:0.95rem;" data-info="viewer3d">3D-Ansicht (cp auf der Oberflaeche)</h3>
     <div id="viewer3d-wrap">
       <div id="viewer3d"></div>
       <p class="viewer3d-note" id="viewer3d-note" hidden></p>
@@ -281,7 +306,7 @@
     </div>
     <p class="hint">Ziehen zum Drehen, Scrollen zum Zoomen. Jeder Punkt ist ein echter Netzknoten der Oberflaeche, keine geglaettete Flaeche.</p>
 
-    <h3 style="font-size:0.95rem;">cp-Verteilung (Sehnenschnitt)</h3>
+    <h3 style="font-size:0.95rem;" data-info="cp_chart">cp-Verteilung (Sehnenschnitt)</h3>
     <svg id="cp-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
     <div class="legend">
       <span><span class="dot" style="background:#4f8cff"></span>Oberseite</span>
@@ -292,6 +317,282 @@
 
 <script>
 const TOKEN = "__FOSAS_TOKEN__";
+
+// Explanatory text for the (i) info buttons. Written for someone with
+// no aerodynamics/CFD background, per the user's explicit request to
+// learn while using the tool. Each entry is tagged Gesichert (settled
+// physics/definition) or Annahme (a typical range or rule of thumb, not
+// a universal law) per the project's own labeling convention, see
+// CLAUDE.md. No invented numbers: every figure here is a standard
+// textbook value or an explicit rule of thumb already used elsewhere in
+// this codebase (e.g. the default growth_ratio/target_y_plus values).
+const INFO_TEXT = {
+  step_file: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>STEP-Datei</h4>
+    <p>Das 3D-Modell deines Bauteils im STEP-Format (Standardaustauschformat
+    fuer CAD-Geometrie, von praktisch jeder CAD-Software exportierbar).</p>
+    <p>FOSAS geht aktuell davon aus, dass X in Stroemungsrichtung zeigt,
+    Y entlang der Spannweite und Z nach oben, und dass der Querschnitt
+    ueber die Spannweite konstant bleibt (keine Verjuengung wird
+    abgebildet, nur die Mitte des Bauteils zaehlt).</p>
+  `,
+  velocity: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Anstroemgeschwindigkeit</h4>
+    <p>Wie schnell die Luft auf dein Bauteil trifft (relativ dazu, nicht
+    die Geschwindigkeit ueber Grund). Bestimmt zusammen mit der Groesse
+    des Bauteils und der Luftviskositaet, ob die Stroemung eher glatt
+    (laminar) oder verwirbelt (turbulent) ist.</p>
+    <p class="example">Beispiel: 30 m/s = 108 km/h, ungefaehr
+    Autobahntempo. 86,9 m/s = 313 km/h, typische kleine Flugzeug-
+    Reisegeschwindigkeit.</p>
+  `,
+  aoa_deg: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Anstellwinkel (Angle of Attack)</h4>
+    <p>Der Winkel zwischen der Sehnenlinie des Profils (gerade Linie von
+    Vorder- zu Hinterkante) und der ankommenden Luftstroemung.</p>
+    <p>Groesserer Anstellwinkel erzeugt normalerweise mehr Auftrieb, aber
+    auch mehr Widerstand, bis zu einem Punkt (Stroemungsabriss/Stall),
+    ab dem der Auftrieb einbricht. FOSAS erkennt einen Stall nicht
+    automatisch, ein stationaerer Loeser wie dieser kann in der Naehe
+    eines Stalls zusaetzlich schlechter konvergieren.</p>
+  `,
+  density: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Luftdichte</h4>
+    <p>Masse der Luft pro Volumen. Mehr Dichte bedeutet mehr Kraft bei
+    gleicher Geschwindigkeit (Auftrieb und Widerstand skalieren beide
+    direkt mit der Dichte).</p>
+    <p class="example">1,225 kg/m^3 ist der Standardwert auf Meereshoehe
+    bei 15 Grad Celsius (Normatmosphaere ISA). Auf einem Berg oder bei
+    hoher Temperatur ist die Luft duenner, der Wert also kleiner.</p>
+  `,
+  dynamic_viscosity: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Dynamische Viskositaet</h4>
+    <p>Ein Mass fuer die innere Reibung der Luft, wie "zaeh" sie ist.
+    Zusammen mit Geschwindigkeit, Dichte und der Baugroesse ergibt sich
+    daraus die Reynolds-Zahl, die bestimmt, wie duenn die
+    Grenzschicht (die duenne, abgebremste Luftschicht direkt an der
+    Oberflaeche) ausfaellt.</p>
+    <p class="example">1,81e-5 Pa*s ist der Standardwert fuer Luft bei
+    15 Grad Celsius, aendert sich kaum mit normalen Wetterbedingungen.</p>
+  `,
+  temperature: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Temperatur</h4>
+    <p>Wird fuer die Berechnung der Stroemung selbst gebraucht (Luft ist
+    hier als leicht kompressibel modelliert). 288,15 K = 15 Grad Celsius,
+    der Normwert der internationalen Standardatmosphaere auf Meereshoehe.</p>
+  `,
+  target_y_plus: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Ziel y+</h4>
+    <p>Eine dimensionslose Kennzahl, wie weit der erste Netzpunkt von der
+    Oberflaeche entfernt liegt, in "Wandeinheiten" statt in Metern
+    gemessen. Das Turbulenzmodell, das FOSAS verwendet, braucht y+ nahe
+    1, um die duenne Grenzschicht direkt an der Wand richtig aufzuloesen.</p>
+    <p>FOSAS berechnet daraus automatisch, wie duenn die erste Netzzelle
+    an der Oberflaeche sein muss (haeufig im Bereich weniger
+    hundertstel Millimeter). Ein zu grosser Wert (grobe erste Zelle)
+    macht die Reibungs-/Widerstandsberechnung ungenauer.</p>
+  `,
+  growth_ratio: `
+    <span class="tag annahme">Annahme (Richtwert)</span>
+    <h4>Wachstumsrate Grenzschicht</h4>
+    <p>Um wie viel jede weitere Netzschicht in der Grenzschicht dicker
+    wird als die vorherige, ausgehend von der sehr duennen ersten Zelle
+    (siehe Ziel y+). 1,2 bedeutet: jede Schicht ist 20% dicker als die
+    davor.</p>
+    <p>Ueblicher Bereich in der Praxis ist etwa 1,1 bis 1,3. Kleinere
+    Werte ergeben ein feineres, aber groesseres (langsamer zu
+    rechnendes) Netz.</p>
+  `,
+  bl_thickness_factor: `
+    <span class="tag annahme">Annahme (Richtwert)</span>
+    <h4>Grenzschichtdicke</h4>
+    <p>Wie dick der Bereich mit den fein abgestuften Grenzschicht-Zellen
+    insgesamt ist, als Anteil der Sehnenlaenge (0,05 = 5% der
+    Sehnenlaenge). Muss die reale, physikalische Grenzschichtdicke
+    grosszuegig einschliessen, sonst fehlt aufgeloeste Netzaufloesung
+    genau dort, wo die Reibung am staerksten wirkt.</p>
+  `,
+  span_layers: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Spannweiten-Schichten</h4>
+    <p>In wie viele Abschnitte das Netz entlang der Spannweite (Y-Achse)
+    unterteilt wird. Reine Netzaufloesung in diese eine Richtung, mehr
+    Schichten aendern nicht die Form der Geometrie, nur wie fein sie in
+    dieser Richtung vernetzt ist.</p>
+  `,
+  n_profile_points: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Profilpunkte</h4>
+    <p>Wie viele Stuetzpunkte verwendet werden, um die gekruemmte
+    Profilkontur (Ober- und Unterseite) im Netz nachzubilden. Mehr
+    Punkte folgen einer stark gekruemmten Kontur (z. B. an einer
+    runden Vorderkante) genauer, kosten aber mehr Rechenzeit beim
+    Vernetzen.</p>
+  `,
+  max_iterations: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Maximale Iterationen</h4>
+    <p>Wie viele Rechenschritte der Loeser maximal durchfuehrt. Die
+    Loesung startet bei Iteration 0 weit von der Realitaet entfernt und
+    naehert sich schrittweise an, jede Iteration bringt (im guten Fall)
+    einen kleineren Restfehler, siehe Konvergenzziel. Mehr Iterationen
+    bedeuten laengere Rechenzeit, aber nicht automatisch ein besseres
+    Ergebnis, wenn die Rechnung bereits ein Plateau erreicht hat.</p>
+  `,
+  mpi_ranks: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>MPI-Prozesse</h4>
+    <p>Wie viele Rechenprozesse parallel arbeiten (Parallelrechnen ueber
+    MPI, einen Standard fuer verteiltes Rechnen). Mehr Prozesse koennen
+    die Rechnung auf einer Maschine mit mehreren Kernen beschleunigen,
+    mehr als die Anzahl der verfuegbaren Kerne bringt aber nichts.</p>
+  `,
+  time_discretization: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Zeitintegration</h4>
+    <p><b>Implizit</b> ist normalerweise robuster und braucht weniger
+    Iterationen bis zur Konvergenz, verbraucht dafuer mehr Arbeitsspeicher
+    pro Iteration.</p>
+    <p><b>Explizit</b> braucht weniger Speicher pro Iteration, dafuer
+    typischerweise deutlich mehr Iterationen und kleinere, stabilitaets-
+    begrenzte Schritte, um nicht numerisch zu divergieren.</p>
+  `,
+  residual_threshold: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Konvergenzziel (Restfehler)</h4>
+    <p>Der Restfehler misst, wie sehr sich die Loesung von einer
+    Iteration zur naechsten noch aendert (auf einer logarithmischen
+    Skala, negativer heisst kleiner/besser). -8 bedeutet: die Aenderung
+    ist auf ein Zehnmillionstel des Anfangswerts gefallen, ein ueblicher,
+    aber strenger Zielwert.</p>
+    <p>Faellt der Restfehler bis zum Ende der Iterationen nicht unter
+    dieses Ziel, gilt der Lauf als nicht konvergiert, das Ergebnis kann
+    dann noch ungenau oder falsch sein.</p>
+  `,
+  convergence: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Konvergenz</h4>
+    <p>Zeigt an, ob der Restfehler das Konvergenzziel erreicht hat.
+    "Nicht konvergiert" ist eine ehrliche Aussage ueber den
+    tatsaechlichen Rechenzustand, kein Fehler der Software: Es bedeutet,
+    die Zahlen unten (CL, CD, ...) sind eine Zwischenauswertung, kein
+    belastbares Endergebnis.</p>
+    <p>"Plateau" bedeutet: Der Restfehler faellt praktisch nicht mehr
+    weiter, mehr Iterationen wuerden vermutlich nicht mehr viel aendern
+    (siehe docs/RISKS.md R10 fuer einen bekannten, realen Fall davon).</p>
+  `,
+  cl: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>CL, Auftriebsbeiwert</h4>
+    <p>Eine dimensionslose Zahl fuer den erzeugten Auftrieb, unabhaengig
+    von der absoluten Groesse des Bauteils (Auftriebskraft geteilt durch
+    Staudruck mal Bezugsflaeche).</p>
+    <p class="example">Richtwerte fuer einfache Fluegelprofile: um 0 bei
+    0 Grad Anstellwinkel (symmetrisches Profil), oft 0,3 bis 0,6 im
+    Reiseflug, bis etwa 1,5-2 kurz vor dem Stroemungsabriss.</p>
+  `,
+  cd: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>CD, Widerstandsbeiwert</h4>
+    <p>Dimensionslose Zahl fuer den Luftwiderstand, analog zu CL
+    (Widerstandskraft geteilt durch Staudruck mal Bezugsflaeche).</p>
+    <p class="example">Richtwerte: ein schlankes Fluegelprofil bei
+    kleinem Anstellwinkel liegt oft bei 0,01 bis 0,05, ein stumpfer
+    Koerper (z. B. eine Platte quer zur Stroemung) kann leicht ueber 1
+    liegen.</p>
+  `,
+  mean_y_plus: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Mittleres y+</h4>
+    <p>Der tatsaechlich in der fertigen Rechnung erreichte y+-Wert
+    (siehe Ziel y+ bei der Eingabe), gemittelt ueber die ganze
+    Oberflaeche. Liegt er deutlich ueber dem Zielwert, war die erste
+    Netzzelle an manchen Stellen groeber als beabsichtigt.</p>
+  `,
+  viewer3d: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>3D-Ansicht</h4>
+    <p>Zeigt jeden berechneten Punkt auf der Bauteiloberflaeche an seiner
+    echten 3D-Position, eingefaerbt nach seinem cp-Wert (siehe
+    cp-Verteilung). Es ist eine Punktwolke aus echten Netzknoten, keine
+    geglaettete, gerenderte Flaeche, und zeigt nur die Oberflaeche, keine
+    Stroemung in der umgebenden Luft (Stromlinien o. ae. werden aktuell
+    nicht berechnet/angezeigt).</p>
+  `,
+  cp_chart: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>cp, Druckbeiwert</h4>
+    <p>Eine dimensionslose Kennzahl fuer den lokalen Druckunterschied
+    zur ungestoerten Anstroemung. cp = 1 an einem Staupunkt (Luft kommt
+    dort vollstaendig zum Stillstand, meist an der Vorderkante),
+    negatives cp bedeutet Unterdruck (Sog), typisch auf der Oberseite
+    eines auftriebserzeugenden Profils.</p>
+    <p>Die cp-Achse im Diagramm ist bewusst umgedreht (Sog zeigt nach
+    oben), das ist Konvention in der Aerodynamik, nicht Zufall.</p>
+  `,
+};
+
+function setupInfoButtons() {
+  document.querySelectorAll("[data-info]").forEach((el) => {
+    const key = el.getAttribute("data-info");
+    if (!INFO_TEXT[key] || el.querySelector(".info-btn")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "info-btn";
+    btn.textContent = "i";
+    btn.setAttribute("aria-label", "Erklaerung anzeigen");
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleInfoPopover(btn, key);
+    });
+    el.appendChild(btn);
+  });
+}
+
+let currentInfoPopover = null;
+let currentInfoAnchor = null;
+
+function closeInfoPopover() {
+  if (currentInfoPopover) currentInfoPopover.remove();
+  currentInfoPopover = null;
+  currentInfoAnchor = null;
+}
+
+function toggleInfoPopover(anchorEl, key) {
+  if (currentInfoAnchor === anchorEl) { closeInfoPopover(); return; }
+  closeInfoPopover();
+  const pop = document.createElement("div");
+  pop.className = "info-popover";
+  pop.innerHTML = INFO_TEXT[key]; // authored content, not user input
+  document.body.appendChild(pop);
+  const rect = anchorEl.getBoundingClientRect();
+  const top = window.scrollY + rect.bottom + 6;
+  let left = window.scrollX + rect.left;
+  const maxLeft = window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 12;
+  left = Math.max(8, Math.min(left, maxLeft));
+  pop.style.top = top + "px";
+  pop.style.left = left + "px";
+  currentInfoPopover = pop;
+  currentInfoAnchor = anchorEl;
+  setTimeout(() => document.addEventListener("click", onOutsideInfoClick), 0);
+}
+
+function onOutsideInfoClick(e) {
+  if (currentInfoPopover && !currentInfoPopover.contains(e.target) && e.target !== currentInfoAnchor) {
+    closeInfoPopover();
+    document.removeEventListener("click", onOutsideInfoClick);
+  }
+}
+
+setupInfoButtons();
 
 function authHeaders() {
   return { "Authorization": "Bearer " + TOKEN };
