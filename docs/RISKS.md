@@ -652,3 +652,45 @@ Parameter pro Auftrag nicht nachtraeglich geaendert werden koennen, aber
 in ARCHITECTURE.md/OPEN_QUESTIONS.md festzuhalten, falls das V1-Modell
 (ein Auftrag, ein Arbeitsverzeichnis, unveraenderliche Parameter) je
 aufgeweicht wird.
+
+## R15: Manuell nachgedrehte reale Fluegeldatei fuehrt zu einem eigenen, reproduzierbaren Gmsh-Speicherueberlauf (offen, Ursache ungeklaert)
+
+Beleg (echter Vorfall, eigene Webflaeche, Server-Log und `dmesg`
+bestaetigt): Nach der R13-Behebung wurde dieselbe reale Fluegeldatei,
+manuell um 90 Grad um die X-Achse gedreht (`wing_reoriented.step`, siehe
+R12/R13), erneut ueber die Weboberflaeche hochgeladen, mit
+Standardeinstellungen (30 m/s, 5 Grad, `span_layers=24`,
+`n_profile_points=60`, `EULER_IMPLICIT`, 500 Iterationen). Die
+Achsen-Pruefung aus R13 greift diesmal korrekt nicht (Geometrie besteht
+die Plausibilitaetspruefung), die Pipeline geht in die Vernetzung.
+
+Zwei unabhaengige Versuche sind dort jeweils mit Gmsh-Exitcode -9
+abgestuerzt, beide Male mit denselben Warnungen ("Skipping curve with no
+begin or end point", "No elements in curve 444444") kurz vor dem Absturz.
+Per `dmesg` (mit `sudo`, da `dmesg` ohne Rechte auf diesem Server leer
+blieb) fuer beide Versuche eindeutig als OOM-Kill bestaetigt (Prozesse
+8876 und 10406, jeweils rund 6,5 GB RSS beim Kill, Server hat 7,6 GB
+insgesamt, kein Swap). Der zweite Versuch wurde live beobachtet: Der
+Speicherverbrauch von Gmsh wuchs ueber gut sieben Minuten kontinuierlich
+und zuletzt schnell (von rund 2,2 GB auf ueber 6,5 GB in den letzten
+anderthalb Minuten vor dem Kill), keine sofortige Explosion, aber klar
+unbegrenztes Wachstum ohne Konvergenz zu einer fertigen Vernetzung.
+
+Wichtig zur Einordnung: Das ist ein anderer Fehler als R13. R13 betraf
+die Achsenzuordnung (falscher, viel zu grosser Querschnitt). Hier ist
+die Achsenzuordnung korrekt, aber die aus dem gedrehten STEP-Modell
+extrahierte Querschnittskontur enthaelt offenbar degenerierte oder
+unzusammenhaengende Kurven (die "Skipping curve"-Warnungen deuten
+darauf hin), was Gmsh vermutlich in eine pathologische, nicht
+konvergierende Verfeinerung treibt statt sauber abzubrechen.
+
+Status: Nicht behoben, Ursache nicht im Detail untersucht (Vermutung
+oben, nicht verifiziert). Naechste sinnvolle Schritte waeren, den
+tatsaechlich aus `geometry.py`/`pipeline.py` extrahierten Querschnitt
+(die `profile_points_xz`-Liste) direkt zu inspizieren, bevor er an Gmsh
+geht, und/oder eine Obergrenze fuer Gmsh-Speicherverbrauch beziehungsweise
+einen Prozess-Timeout mit klarer Fehlermeldung einzuziehen, statt den
+Server erneut ungebremst in den OOM-Killer laufen zu lassen (aktuell
+gibt es zwar `mesh_timeout`, der greift aber nur bei Zeitueberschreitung,
+nicht bei Speicherueberschreitung). Noch nicht umgesetzt, da noch nicht
+vom Projektinhaber beauftragt.
