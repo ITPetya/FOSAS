@@ -117,9 +117,19 @@
   #viewer3d canvas { display: block; }
   .viewer3d-note {
     position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-    display: flex; align-items: center; justify-content: center;
+    align-items: center; justify-content: center;
     color: var(--muted); font-size: 0.85rem; text-align: center; padding: 20px;
   }
+  /* Real bug, fixed: a plain "display: flex" here unconditionally
+     overrode the [hidden] attribute's own display:none (author CSS
+     always wins over the browser's built-in [hidden] rule, regardless
+     of selector specificity), so this full-size overlay stayed
+     visible and ate every drag/click meant for the 3D canvas beneath
+     it even when "hidden" was set. Scoping the flex display to
+     :not([hidden]) lets the attribute's own display:none apply again
+     when hidden is present. */
+  .viewer3d-note:not([hidden]) { display: flex; }
+  #viewer3d, #viewer3d canvas { touch-action: none; user-select: none; }
   .colorbar-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.75rem; color: var(--muted); }
   .colorbar { flex: 1; height: 10px; border-radius: 999px; background: linear-gradient(to right, #2f6fed, #e6e8eb, #e0523f); }
   .job-row {
@@ -450,6 +460,13 @@ function renderSurface3D(surface) {
     renderer.setSize(w, h);
   }
   window.addEventListener("resize", onResize);
+  // Defensive: a size read taken in the same tick as unhiding the
+  // parent panel can be wrong in some browsers before layout has fully
+  // settled (confirmed the hard way: the canvas ended up much shorter
+  // than its container, leaving a "dead" area below it that looked like
+  // part of the 3D view but silently passed drags through to the page
+  // instead of to OrbitControls). Re-measuring a frame later corrects it.
+  requestAnimationFrame(onResize);
 
   let frameHandle;
   function animate() {
