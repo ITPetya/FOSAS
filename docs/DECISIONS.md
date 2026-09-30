@@ -408,3 +408,84 @@ und aendert sich hier nicht). Keine sonstigen Verhaltensaenderungen fuer
 bestehende, nicht wiederaufgenommene Faelle, da RESTART lediglich eine
 zusaetzliche Ausgabedatei ist und den eigentlichen Loesungsverlauf nicht
 beeinflusst.
+
+## ADR-0014: Laengen aus STEP-Geometrie werden von Millimeter auf Meter umgerechnet (behebt R15)
+
+Kontext: R15 beschreibt einen reproduzierbaren Gmsh-Speicherueberlauf bei
+der manuell nachgedrehten realen Fluegeldatei. Direkte Untersuchung des
+tatsaechlich generierten `.geo`-Skripts zeigte: Sehnenlaenge (chord) kam
+als 100 an (die Datei ist laut eigenem STEP-Header tatsaechlich in
+Millimetern, Sehnenlaenge real 100 mm, siehe R12), wurde aber in
+`fosas_core.pipeline.run_case` ungeprueft als 100 Meter in alle
+physikalischen Formeln (Reynolds-Zahl, y+-Zellhoehe ueber
+`first_cell_height`, Referenzwerte fuer CL/CD) eingesetzt.
+
+Ursache mit einem gezielten, kontrollierten Experiment zweifelsfrei
+bestaetigt (Gesichert, nicht Vermutung): Ein mit build123d exportierter
+Wuerfel `Box(1,1,1)` kommt beim erneuten Einlesen als Bounding Box 1.0
+zurueck, unabhaengig davon, welche Laengeneinheit im STEP-Header steht.
+Eine Kopie derselben Datei, deren Header von Hand auf `SI_UNIT($,.METRE.)`
+geaendert wurde, kommt beim Einlesen als Bounding Box 1000.0 zurueck.
+Das beweist: build123d/OCCT arbeitet intern immer in Millimetern und
+rechnet beim Import konsequent in diese interne Einheit um, unabhaengig
+vom deklarierten Einheitentyp der Quelldatei. `fosas_core.geometry`
+gibt also immer Millimeterwerte zurueck, ganz gleich, was die
+Ursprungsdatei deklariert.
+
+Fuer die inflationierte Reynolds-Zahl (chord faelschlich 100 statt 0,1)
+folgt daraus eine um den Faktor 1000 zu grosse Reynolds-Zahl und dadurch
+eine unrealistisch duenne, y+-basierte erste Wandzellenhoehe relativ zur
+(ebenfalls faelschlich 1000-fach zu grossen) Rechengebietsgroesse. Das
+Verhaeltnis von groesster zu kleinster noetiger Netzzellengroesse steigt
+dadurch von einem beherrschbaren Bereich (~5000, mit korrekter Skalierung
+nachgerechnet) auf einen unrealistischen Bereich (~3 Millionen), was
+Gmsh vermutlich in eine explodierende, nicht konvergierende Verfeinerung
+treibt und den Arbeitsspeicher erschoepft.
+
+Wichtig: Die eigenen synthetischen Testgeometrien (`core/tests/fixtures.py`)
+haben diesen Fehler nie aufgedeckt, weil sie ebenfalls ueber build123d
+gebaut UND wieder eingelesen werden: Eine Sehnenlaenge, die als "0,6"
+gemeint war (0,6 Meter, so haben die Testautoren die Zahl gewaehlt), kam
+nach Export/Reimport wieder als "0,6" zurueck (build123d/OCCT rechnet
+nicht neu um, wenn Quell- und Zieleinheit beide Millimeter sind), und
+der anschliessende Fehler ("behandle das als Meter") hat dieselbe Zahl
+zufaellig unveraendert gelassen, zwei sich gegenseitig aufhebende
+Fehlannahmen statt eines einzigen korrekten Schritts.
+
+Entscheidung: `run_case` rechnet Sehnenlaenge, Spannweite, Dicke,
+Mittelspannposition und alle Querschnittspunkte direkt nach der
+Extraktion aus der Bounding Box beziehungsweise dem geschnittenen
+Querschnitt von Millimeter auf Meter um (Faktor 0,001), bevor
+irgendeine physikalische Formel oder die Netzerzeugung diese Werte
+verwendet. Die Testgeometrien in `core/tests/fixtures.py` wurden
+angepasst: `naca0012_wing_step` und `naca0012_wing_step_wrong_axes`
+bauen die Geometrie jetzt beim 1000-fachen des als Meter gemeinten
+`chord`/`span`-Arguments (also tatsaechlich in Millimetern), sodass alle
+bestehenden Testaufrufe und Erwartungswerte (in Metern) unveraendert
+gueltig bleiben. `naca0012_profile_step` bleibt bewusst unskaliert, da
+ihr einziger Verwender (`generate_constant_section_geo_from_step_profile`,
+ein separater, nicht produktiv genutzter Technikversuch aus ADR-0007)
+Chord/Span-Argument und importierte STEP-Geometrie auf derselben
+Zahlenskala erwartet, nicht ueber `run_case` laeuft und daher von diesem
+Fehler nie betroffen war.
+
+Verifikation: Ein neuer schneller Test
+(`test_run_case_converts_geometry_from_millimetres_to_metres`) prueft
+direkt im generierten `.geo`-Text, dass eine mit 0,6 m gemeinte
+Sehnenlaenge dort als `chord = 0.6` erscheint, nicht als `chord = 600`,
+ohne einen echten Gmsh-Lauf zu brauchen. Zusaetzlich wurde die reale,
+zuvor abstuerzende Datei (`wing_reoriented.step`, siehe R15) direkt durch
+den reparierten `run_case` geschickt: Sehnenlaenge kommt jetzt korrekt
+als 0,1 m zurueck (passt zu R12s unabhaengiger Messung: real 100 mm),
+das Mesh braucht nur noch rund 230 MB Speicher (vorher unbegrenzt
+wachsend bis zum OOM-Kill) und ist nach unter einer Minute fertig, mit
+211850 Knoten und 1199232 Elementen. Alle bestehenden Tests (schnell und
+langsam) bleiben gruen.
+
+Konsequenzen: Jede reale, in Millimetern authorierte STEP-Datei (der
+CAD-Normalfall, siehe R11/R12) wird ab jetzt korrekt skaliert. Es gibt
+weiterhin keine UI-Anzeige, welche Laengeneinheit erkannt beziehungsweise
+angenommen wurde; da build123d/OCCT jede STEP-Datei unabhaengig von ihrer
+deklarierten Einheit auf dieselbe interne Millimeter-Konvention normiert,
+ist die Millimeter-Annahme kein Rateschritt, sondern eine feste,
+bibliotheksweite Tatsache, die fuer jede STEP-Datei gleichermassen gilt.

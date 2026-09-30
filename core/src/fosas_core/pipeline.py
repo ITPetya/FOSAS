@@ -179,7 +179,35 @@ def run_case(
     if not section:
         raise PipelineError("geometry", "Cross-section at mid-span is empty.")
 
-    profile_points = _sample_wire_points(section[0].outer_wire())
+    profile_points_native = _sample_wire_points(section[0].outer_wire())
+
+    # build123d/OCCT's internal working length unit is millimeters,
+    # regardless of what unit a source STEP file declares in its own
+    # header: confirmed directly by round-tripping two synthetic STEP
+    # files through import_step, one declaring SI_UNIT(.MILLI.,.METRE.)
+    # and one declaring SI_UNIT($,.METRE.) for the same nominal size,
+    # which came back as bounding boxes of 1.0 and 1000.0 respectively.
+    # Every physics formula from here on (Reynolds number, y+ sizing,
+    # SU2's freestream/viscosity) is SI (density kg/m^3, velocity m/s,
+    # viscosity Pa*s), so every length pulled out of the geometry must
+    # be converted to meters here, once, before any of it is used. This
+    # was missing until a real customer file (chord really 100 mm) got
+    # its 100 treated as 100 meters, inflating the Reynolds number by
+    # 1000x and, through the resulting boundary-layer/background mesh
+    # size ratio, crashing Gmsh with an OOM kill, see docs/RISKS.md R15.
+    # Synthetic test fixtures never exposed this: they are also built
+    # and re-imported via build123d, so a "0.6" chosen to mean "0.6 m"
+    # round-tripped as "0.6" again before this fix, i.e. two separate
+    # unit mistakes (mm meant as m in the fixture, then treated as m
+    # again here) canceled out numerically. Fixed at the source instead
+    # of patching fixtures to match the bug: fixtures.py now builds
+    # geometry at 1000x the intended metre dimensions.
+    _MM_TO_M = 0.001
+    chord *= _MM_TO_M
+    span *= _MM_TO_M
+    thickness *= _MM_TO_M
+    mid_y *= _MM_TO_M
+    profile_points = tuple((x * _MM_TO_M, z * _MM_TO_M) for x, z in profile_points_native)
 
     y1 = first_cell_height(
         density=params.density,

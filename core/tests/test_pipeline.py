@@ -2,6 +2,9 @@ from pathlib import Path
 
 import pytest
 
+import re
+
+from fosas_core.meshing import MeshingError
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 
 from .fixtures import naca0012_wing_step, naca0012_wing_step_wrong_axes
@@ -17,6 +20,36 @@ def test_run_case_rejects_geometry_with_span_along_the_wrong_axis(tmp_path):
     with pytest.raises(PipelineError, match="implausible") as exc_info:
         run_case(step_path, params, tmp_path / "work")
     assert exc_info.value.stage == "geometry"
+
+
+def test_run_case_converts_geometry_from_millimetres_to_metres(tmp_path, monkeypatch):
+    """Regression test for R15/ADR-0014: build123d/OCCT's working length
+    unit is always millimetres, confirmed empirically (see the comment in
+    fosas_core.pipeline.run_case), so a STEP file built with a nominal
+    600 mm chord must produce a chord of 0.6 m in the generated Gmsh
+    script, not 600. Does not need a real Gmsh/SU2 run: run_gmsh is
+    intercepted right where it would hand off to the external process,
+    after the .geo text (which embeds the converted chord as a plain
+    number) has already been built in pure Python.
+    """
+    step_path = naca0012_wing_step(tmp_path / "wing.step", chord=0.6, span=1.2, n=10)
+    params = CaseParams(velocity=30, aoa_deg=5)
+
+    captured = {}
+
+    def fake_run_gmsh(geo_script, output_su2_path, **kwargs):
+        captured["geo_script"] = geo_script
+        raise MeshingError("stop before actually invoking Gmsh")
+
+    monkeypatch.setattr("fosas_core.pipeline.run_gmsh", fake_run_gmsh)
+
+    with pytest.raises(PipelineError):
+        run_case(step_path, params, tmp_path / "work")
+
+    assert "geo_script" in captured
+    match = re.search(r"^chord = ([0-9.eE+-]+);", captured["geo_script"], re.MULTILINE)
+    assert match is not None, captured["geo_script"]
+    assert float(match.group(1)) == pytest.approx(0.6, rel=1e-3)
 
 
 def test_case_params_reject_invalid_input():

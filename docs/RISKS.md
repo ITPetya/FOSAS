@@ -653,7 +653,7 @@ in ARCHITECTURE.md/OPEN_QUESTIONS.md festzuhalten, falls das V1-Modell
 (ein Auftrag, ein Arbeitsverzeichnis, unveraenderliche Parameter) je
 aufgeweicht wird.
 
-## R15: Manuell nachgedrehte reale Fluegeldatei fuehrt zu einem eigenen, reproduzierbaren Gmsh-Speicherueberlauf (offen, Ursache ungeklaert)
+## R15: Manuell nachgedrehte reale Fluegeldatei fuehrt zu einem eigenen, reproduzierbaren Gmsh-Speicherueberlauf (behoben)
 
 Beleg (echter Vorfall, eigene Webflaeche, Server-Log und `dmesg`
 bestaetigt): Nach der R13-Behebung wurde dieselbe reale Fluegeldatei,
@@ -684,13 +684,23 @@ unzusammenhaengende Kurven (die "Skipping curve"-Warnungen deuten
 darauf hin), was Gmsh vermutlich in eine pathologische, nicht
 konvergierende Verfeinerung treibt statt sauber abzubrechen.
 
-Status: Nicht behoben, Ursache nicht im Detail untersucht (Vermutung
-oben, nicht verifiziert). Naechste sinnvolle Schritte waeren, den
-tatsaechlich aus `geometry.py`/`pipeline.py` extrahierten Querschnitt
-(die `profile_points_xz`-Liste) direkt zu inspizieren, bevor er an Gmsh
-geht, und/oder eine Obergrenze fuer Gmsh-Speicherverbrauch beziehungsweise
-einen Prozess-Timeout mit klarer Fehlermeldung einzuziehen, statt den
-Server erneut ungebremst in den OOM-Killer laufen zu lassen (aktuell
-gibt es zwar `mesh_timeout`, der greift aber nur bei Zeitueberschreitung,
-nicht bei Speicherueberschreitung). Noch nicht umgesetzt, da noch nicht
-vom Projektinhaber beauftragt.
+Status: Behoben, siehe ADR-0014. Die vermutete Ursache oben ("degenerierte
+Kurven") war eine Fehlspur: Die tatsaechliche Ursache lag nicht in der
+Kontur, sondern darin, dass `run_case` die aus der Geometrie gelesene
+Sehnenlaenge (100, in Wirklichkeit Millimeter, siehe R12) ungeprueft als
+100 Meter in alle physikalischen Formeln eingesetzt hat. Die dadurch um
+Faktor 1000 ueberhoehte Reynolds-Zahl fuehrte zu einer relativ zur
+(ebenfalls falsch skalierten) Rechengebietsgroesse extrem duennen
+Grenzschicht-Zellhoehe, was Gmsh in eine explodierende Verfeinerung
+getrieben hat. `run_case` rechnet jetzt alle aus der Geometrie gelesenen
+Laengen konsequent von Millimeter auf Meter um. Mit der echten Datei
+verifiziert: Sehnenlaenge kommt jetzt korrekt als 0,1 m zurueck (passt zu
+R12), das Mesh braucht nur noch rund 230 MB (vorher unbegrenzt wachsend
+bis zum OOM-Kill) und ist nach unter einer Minute fertig.
+
+Die "Skipping curve"-Warnungen traten weiterhin nicht mehr auf, sobald
+die Groessenverhaeltnisse realistisch waren, was die urspruengliche
+"degenerierte Kontur"-Vermutung zusaetzlich entkraeftet: Sie war
+vermutlich ein Symptom des extremen Groessenverhaeltnisses (numerische
+Rundungsprobleme bei der Kurvendiskretisierung ueber viele
+Groessenordnungen hinweg), nicht eine eigene, unabhaengige Ursache.
