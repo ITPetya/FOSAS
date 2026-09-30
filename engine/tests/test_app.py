@@ -95,6 +95,8 @@ def test_create_and_poll_a_real_job(client, settings, tmp_path, gmsh_executable,
     assert job is not None
     assert job["status"] == "done", job
     assert job["result"]["cl"] != 0.0
+    assert abs(job["result"]["cl"]) < 50  # catches a diverged run, not just an unrotated one
+    assert abs(job["result"]["cd"]) < 50
     assert job["result"]["convergence"]["converged"] is False  # known for this short/coarse case
     assert len(job["result"]["surface"]) > 0
     assert "cp" in job["result"]["surface"][0]

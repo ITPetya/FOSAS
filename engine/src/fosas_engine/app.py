@@ -19,13 +19,15 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 
 from fosas_engine.jobs import JobStore
 from fosas_engine.models import JobOut
 from fosas_engine.settings import Settings
+
+_WEB_CLIENT_PATH = Path(__file__).resolve().parents[3] / "clients" / "web" / "index.html"
 
 
 def create_app(settings: Settings) -> FastAPI:
@@ -50,6 +52,20 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/", response_class=HTMLResponse)
+    def index():
+        # No token check here on purpose: the token has to reach the
+        # browser somehow, and reaching this route at all already implies
+        # network access to the engine (127.0.0.1 plus, for a remote
+        # machine, an SSH tunnel), the same trust boundary /docs relies on.
+        if not _WEB_CLIENT_PATH.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Web client not found at {_WEB_CLIENT_PATH}. Use /docs instead.",
+            )
+        html = _WEB_CLIENT_PATH.read_text()
+        return html.replace("__FOSAS_TOKEN__", settings.token)
 
     @app.post("/jobs", response_model=JobOut, dependencies=[Depends(require_token)])
     async def create_job(

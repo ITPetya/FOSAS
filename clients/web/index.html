@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>FOSAS</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8eb;
+    --muted: #9aa3af;
+    --accent: #4f8cff;
+    --ok: #2fbf71;
+    --warn: #e0a72f;
+    --bad: #e05252;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 24px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 0.9rem; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin: 12px 0 4px; }
+  label.first { margin-top: 0; }
+  input[type=number], input[type=text], select {
+    width: 100%;
+    background: #0d0f13;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 0.95rem;
+  }
+  input[type=file] { width: 100%; color: var(--muted); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  details { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+  button {
+    margin-top: 20px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 1rem;
+    cursor: pointer;
+    width: 100%;
+  }
+  button:disabled { background: #33374a; cursor: default; }
+  .status { margin-top: 16px; font-size: 0.9rem; color: var(--muted); }
+  .badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .badge.ok { background: var(--ok); color: #06240f; }
+  .badge.warn { background: var(--warn); color: #2a1d00; }
+  .badge.bad { background: var(--bad); color: #2a0000; }
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+  .metric { background: #0d0f13; border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+  .metric .value { font-size: 1.3rem; font-weight: 600; }
+  .metric .label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .msg { font-size: 0.9rem; margin-top: 8px; line-height: 1.4; }
+  svg { width: 100%; height: auto; background: #0d0f13; border: 1px solid var(--border); border-radius: 8px; }
+  .legend { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+  .legend span { display: inline-flex; align-items: center; margin-right: 16px; }
+  .legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+  .error { color: var(--bad); font-size: 0.9rem; margin-top: 12px; white-space: pre-wrap; }
+  .hint { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>FOSAS, virtueller Windkanal</h1>
+  <p class="sub">
+    Fruehe, bewusst einfache Testoberflaeche (Phase 1). Geometrie muss bereits
+    in der Achsenkonvention X stromab, Y spannweitig, Z vertikal vorliegen
+    und einen konstanten Querschnitt haben, siehe docs/ARCHITECTURE.md.
+  </p>
+
+  <div class="panel">
+    <form id="case-form">
+      <label class="first">STEP-Datei</label>
+      <input type="file" id="step_file" accept=".step,.stp" required>
+
+      <div class="row">
+        <div>
+          <label>Anstroemgeschwindigkeit (m/s)</label>
+          <input type="number" id="velocity" value="30" step="any" required>
+        </div>
+        <div>
+          <label>Anstellwinkel (Grad)</label>
+          <input type="number" id="aoa_deg" value="5" step="any" required>
+        </div>
+      </div>
+
+      <details>
+        <summary>Erweiterte Einstellungen</summary>
+        <div class="row">
+          <div><label>Luftdichte (kg/m^3)</label><input type="number" id="density" value="1.225" step="any"></div>
+          <div><label>Dynamische Viskositaet (Pa*s)</label><input type="number" id="dynamic_viscosity" value="0.0000181" step="any"></div>
+        </div>
+        <div class="row">
+          <div><label>Temperatur (K)</label><input type="number" id="temperature" value="288.15" step="any"></div>
+          <div><label>Ziel y+</label><input type="number" id="target_y_plus" value="1.0" step="any"></div>
+        </div>
+        <div class="row">
+          <div><label>Wachstumsrate Grenzschicht</label><input type="number" id="growth_ratio" value="1.2" step="any"></div>
+          <div><label>Grenzschichtdicke (Faktor mal Sehnenlaenge)</label><input type="number" id="bl_thickness_factor" value="0.05" step="any"></div>
+        </div>
+        <div class="row">
+          <div><label>Spannweiten-Schichten</label><input type="number" id="span_layers" value="24" step="1"></div>
+          <div><label>Profilpunkte</label><input type="number" id="n_profile_points" value="60" step="1"></div>
+        </div>
+        <div class="row">
+          <div><label>Max. Iterationen</label><input type="number" id="max_iterations" value="500" step="1"></div>
+          <div><label>MPI-Prozesse</label><input type="number" id="mpi_ranks" value="1" step="1"></div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Zeitintegration</label>
+            <select id="time_discretization">
+              <option value="EULER_IMPLICIT">Implizit (schneller pro Iteration, mehr Speicher)</option>
+              <option value="RUNGE-KUTTA_EXPLICIT">Explizit (weniger Speicher, mehr Iterationen noetig)</option>
+            </select>
+          </div>
+          <div><label>Konvergenzziel (Restfehler)</label><input type="number" id="residual_threshold" value="-8" step="any"></div>
+        </div>
+        <p class="hint">Voreinstellungen passen fuer einen kleinen Testfall. Bei eigenen Geometrien Sehnenlaenge/Reynolds-Zahl im Kopf behalten, siehe docs/RISKS.md R10 zur bekannten Konvergenzfrage.</p>
+      </details>
+
+      <button type="submit" id="submit-btn">Rechnung starten</button>
+    </form>
+    <div class="status" id="status"></div>
+    <div class="error" id="error" hidden></div>
+  </div>
+
+  <div class="panel" id="result-panel" hidden>
+    <h2 style="margin-top:0;font-size:1.1rem;">Ergebnis</h2>
+    <div id="convergence-badge"></div>
+    <div class="metrics">
+      <div class="metric"><div class="value" id="cl-value">-</div><div class="label">CL</div></div>
+      <div class="metric"><div class="value" id="cd-value">-</div><div class="label">CD</div></div>
+      <div class="metric"><div class="value" id="yplus-value">-</div><div class="label">mittleres y+</div></div>
+    </div>
+    <p class="msg" id="convergence-msg"></p>
+    <h3 style="font-size:0.95rem;">cp-Verteilung</h3>
+    <svg id="cp-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="legend">
+      <span><span class="dot" style="background:#4f8cff"></span>Oberseite</span>
+      <span><span class="dot" style="background:#e0a72f"></span>Unterseite</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKEN = "__FOSAS_TOKEN__";
+
+function authHeaders() {
+  return { "Authorization": "Bearer " + TOKEN };
+}
+
+function paramFields() {
+  return [
+    "velocity", "aoa_deg", "density", "dynamic_viscosity", "temperature",
+    "target_y_plus", "growth_ratio", "bl_thickness_factor", "span_layers",
+    "n_profile_points", "max_iterations", "mpi_ranks", "time_discretization",
+    "residual_threshold",
+  ];
+}
+
+function setError(msg) {
+  const el = document.getElementById("error");
+  if (msg) { el.textContent = msg; el.hidden = false; } else { el.hidden = true; el.textContent = ""; }
+}
+
+function drawCpChart(surface) {
+  const svg = document.getElementById("cp-chart");
+  svg.innerHTML = "";
+  if (!surface || surface.length === 0) return;
+
+  const xs = surface.map(p => p.x);
+  const cps = surface.map(p => p.cp);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const cpMin = Math.min(...cps), cpMax = Math.max(...cps);
+  const padX = 40, padY = 20, W = 600, H = 320;
+
+  function sx(x) { return padX + (x - xMin) / (xMax - xMin || 1) * (W - 2 * padX); }
+  // cp axis inverted (more negative cp plotted upward), standard airfoil convention
+  function sy(cp) { return padY + (cp - cpMax) / (cpMin - cpMax || 1) * (H - 2 * padY); }
+
+  const ns = "http://www.w3.org/2000/svg";
+  const zeroLine = document.createElementNS(ns, "line");
+  const y0 = sy(0);
+  zeroLine.setAttribute("x1", padX); zeroLine.setAttribute("x2", W - padX);
+  zeroLine.setAttribute("y1", y0); zeroLine.setAttribute("y2", y0);
+  zeroLine.setAttribute("stroke", "#2a2f3a");
+  svg.appendChild(zeroLine);
+
+  for (const p of surface) {
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", sx(p.x));
+    c.setAttribute("cy", sy(p.cp));
+    c.setAttribute("r", 2.2);
+    c.setAttribute("fill", p.z >= 0 ? "#4f8cff" : "#e0a72f");
+    c.setAttribute("opacity", "0.85");
+    svg.appendChild(c);
+  }
+
+  const label = document.createElementNS(ns, "text");
+  label.setAttribute("x", padX);
+  label.setAttribute("y", H - 4);
+  label.setAttribute("fill", "#9aa3af");
+  label.setAttribute("font-size", "11");
+  label.textContent = "x (Sehnenrichtung)  |  cp-Achse invertiert (Sog nach oben)";
+  svg.appendChild(label);
+}
+
+function renderResult(result) {
+  document.getElementById("result-panel").hidden = false;
+  document.getElementById("cl-value").textContent = result.cl.toFixed(4);
+  document.getElementById("cd-value").textContent = result.cd.toFixed(4);
+  document.getElementById("yplus-value").textContent = result.mean_y_plus.toFixed(2);
+
+  const badge = document.getElementById("convergence-badge");
+  const conv = result.convergence;
+  let cls = "bad", text = "Nicht konvergiert";
+  if (conv.converged) { cls = "ok"; text = "Konvergiert"; }
+  else if (conv.is_plateaued) { cls = "warn"; text = "Plateau, vermutlich nicht loesbar durch mehr Iterationen"; }
+  badge.innerHTML = '<span class="badge ' + cls + '">' + text + '</span>';
+  document.getElementById("convergence-msg").textContent = conv.message;
+
+  drawCpChart(result.surface);
+}
+
+async function pollJob(jobId) {
+  const statusEl = document.getElementById("status");
+  while (true) {
+    const res = await fetch("/jobs/" + jobId, { headers: authHeaders() });
+    if (!res.ok) { setError("Fehler beim Abfragen des Jobs (" + res.status + ")"); return; }
+    const job = await res.json();
+    if (job.status === "pending" || job.status === "running") {
+      statusEl.textContent = "Status: " + job.status + " ... (kein Live-Fortschritt in dieser Version, siehe engine/README.md)";
+      await new Promise(r => setTimeout(r, 2000));
+      continue;
+    }
+    if (job.status === "failed") {
+      statusEl.textContent = "";
+      setError("Fehlgeschlagen in Phase '" + job.stage + "': " + job.error);
+      return;
+    }
+    statusEl.textContent = "Fertig.";
+    renderResult(job.result);
+    return;
+  }
+}
+
+document.getElementById("case-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setError(null);
+  document.getElementById("result-panel").hidden = true;
+  const btn = document.getElementById("submit-btn");
+  btn.disabled = true;
+  document.getElementById("status").textContent = "Lade Datei hoch und starte Job ...";
+
+  try {
+    const fileInput = document.getElementById("step_file");
+    if (!fileInput.files.length) { setError("Bitte eine STEP-Datei waehlen."); return; }
+
+    const form = new FormData();
+    form.append("step_file", fileInput.files[0]);
+    for (const name of paramFields()) {
+      form.append(name, document.getElementById(name).value);
+    }
+
+    const res = await fetch("/jobs", { method: "POST", headers: authHeaders(), body: form });
+    if (!res.ok) {
+      const detail = await res.text();
+      setError("Konnte Job nicht starten (" + res.status + "): " + detail);
+      return;
+    }
+    const job = await res.json();
+    document.getElementById("status").textContent = "Job " + job.id + " gestartet.";
+    await pollJob(job.id);
+  } catch (err) {
+    setError("Unerwarteter Fehler: " + err);
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>

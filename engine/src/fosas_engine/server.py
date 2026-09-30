@@ -35,9 +35,15 @@ def main() -> None:
     settings = Settings(token=token, work_root=args.work_root)
     app = create_app(settings)
 
-    print(f"FOSAS engine starting on http://127.0.0.1:{port}")
-    print(f"Token: {token}")
-    print(f"Interactive docs (send the token as 'Authorization: Bearer <token>'): http://127.0.0.1:{port}/docs")
+    # flush=True: stdout is fully buffered (not line-buffered) when it is
+    # not a terminal, e.g. when redirected to a log file. Without an
+    # explicit flush here, a reader tailing that file would not see the
+    # token until enough other output accumulated to trigger a flush,
+    # observed directly while testing this script.
+    print(f"FOSAS engine starting on http://127.0.0.1:{port}", flush=True)
+    print(f"Token: {token}", flush=True)
+    print(f"Web client: http://127.0.0.1:{port}/", flush=True)
+    print(f"Interactive docs (send the token as 'Authorization: Bearer <token>'): http://127.0.0.1:{port}/docs", flush=True)
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 

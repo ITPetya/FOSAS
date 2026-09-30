@@ -80,7 +80,13 @@ class SolverParams:
     farfield_marker: str = "farfield"
     turbulence_model: str = "SA"
     max_iterations: int = 500
-    cfl_number: float = 5.0
+    # 1.0 is conservative but safe for both schemes. Confirmed by direct
+    # test: CFL=5.0 with RUNGE-KUTTA_EXPLICIT diverges outright (CL/CD in
+    # the millions, growing residual) on a y+=1 boundary-layer mesh,
+    # while CFL=1.0 gives an immediately plausible result on the same
+    # mesh. Implicit runs can raise this explicitly once they need faster
+    # convergence; explicit runs generally cannot go much higher anyway.
+    cfl_number: float = 1.0
     time_discretization: str = "EULER_IMPLICIT"
     restart_solution_path: Path | None = None
 

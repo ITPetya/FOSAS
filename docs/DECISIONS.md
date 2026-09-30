@@ -334,3 +334,43 @@ Konsequenzen: Falls in einer Umgebung tatsaechliches Oversubscribing
 (mehr Prozesse als Kerne) fachlich unerwuenscht waere, faellt diese
 Sicherheitsbremse jetzt weg. Das ist fuer unseren Anwendungsfall
 akzeptabel, da `mpi_ranks` ohnehin vom Aufrufer bewusst gesetzt wird.
+
+## ADR-0012: Standard-CFL-Zahl auf 1,0 gesenkt, echter Divergenz-Fehler gefunden
+
+Kontext: Beim Bau der ersten Weboberfläche (`clients/web`) wurde ein
+End-zu-Ende-Testlauf ueber die echte HTTP-Schnittstelle gemacht, mit
+denselben Parametern wie in unseren bestehenden Tests. Ergebnis: CL rund
+-2,9 Millionen, CD rund -524000, offensichtlich unsinnig. Ursache
+gefunden und durch Gegentest bestaetigt: `SolverParams.cfl_number` hatte
+den Standardwert 5,0, unabhaengig vom gewaehlten Zeitintegrationsverfahren.
+Bei `RUNGE-KUTTA_EXPLICIT` (unser Rueckfall-Schema fuer Faelle ohne
+genug Arbeitsspeicher fuer implizit, siehe R10) ist CFL 5,0 weit ueber
+der Stabilitaetsgrenze, die Rechnung divergiert sichtbar (Restfehler
+waechst statt zu fallen, positiv statt negativ). Mit CFL 1,0 auf
+demselben Netz sofort ein plausibles Ergebnis (CL rund 1,29 statt -2,9
+Millionen).
+
+Besonders unangenehmer Nebenbefund: Unsere bestehenden End-zu-Ende-Tests
+(`test_solver.py`, `test_pipeline.py`, `test_app.py`) liefen mit genau
+dieser Kombination (explizit, Standard-CFL) bereits vorher erfolgreich
+durch, weil sie nur `cl != 0` statt eines Plausibilitaetsbereichs
+gepglueft haben. Ein Ergebnis in Millionenhoehe waere also unbemerkt als
+"Test bestanden" durchgerutscht.
+
+Entscheidung: Standardwert von `cfl_number` auf 1,0 gesenkt (sicher fuer
+explizit und implizit, implizit kann bei Bedarf weiterhin explizit
+hoeher gesetzt werden). Alle betroffenen Tests bekommen zusaetzlich eine
+Plausibilitaetsgrenze (`abs(cl) < 50`, `abs(cd) < 50`), nicht nur eine
+Ungleich-Null-Pruefung.
+
+Alternativen: CFL abhaengig vom gewaehlten Zeitintegrationsverfahren
+automatisch waehlen (verworfen fuer den Moment, mehr Komplexitaet als
+ein einzelner, fuer beide Faelle sicherer Standardwert braucht).
+
+Konsequenzen: Alle bisherigen End-zu-Ende-Testlaeufe mit explizitem
+Verfahren und Standardeinstellungen (siehe RISKS.md R10) muessen als
+womoeglich durch diesen Fehler beeinflusst neu bewertet werden, auch
+wenn die Kernaussage von R10 (Restfehler-Plateau weit ueber dem
+Konvergenzziel) davon nicht beruehrt sein sollte, da die grossen
+Validierungslaeufe in R10 mit explizit gesetzter CFL-Zahl liefen, nicht
+mit dem betroffenen Standardwert.
