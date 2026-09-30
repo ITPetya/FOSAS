@@ -22,11 +22,25 @@ ueber Gmsh, ausschliesslich als externer Prozess (ADR-0002), nicht als
 In-Process-Import.
 
 **Schicht 2, Engine-Dienst.** FastAPI mit REST, WebSocket fuer Fortschritt,
-Job-Warteschlange, OpenAPI-Schema. Lokal nur 127.0.0.1 mit Zufallsport und
-Token, im Servermodus echte Authentifizierung (Interface wird von Anfang an
-so entworfen, dass Auth spaeter eingehaengt werden kann, ohne die
-API-Form zu brechen). Die automatisch erzeugte interaktive
+Job-Warteschlange, OpenAPI-Schema. Standardmaessig nur 127.0.0.1 mit
+Zufallsport und Token, im Servermodus echte Authentifizierung (Interface
+wird von Anfang an so entworfen, dass Auth spaeter eingehaengt werden
+kann, ohne die API-Form zu brechen). Die automatisch erzeugte interaktive
 OpenAPI-Dokumentation dient von Phase 1 an als browserbasierte Testflaeche.
+
+**Erreichbarkeit ueber Tailscale (seit Phase 1).** Der Server war anfangs
+nur per SSH-Tunnel von einem einzelnen, vorher eingerichteten Geraet aus
+erreichbar, das war fuer mehrere eigene Geraete zu umstaendlich. Loesung:
+Tailscale (privates VPN) auf dem Server und auf jedem Geraet des
+Projektinhabers, alle im selben, privaten Tailnet. Die Engine bindet
+dafuer explizit an die eigene Tailscale-Interface-Adresse
+(`fosas_engine.server --host <Tailscale-IP>`), nicht an `0.0.0.0`: Damit
+ist sie beweisbar nur ueber das Tailnet erreichbar, unabhaengig davon, ob
+eine separate Firewall/Security-Group-Konfiguration das ebenfalls korrekt
+absichert. Zugriffsschutz bleibt weiterhin das Bearer-Token, jetzt aber
+gegen ein privates statt ein oeffentliches Netz. `--host` ohne Angabe
+bleibt beim sicheren Standard `127.0.0.1`, ein Aufruf ohne Tailscale
+aendert also nichts am bisherigen Verhalten.
 
 **Job-Persistenz und geteilte Sitzung (seit Phase 1, siehe RISKS.md R14).**
 Es gibt bewusst kein Nutzerkonto und keine Browser-Sitzung im ueblichen
