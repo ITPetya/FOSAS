@@ -109,7 +109,22 @@
   }
   @keyframes indeterminate { 0% { left: -35%; } 100% { left: 100%; } }
   .progress-meta { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+  #viewer3d-wrap { position: relative; }
+  #viewer3d {
+    width: 100%; height: 380px; background: #0d0f13; border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+  #viewer3d canvas { display: block; }
+  .viewer3d-note {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 0.85rem; text-align: center; padding: 20px;
+  }
+  .colorbar-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.75rem; color: var(--muted); }
+  .colorbar { flex: 1; height: 10px; border-radius: 999px; background: linear-gradient(to right, #2f6fed, #e6e8eb, #e0523f); }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/three@0.140.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.140.2/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -200,7 +215,20 @@
       <div class="metric"><div class="value" id="yplus-value">-</div><div class="label">mittleres y+</div></div>
     </div>
     <p class="msg" id="convergence-msg"></p>
-    <h3 style="font-size:0.95rem;">cp-Verteilung</h3>
+
+    <h3 style="font-size:0.95rem;">3D-Ansicht (cp auf der Oberflaeche)</h3>
+    <div id="viewer3d-wrap">
+      <div id="viewer3d"></div>
+      <p class="viewer3d-note" id="viewer3d-note" hidden></p>
+    </div>
+    <div class="colorbar-row" id="colorbar-row" hidden>
+      <span id="cp-min-label"></span>
+      <div class="colorbar"></div>
+      <span id="cp-max-label"></span>
+    </div>
+    <p class="hint">Ziehen zum Drehen, Scrollen zum Zoomen. Jeder Punkt ist ein echter Netzknoten der Oberflaeche, keine geglaettete Flaeche.</p>
+
+    <h3 style="font-size:0.95rem;">cp-Verteilung (Sehnenschnitt)</h3>
     <svg id="cp-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
     <div class="legend">
       <span><span class="dot" style="background:#4f8cff"></span>Oberseite</span>
@@ -272,6 +300,125 @@ function drawCpChart(surface) {
   svg.appendChild(label);
 }
 
+let viewer3dState = null;
+
+function cpToColor(cp, cpMin, cpMax) {
+  // Diverging colormap, low cp (suction) to high cp: blue -> near-white -> red,
+  // matching common CFD post-processor convention (e.g. ParaView "coolwarm").
+  const t = cpMax > cpMin ? (cp - cpMin) / (cpMax - cpMin) : 0.5;
+  const stops = [
+    [0.0, [47, 111, 237]],
+    [0.5, [230, 232, 235]],
+    [1.0, [224, 82, 63]],
+  ];
+  let a = stops[0], b = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i][0] && t <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
+  }
+  const span = b[0] - a[0];
+  const localT = span > 0 ? (t - a[0]) / span : 0;
+  const lerp = (i) => (a[1][i] + (b[1][i] - a[1][i]) * localT) / 255;
+  return [lerp(0), lerp(1), lerp(2)];
+}
+
+function disposeViewer3D() {
+  if (!viewer3dState) return;
+  viewer3dState.controls.dispose();
+  viewer3dState.renderer.dispose();
+  viewer3dState.container.innerHTML = "";
+  cancelAnimationFrame(viewer3dState.frameHandle);
+  window.removeEventListener("resize", viewer3dState.onResize);
+  viewer3dState = null;
+}
+
+function renderSurface3D(surface) {
+  const container = document.getElementById("viewer3d");
+  const note = document.getElementById("viewer3d-note");
+  const colorbarRow = document.getElementById("colorbar-row");
+  disposeViewer3D();
+
+  if (typeof THREE === "undefined") {
+    // External CDN (jsdelivr) unreachable or blocked: degrade honestly
+    // instead of leaving a blank box or throwing, the 2D chart below
+    // still shows the same cp data.
+    note.hidden = false;
+    note.textContent = "3D-Bibliothek (three.js) konnte nicht geladen werden, siehe cp-Diagramm unten.";
+    colorbarRow.hidden = true;
+    return;
+  }
+  note.hidden = true;
+  if (!surface || surface.length === 0) return;
+
+  const cps = surface.map(p => p.cp);
+  const cpMin = Math.min(...cps), cpMax = Math.max(...cps);
+  document.getElementById("cp-min-label").textContent = "cp " + cpMin.toFixed(2);
+  document.getElementById("cp-max-label").textContent = "cp " + cpMax.toFixed(2);
+  colorbarRow.hidden = false;
+
+  const xs = surface.map(p => p.x), ys = surface.map(p => p.y), zs = surface.map(p => p.z);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+  const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), Math.max(...zs) - Math.min(...zs), 1e-6);
+
+  const positions = new Float32Array(surface.length * 3);
+  const colors = new Float32Array(surface.length * 3);
+  surface.forEach((p, i) => {
+    // FOSAS axis convention is X chordwise, Y spanwise, Z vertical (see
+    // docs/ARCHITECTURE.md); three.js treats Y as "up" by convention,
+    // so swap Y/Z here purely for a sensible default camera orientation,
+    // this does not change any underlying data.
+    positions[i * 3 + 0] = (p.x - cx) / extent;
+    positions[i * 3 + 1] = (p.z - cz) / extent;
+    positions[i * 3 + 2] = (p.y - cy) / extent;
+    const [r, g, b] = cpToColor(p.cp, cpMin, cpMax);
+    colors[i * 3 + 0] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  const material = new THREE.PointsMaterial({ size: 0.02, vertexColors: true, sizeAttenuation: true });
+  const points = new THREE.Points(geometry, material);
+
+  const scene = new THREE.Scene();
+  scene.add(points);
+  scene.add(new THREE.AxesHelper(0.7));
+
+  const width = container.clientWidth, height = container.clientHeight;
+  const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 100);
+  camera.position.set(1.6, 1.2, 1.6);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  container.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.update();
+
+  function onResize() {
+    const w = container.clientWidth, h = container.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  window.addEventListener("resize", onResize);
+
+  let frameHandle;
+  function animate() {
+    frameHandle = requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  viewer3dState = { renderer, controls, container, onResize, get frameHandle() { return frameHandle; } };
+}
+
 function renderResult(result) {
   document.getElementById("result-panel").hidden = false;
   document.getElementById("cl-value").textContent = result.cl.toFixed(4);
@@ -286,6 +433,7 @@ function renderResult(result) {
   badge.innerHTML = '<span class="badge ' + cls + '">' + text + '</span>';
   document.getElementById("convergence-msg").textContent = conv.message;
 
+  renderSurface3D(result.surface);
   drawCpChart(result.surface);
 }
 
