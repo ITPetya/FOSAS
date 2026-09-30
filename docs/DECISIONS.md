@@ -304,3 +304,33 @@ docs/OPEN_QUESTIONS.md). Ausserdem laesst sich jetzt zum ersten Mal das
 tatsaechlich erreichte y+ direkt nachpruefen statt nur die Zielgroesse
 aus der Netzgenerierung zu kennen, das ist ein bisher fehlender
 Ruecklkopplungsschritt fuer die R10-Untersuchung.
+
+## ADR-0011: mpirun immer mit --oversubscribe aufrufen
+
+Kontext: Auf einer neu eingerichteten x86_64-Cloud-Instanz (AWS,
+`m7i-flex.large`, 2 vCPU) schlug selbst ein trivialer Aufruf `mpirun -np 2
+hostname` fehl, mit der Fehlermeldung "prte-rmaps-base:alloc-error". Das
+betraf nicht nur unseren Code, sondern OpenMPI/PRRTE selbst: die
+moderne PRRTE-Laufzeitumgebung (OpenMPI 5.x) erkennt auf manchen
+virtualisierten/Cloud-Hosts die tatsaechlich verfuegbaren Kerne
+("Slots") nicht korrekt, auch wenn die angeforderte Prozesszahl genau
+der echten Kernzahl entspricht. Mit `--oversubscribe` laeuft derselbe
+Aufruf sofort fehlerfrei.
+
+Entscheidung: `fosas_core.solver.run_su2` haengt bei `mpi_ranks > 1`
+immer `--oversubscribe` an den `mpirun`-Aufruf an. Das ist bei korrekt
+erkannten Slots wirkungslos (kein echtes Oversubscribing, solange
+`mpi_ranks` die echte Kernzahl nicht uebersteigt), macht das Verhalten
+aber robust gegenueber dieser Klasse von Umgebungsfehlern.
+
+Alternativen: Nutzer selbst dazu anhalten, die Umgebung zu reparieren
+(z. B. Hostfile oder Slot-Hinweise per Umgebungsvariable, verworfen, zu
+fehleranfaellig und nicht ohne Weiteres automatisierbar). Nur bei
+Bedarf/Fehlerfall nachtraeglich mit `--oversubscribe` erneut versuchen
+(verworfen, unnoetig kompliziert fuer einen Flag ohne Nachteil im
+Normalfall).
+
+Konsequenzen: Falls in einer Umgebung tatsaechliches Oversubscribing
+(mehr Prozesse als Kerne) fachlich unerwuenscht waere, faellt diese
+Sicherheitsbremse jetzt weg. Das ist fuer unseren Anwendungsfall
+akzeptabel, da `mpi_ranks` ohnehin vom Aufrufer bewusst gesetzt wird.

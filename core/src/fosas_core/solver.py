@@ -237,7 +237,14 @@ def run_su2(
     if mpi_ranks < 1:
         raise ValueError("mpi_ranks must be at least 1")
     command = (
-        [mpirun_executable, "-np", str(mpi_ranks), su2_executable, str(config_path)]
+        # --oversubscribe: newer OpenMPI (PRRTE runtime) has been observed
+        # to under-detect available slots on some virtualized/cloud hosts
+        # and refuse to launch even when mpi_ranks matches the real core
+        # count (confirmed directly: `mpirun -np 2 hostname` failed with
+        # "prte-rmaps-base:alloc-error" on a 2-vCPU AWS instance).
+        # Oversubscribing is a no-op when slots are detected correctly and
+        # mpi_ranks does not actually exceed them.
+        [mpirun_executable, "--oversubscribe", "-np", str(mpi_ranks), su2_executable, str(config_path)]
         if mpi_ranks > 1
         else [su2_executable, str(config_path)]
     )
