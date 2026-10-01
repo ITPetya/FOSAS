@@ -7,7 +7,7 @@ from fosas_core.pipeline import CaseParams, CaseResult
 from fosas_core.quality import ConvergenceAssessment
 from fosas_core.solver import IterationHistory, SurfaceData
 
-from fosas_engine.jobs import JobNotDeletableError, JobStore
+from fosas_engine.jobs import JobNotDeletableError, JobNotResumableError, JobStore
 
 
 def _fake_result(work_dir: Path) -> CaseResult:
@@ -155,3 +155,33 @@ def test_manual_delete_removes_files_and_record(tmp_path):
     store.delete(job_id)
     assert store.get(job_id) is None
     assert not work_dir.exists()
+
+
+def test_prepare_for_resume_resets_a_failed_job(tmp_path):
+    store, job_id, work_dir = _make_finished_job(tmp_path, "job1", "failed", hours_ago=0)
+    store._jobs[job_id].archived = True
+
+    resumed = store.prepare_for_resume(job_id)
+
+    assert resumed.status == "pending"
+    assert resumed.stage is None
+    assert resumed.error is None
+    assert resumed.finished_at is None
+    assert resumed.archived is False
+    assert work_dir.exists()  # nothing deleted, same work_dir reused
+
+
+def test_prepare_for_resume_refuses_a_done_job(tmp_path):
+    store, job_id, _ = _make_finished_job(tmp_path, "job1", "done", hours_ago=0)
+    with pytest.raises(JobNotResumableError):
+        store.prepare_for_resume(job_id)
+
+
+def test_prepare_for_resume_refuses_a_running_job(tmp_path):
+    work_dir = tmp_path / "cases" / "job1"
+    work_dir.mkdir(parents=True)
+    store = JobStore()
+    job = store.create("job1", CaseParams(velocity=50, aoa_deg=5), "wing.step", work_dir / "input.step", work_dir)
+    store.mark_running(job.id)
+    with pytest.raises(JobNotResumableError):
+        store.prepare_for_resume(job.id)

@@ -537,3 +537,18 @@ Auftraege, `GET /jobs?archived=true` nur archivierte. Neue Endpunkte
 `DELETE /jobs/{id}`. Kein Weg, einen laufenden Auftrag ueber die API
 abzubrechen, das war schon vorher nicht moeglich und bleibt ein anderes,
 eigenes Thema.
+
+Nachtrag (direkt im Anschluss an R17): `POST /jobs/{id}/resume` ergaenzt,
+nachdem genau dieser Vorfall (5000-Iterationen-Lauf am Timeout
+gescheitert) nur manuell per direktem `run_case`-Aufruf auf dem Server
+behoben werden konnte. Nur fuer Auftraege mit Status "failed" erlaubt
+(`JobNotResumableError` sonst), setzt Status auf "pending", loescht
+Fehlermeldung/Stage/Archiviert-Flag und reicht Datei/Parameter/
+Arbeitsverzeichnis unveraendert an den Executor weiter.
+`fosas_core.pipeline.run_case` erkennt selbst, ob Netz oder
+SU2-Zwischenspeicherung im Arbeitsverzeichnis schon vorliegen (R14), ein
+Fortsetzen ueber die API ist also kein Neustart von vorne. Absichtlich
+nicht auf bestimmte Fehlerursachen beschraenkt (z. B. nur Timeout): Ein
+erneuter Versuch bei einem unbehebbaren Fehler (z. B. Geometrieproblem)
+schlaegt einfach sofort wieder fehl, das ist kein gefaehrliches
+Verhalten, nur verschwendete Zeit.

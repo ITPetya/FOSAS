@@ -7,13 +7,6 @@
   Beispiel fuer einen Fluegel mit Endplatten (RISKS.md R18) oder eine
   Verjuengung (R12). Aktuell bewusst zurueckgestellt, kein konkretes
   Konzept. Groesserer, eigener Ausbauschritt, nicht nebenbei zu machen.
-- Ein Auftrag, der am Timeout oder durch einen Absturz unterbrochen wird
-  (siehe RISKS.md R14, R17), kann aktuell nur manuell (direkter
-  `run_case`-Aufruf auf dem Server) fortgesetzt werden, nicht ueber die
-  API oder die Weboberflaeche selbst. Eine "Fortsetzen"-Aktion pro
-  Auftrag (z. B. `POST /jobs/{id}/resume`, das `run_case` erneut auf
-  demselben Arbeitsverzeichnis mit hoeherem Timeout aufruft) waere ein
-  naheliegender, aber eigener Ausbauschritt.
 - trame wurde per Spike als grundsaetzlich geeignet bestaetigt (RISKS.md,
   R9), aber nur mit einem stark vereinfachten synthetischen Datensatz. Ein
   Lasttest mit echter Netzaufloesung inklusive Stromlinien/Schnittflaechen

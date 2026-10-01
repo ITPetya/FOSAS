@@ -143,6 +143,11 @@ class JobNotDeletableError(Exception):
     its work_dir may still be written to by a subprocess."""
 
 
+class JobNotResumableError(Exception):
+    """Raised when trying to resume a job that is not currently failed:
+    "done" has nothing to resume, "pending"/"running" is already active."""
+
+
 class JobStore:
     def __init__(self):
         self._jobs: dict[str, Job] = {}
@@ -198,6 +203,12 @@ class JobStore:
         with self._lock:
             job = self._jobs[job_id]
             job.status = "running"
+            # Clears a previous failure's stage/error: relevant when this
+            # is a resume of a job that failed before (see `resume`
+            # below), so a since-fixed run does not keep showing the old
+            # error message after it succeeds.
+            job.stage = None
+            job.error = None
             _write_job_meta(job)
 
     def mark_done(self, job_id: str, result: CaseResult) -> None:
@@ -216,6 +227,27 @@ class JobStore:
             job.error = error
             job.finished_at = datetime.now(timezone.utc)
             _write_job_meta(job)
+
+    def prepare_for_resume(self, job_id: str) -> Job:
+        """Resets a failed job back to "pending" so the caller can
+        resubmit it to the executor (see POST /jobs/{id}/resume in
+        app.py; this method only touches state, it does not itself run
+        anything). fosas_core.pipeline.run_case picks up whatever mesh/
+        restart file already exists in the unchanged work_dir on its
+        own, see docs/RISKS.md R14/R17 for the real incidents this is
+        for. Un-archives, since a resumed job is active again.
+        """
+        with self._lock:
+            job = self._jobs[job_id]
+            if job.status != "failed":
+                raise JobNotResumableError(f"Job {job_id} is {job.status}, only a failed job can be resumed")
+            job.status = "pending"
+            job.stage = None
+            job.error = None
+            job.finished_at = None
+            job.archived = False
+            _write_job_meta(job)
+            return job
 
     def archive(self, job_id: str) -> None:
         with self._lock:

@@ -755,11 +755,9 @@ einen Test, der `run_case` abfaengt und prueft, dass der uebergebene
 Timeout mit `max_iterations` skaliert statt am festen Standardwert zu
 kleben.
 
-Offener Punkt: Es gibt weiterhin keinen Weg, einen an diesem Timeout
-(oder sonst wie) unterbrochenen Auftrag ueber die API selbst
-fortzusetzen, nur manuell wie in diesem Vorfall. Eine "Fortsetzen"-Aktion
-pro Auftrag waere ein sinnvoller, aber eigener Ausbauschritt, siehe
-OPEN_QUESTIONS.md.
+Nachtrag: `POST /jobs/{id}/resume` (siehe ADR-0015-Fortsetzung weiter
+unten) deckt das inzwischen auch ueber die API ab, nicht mehr nur
+manuell wie in diesem Vorfall.
 
 ## R18: Realer F1-Heckfluegel hat keinen konstanten Querschnitt, Endplatten nicht abbildbar (offen, bewusst zurueckgestellt)
 

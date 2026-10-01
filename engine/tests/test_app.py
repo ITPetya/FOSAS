@@ -113,6 +113,51 @@ def test_archive_unarchive_and_list_filtering(client, settings, tmp_path):
     assert [j["id"] for j in client.get("/jobs", headers=headers).json()] == ["job1"]
 
 
+def test_resume_resubmits_a_failed_job(client, settings, tmp_path, monkeypatch):
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    _create_finished_job(app, settings.work_root, "job1", status="failed")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+
+    import fosas_engine.app as app_module
+
+    captured = {}
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        captured["called"] = True
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    resp = client.post("/jobs/job1/resume", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["status"] in ("pending", "running", "failed")  # race with the background thread
+
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and "called" not in captured:
+        time.sleep(0.05)
+    assert captured.get("called") is True
+
+
+def test_resume_refuses_a_done_job(client, settings, tmp_path):
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    _create_finished_job(app, settings.work_root, "job1", status="done")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+
+    resp = client.post("/jobs/job1/resume", headers=headers)
+    assert resp.status_code == 409
+
+
+def test_resume_unknown_job_is_404(client, settings):
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    assert client.post("/jobs/does-not-exist/resume", headers=headers).status_code == 404
+
+
 def test_archive_unknown_job_is_404(client, settings):
     headers = {"Authorization": f"Bearer {settings.token}"}
     assert client.post("/jobs/does-not-exist/archive", headers=headers).status_code == 404

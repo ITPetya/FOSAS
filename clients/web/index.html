@@ -962,6 +962,14 @@ function selectJob(jobId) {
 
 let showingArchived = false;
 
+async function resumeJob(jobId) {
+  // Reuses the same work_dir (mesh and any SU2 restart checkpoint it
+  // already has, see docs/RISKS.md R14/R17), not a fresh run from
+  // scratch, and jumps straight to that job's status view.
+  await fetch("/jobs/" + jobId + "/resume", { method: "POST", headers: authHeaders() });
+  selectJob(jobId);
+}
+
 async function archiveJob(jobId) {
   await fetch("/jobs/" + jobId + "/archive", { method: "POST", headers: authHeaders() });
   loadJobsList();
@@ -1033,6 +1041,17 @@ async function loadJobsList() {
     actions.className = "job-actions";
     const canModify = job.status === "done" || job.status === "failed";
     if (canModify) {
+      if (job.status === "failed") {
+        const resumeBtn = document.createElement("button");
+        resumeBtn.type = "button";
+        resumeBtn.className = "job-action-btn";
+        resumeBtn.textContent = "Fortsetzen";
+        resumeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          resumeJob(job.id);
+        });
+        actions.appendChild(resumeBtn);
+      }
       const toggleBtn = document.createElement("button");
       toggleBtn.type = "button";
       toggleBtn.className = "job-action-btn";
