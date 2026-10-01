@@ -58,6 +58,29 @@
   waere das ein weiterer Hinweis auf ein Netzproblem statt nur eine
   Vermutung).
 
+## Phase 2, Vorbereitung (noch keine Umsetzung, nur Recherche)
+
+- Typst-Anbindung recherchiert (Gesichert, direkt bei den Projekten
+  nachgeprueft, Stand 2026-10-01): Das Python-Paket `typst` auf PyPI
+  (`pip install typst`, aktuelle Version 0.15.0) ist eine inoffizielle,
+  aber aktiv gepflegte Python-Anbindung (`messense/typst-py`) an den
+  eigentlichen Typst-Compiler (`typst/typst`). Beide Projekte stehen
+  unter Apache License 2.0 (LICENSE-Datei direkt aus beiden
+  GitHub-Repos gelesen), keine GPL-Problematik wie bei Gmsh (ADR-0002),
+  kein externer Systemdienst/Binary-Download durch den Nutzer noetig,
+  einfache `typst.compile(...)`-API. Das waere der naheliegende Weg fuer
+  die PDF-Berichtserzeugung in Phase 2. Nicht geprueft: ob die
+  Python-Anbindung auf der Zielhardware (Windows, siehe R3/CLAUDE.md)
+  ueberhaupt ein vorgefertigtes Wheel hat oder dort selbst kompiliert
+  werden muesste.
+- Phase 2 ist laut CLAUDE.md mehr als nur ein PDF-Bericht fuer einen
+  Einzelfall: "Polaren, Netzstudie mit GCI, Bericht". Polaren bedeuten
+  mehrere Zustaende (z. B. eine Anstellwinkel-Sweep-Reihe), nicht nur
+  einen. Die GCI-Netzstudie ist bereits als eigener, noch nicht final
+  entschiedener Punkt weiter unten vermerkt. Der Bericht selbst haengt
+  also von beiden anderen Teilen ab (ein Bericht ueber eine Polare
+  braucht mehrere Einzelrechnungen, keine neue Einzelrechnung).
+
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 
 - Trennung von Qualitaetsstufen (Vorschau/Standard/fein) und der
