@@ -477,6 +477,135 @@ C-Netz statt unseres unstrukturierten Ansatzes), um auszuschliessen,
 dass die Unstrukturiertheit selbst die Ursache ist. Alle drei sind
 groessere, eigene Arbeitspakete, keine schnelle naechste Aktion.
 
+Update, Fortsetzung mit echten Gmsh-Python-Bindings auf x86_64 (Massnahme
+1 jetzt verfuegbar, siehe AWS-Server aus der aktuellen Sitzung): Direkte
+Zellqualitaetsmessung durchgefuehrt (`gmsh.model.mesh.getElementQualities`,
+Mass "minSICN") und vier weitere, bisher nie getestete Numerik-Varianten
+durchgerechnet. Keine davon hat das Konvergenzproblem behoben, aber alle
+liefern neue, Gesicherte Befunde, die R10 praeziser eingrenzen.
+
+(1) Zellqualitaet direkt gemessen: Mit dem bisherigen Vernetzungsweg
+(`generate_constant_section_geo`, Extrude mit `Layers{n}`) sind 72,7 %
+aller 3D-Elemente (620208 Tetraeder) mit minSICN < 0,1, Median 0,0123, bei
+0 invertierten Elementen. Aufgeschluesselt nach Wandabstand (Vielfaches
+der Grenzschichtdicke): innerhalb der Grenzschicht (0-100 % Dicke) Median
+0,001-0,0014, direkt ausserhalb (1x-2x Dicke, "Uebergangszone") immer noch
+Median 0,0061 mit 96,9 % unter 0,1, erst bei 2x-10x Dicke deutliche
+Besserung (Median 0,175), im reinen Fernfeld gut (Median 0,90). Wichtige
+Einordnung, bevor daraus voreilig eine Fehlerursache gemacht wird: minSICN
+ist ein isotropes Formmass, das jede absichtlich anisotrope
+Grenzschichtzelle (duenn in Wandnormalenrichtung, lang tangential) prinzip-
+bedingt als "schlecht" bewertet, auch wenn die Zelle fuer ihren Zweck genau
+richtig geformt ist. Diese Zahlen allein sind also kein Beweis fuer einen
+echten Vernetzungsfehler.
+
+(2) Tetraeder- vs. Prismen-Vernetzung: Mit `Recombine;` am Extrude-Befehl
+erzeugt Gmsh direkt Prismen (Elementtyp 6) statt die Extrusionsschicht in
+Tetraeder zu zerlegen (261758 statt 620208 3D-Elemente, "Subdividing
+extruded mesh"-Schritt im Log verschwindet). Die minSICN-Verteilung bleibt
+aber praktisch identisch (69,9 % unter 0,1, Median 0,0151), und ein echter
+SU2-Lauf (implizit, CFL=5, 500 Iterationen, Re/Mach/AoA wie Referenzfall)
+zeigt dasselbe qualitative Restfehler-Plateau wie mit Tetraedern zuvor
+(rms[P] um -2,6, CL endet bei 0,95 nach sichtbarem Schwanken). Schluss:
+Die Tetraeder-Zerlegung der Extrusionsschicht ist nicht die Ursache des
+Plateaus, trotz der auffaelligen minSICN-Zahlen.
+
+(3) Die Platzhalterkurve "444444" direkt untersucht (per
+`gmsh.model.getType`/`getBoundingBox`/`getNodes`): Typ "Discrete curve",
+0 Knoten, leere Bounding Box. Das ist ein echtes, aber vollstaendig leeres
+Gmsh-internes Artefakt (vermutlich aus der Eck-/Fan-Behandlung des
+`BoundaryLayer`-Felds), das Gmsh selbst erkennt und beim Vernetzen
+uebergeht (passend zur Warnung "Skipping curve with no begin or end
+point"). Die tatsaechlich schlechtesten Elemente im Netz liegen zudem
+raeumlich NICHT konzentriert an Vorder-/Hinterkante (Stichprobe von 2000
+schlechtesten Tetraedern: 0 davon innerhalb 1 cm von LE oder TE). Die
+"curve 444444"-Spur aus einem fruehen Update dieses Risikoeintrags ist
+damit ausdruecklich als Fehlspur geklaert, nicht als Ursache.
+
+(4) CFL-Schema variiert (bisher nie getestet): Adaptive CFL
+(`CFL_ADAPT=YES`, Start-CFL 1,0 statt fest 5,0) auf demselben Prismennetz
+fuehrt zu einem ANDEREN Plateau als die feste CFL-Zahl auf demselben Netz
+(CL steigt ueber 450 Iterationen kontinuierlich von 0,26 auf 0,69, beim
+Abbruch immer noch steigend, waehrend der Restfehler bei rund -2,7 bis
+-2,9 verharrt). Zwei numerische Pfade auf identischer Geometrie und
+identischem Netz landen also in unterschiedlichen Quasi-Plateaus, keiner
+in der Naehe der Referenz.
+
+(5) Innerer linearer Loeser verstaerkt (bisher nie getestet, naheliegende
+Erklaerung fuer "Restfehler faellt nicht mehr, Loesung aendert sich
+trotzdem" aus einem fruehen Update dieses Eintrags): `LINEAR_SOLVER_ITER`
+von 10 auf 50 und `LINEAR_SOLVER_ERROR` von 1E-6 auf 1E-8 erhoeht. Bei 10
+Grad Anstellwinkel zunaechst sehr vielversprechend (CL=1,30 bei Iteration
+12, nahe an der Referenz 1,091), aber bereits bis Iteration 131
+abgedriftet auf CL=0,08-0,22, Restfehler weiterhin bei rund -2,9 bis -3,0
+pendelnd. Bei 0 Grad (der eigentlich einfachste, symmetrische Fall)
+dasselbe Muster: CD zunaechst bei 0,0135 (deutlich naeher an
+literaturueblichen 0,006-0,008 als jeder bisherige Lauf), aber innerhalb
+von nur 3 weiteren Iterationen auf 0,033 abgedriftet, CL bleibt immerhin
+nahe am physikalisch korrekten Wert 0 (-0,006 bis -0,013). Wichtige
+methodische Lektion daraus: Ein frueher, gut aussehender Zwischenwert ist
+bei diesem Testfall kein verlaessliches Zeichen fuer tatsaechliche
+Konvergenz, in beiden Faellen dieses Updates hat sich ein vielversprechend
+wirkender frueher Stand als Durchgangsstadium erwiesen, nicht als
+Ankunft.
+
+Einordnung (Gesichert als Beobachtung, Interpretation Vermutung): Fuenf
+voneinander unabhaengige numerische Konfigurationen (Tetraeder/Prismen,
+feste/adaptive CFL, schwacher/starker innerer Loeser, 0/10 Grad
+Anstellwinkel) zeigen alle dasselbe qualitative Muster: Der aeussere
+Restfehler pendelt sich auf einem Plateau weit ueber dem Ziel ein (-2,6
+bis -2,9 statt -8), waehrend die daraus abgeleiteten Kraftbeiwerte auch
+NACH diesem scheinbaren Plateau noch deutlich weiterwandern, in
+unterschiedliche Richtungen je nach Numerik. Das spricht gegen "braucht
+nur mehr Zeit" und auch gegen die in diesem Update einzeln getesteten
+Erklaerungen (Tetraeder-Zerlegung, Eckkurven-Artefakt, CFL-Schema,
+Loeser-Staerke). Es stuetzt erneut Hypothese (c) aus der urspruenglichen
+Fassung dieses Eintrags (eine fuer einen stationaeren Loeser nicht
+cleanly abbildbare, schwache Instationaritaet), jetzt aber mit einem
+wichtigen neuen Datenpunkt: Sogar der 0-Grad-Fall, der im fruehen Verlauf
+dieses Eintrags als vermeintlicher Gegenbeweis fuer Hypothese (c) galt
+(1200 Iterationen stabil bei rms[P] rund -3,53), zeigt mit der staerkeren
+Loeser-Einstellung aus diesem Update erneut spuerbares Abdriften statt
+Stabilitaet, die fruehere "0 Grad ist stabil"-Schlussfolgerung muss also
+mit Vorsicht behandelt werden, sie koennte selbst nur ein breiteres oder
+laenger anhaltendes Plateau gewesen sein, keine echte Konvergenz.
+
+Status: Weiterhin offen. Phase 1 (cl/cd/cp-Verteilung gegen
+Referenzdaten) ist mit diesem Befund NICHT erreicht, ausdruecklich kein
+Erfolg zu vermelden. Fuenf zusaetzliche Erklaerungen sind jetzt mit
+echten Daten geprueft und verworfen (Tetraeder-Zerlegung, Eckkurven-
+Artefakt, CFL-Schema, Loeser-Staerke, und implizit die vorherige
+"0 Grad ist stabil"-Annahme), zusaetzlich zu den drei bereits vorher
+widerlegten (falsches y+, zu kleines Fernfeld, reine AoA-Abhaengigkeit).
+
+Massnahme, fuer eine weitere Fortsetzung, nach Dringlichkeit geordnet:
+
+1. `gmsh.model.geo.extrudeBoundaryLayer` ist auf dem jetzt verfuegbaren
+   x86_64-Server bestaetigt vorhanden (Gmsh 4.15.2,
+   Signatur `extrudeBoundaryLayer(dimTags, numElements=[1], heights=[],
+   recombine=False, second=False, viewIndex=-1)`), bisher aber nicht
+   ausprobiert: Das ist ein geometrisch anderer Vernetzungsweg (echte
+   Extrusion entlang der Flaechennormalen statt 2D-Feld plus
+   translatorischem Extrude) und braucht den nativen "geo"-Kernel statt
+   OpenCASCADE, also einen eigenen, nicht trivialen Nachbau der
+   Geometrieerzeugung. Noch nicht begonnen, geschaetzt ein eigenes,
+   mehrstuendiges Arbeitspaket fuer sich.
+2. Eine aussagekraeftigere Qualitaetskennzahl fuer die Uebergangszone
+   waere eine, die nicht wie minSICN von Anisotropie allein schon
+   bestraft wird, zum Beispiel eine direkte Messung der
+   Flaechenorthogonalitaet/Skewness an den Zellgrenzen (relevant fuer
+   SU2s Finite-Volumen-Diskretisierung), nicht ausprobiert in dieser
+   Runde.
+3. Strukturiertes C-Netz exakt wie im SU2-Tutorial nachbauen bleibt die
+   aufwaendigste, aber eindeutigste Methode, um "liegt es an unserem
+   unstrukturierten Vernetzungsweg ueberhaupt" zu klaeren.
+
+Alle drei weiterhin groessere, eigene Arbeitspakete. Produktionscode
+(`fosas_core`) wurde in dieser Untersuchungsrunde nicht veraendert, da
+keiner der getesteten Ansaetze das Problem behoben hat; alle Tests liefen
+ausserhalb der Produktionspipeline auf eigens dafuer erzeugten
+Testnetzen/-configs, um die laufende Engine nicht zu beeinflussen.
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei

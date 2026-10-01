@@ -164,12 +164,18 @@ Zahlenwert abgerufen.
 
 Wichtig fuer die Einordnung eigener Ergebnisse: Diese Werte stammen aus
 extrapolierten Feingitter-Rechnungen mit strukturierten C-Netzen (897x257
-Knoten laut fruehrerem Spike-Fund) und y+ deutlich unter 1. Unser aktueller
-Testfall (siehe RISKS.md, R1/R10) nutzt ein deutlich groeberes, nicht
-y+-kontrolliertes Netz und ist zudem noch nicht konvergiert. Ein direkter
-Zahlenvergleich mit dem aktuellen Testlauf ist daher nicht aussagekraeftig
-und wird erst mit einem netzstudien-faehigen, konvergierten Lauf in Phase 2
-sinnvoll.
+Knoten laut fruehrerem Spike-Fund) und y+ deutlich unter 1. Unser
+aktueller Testfall nutzt inzwischen ein y+-kontrolliertes Netz (erste
+Zellhoehe aus `fosas_core.boundary_layer.first_cell_height`, siehe
+RISKS.md R10), ist aber trotzdem noch nicht konvergiert: Der Restfehler
+pendelt sich auf einem Plateau weit ueber dem Ziel ein, unabhaengig von
+Netz-Elementtyp, CFL-Schema oder Loeser-Einstellungen (RISKS.md R10,
+Stand der Untersuchung mit echten Gmsh-Python-Bindings auf x86_64). Ein
+direkter Zahlenvergleich mit dem aktuellen Testlauf ist daher weiterhin
+nicht aussagekraeftig. Phase 1 ("cl, cd, cp-Verteilung gegen
+Referenzdaten", siehe CLAUDE.md) ist aus diesem Grund noch nicht
+abgeschlossen; ein konvergierter, mit diesen Werten vergleichbarer Lauf
+steht weiterhin aus.
 
 ## Version 1, Kernumfang nach Spike-Auswertung
 
