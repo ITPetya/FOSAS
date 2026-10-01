@@ -2,6 +2,11 @@
 
 ## Technisch, vor der jeweiligen Phase zu klaeren
 
+- Echte Unterstuetzung fuer mehrteilige/verjuengte/lofted Geometrie
+  (mehrere Querschnitte statt einem konstanten, siehe ADR-0007), zum
+  Beispiel fuer einen Fluegel mit Endplatten (RISKS.md R18) oder eine
+  Verjuengung (R12). Aktuell bewusst zurueckgestellt, kein konkretes
+  Konzept. Groesserer, eigener Ausbauschritt, nicht nebenbei zu machen.
 - Ein Auftrag, der am Timeout oder durch einen Absturz unterbrochen wird
   (siehe RISKS.md R14, R17), kann aktuell nur manuell (direkter
   `run_case`-Aufruf auf dem Server) fortgesetzt werden, nicht ueber die

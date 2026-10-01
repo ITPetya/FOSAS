@@ -760,3 +760,29 @@ Offener Punkt: Es gibt weiterhin keinen Weg, einen an diesem Timeout
 fortzusetzen, nur manuell wie in diesem Vorfall. Eine "Fortsetzen"-Aktion
 pro Auftrag waere ein sinnvoller, aber eigener Ausbauschritt, siehe
 OPEN_QUESTIONS.md.
+
+## R18: Realer F1-Heckfluegel hat keinen konstanten Querschnitt, Endplatten nicht abbildbar (offen, bewusst zurueckgestellt)
+
+Beleg (echte, vom Projektinhaber hochgeladene Datei
+`Heckfluegel.stp`): Geometrie liest sauber ein (wasserdicht, 1 Koerper,
+36 Flaechen), besteht aber die Querschnitts-Plausibilitaetspruefung aus
+R13 nicht (Dicke 308 mm > 2x Spannweite 150 mm). Direkte Untersuchung
+mit mehreren Schnitten entlang der vermuteten Spannweitenachse zeigt:
+An den Enden (±150 mm) ist der Querschnitt gross (~207x150 mm, sieht
+nach Endplatte aus), in der Mitte klein (~40x35 bis 40x75 mm) und
+wechselt dabei auch noch seine Position. Kein konstanter Querschnitt,
+wie von ADR-0007 vorausgesetzt: Ein typischer F1-Heckfluegel-Aufbau aus
+Hauptprofil, Flap und zwei grossen, aerodynamisch wichtigen Endplatten
+(fuer die Kontrolle des Randwirbels), nicht ein einzelnes, extrudiertes
+Profil.
+
+Status: Bewusst nicht weiterverfolgt (Projektinhaber-Entscheidung): Eine
+erzwungene Naeherung (Achsen passend drehen, einen beliebigen
+Mittelschnitt nehmen) wuerde die Endplatten komplett ignorieren, also
+ein im Kern anderes Bauteil berechnen, kein eingeschraenktes Ergebnis
+fuer den echten Heckfluegel. Reiht sich ein in R11 (Spoiler, kein
+Solid) und R12 (verjuengter Fluegel): Echte, mehrteilige oder verjuengte
+Bauteile sprengen regelmaessig den V1-Rahmen (ein Koerper, ein
+konstanter Querschnitt). Echte Unterstuetzung fuer mehrteilige/lofted
+Geometrie bleibt ein eigener, grosser Ausbauschritt, siehe
+OPEN_QUESTIONS.md.
