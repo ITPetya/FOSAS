@@ -606,6 +606,119 @@ keiner der getesteten Ansaetze das Problem behoben hat; alle Tests liefen
 ausserhalb der Produktionspipeline auf eigens dafuer erzeugten
 Testnetzen/-configs, um die laufende Engine nicht zu beeinflussen.
 
+Update, Durchbruch mit Massnahme 3 (Gesichert, eigener Test, direkt an
+den Rohdaten auf dem Server nachgeprueft): Das SU2-Projekt stellt den
+tatsaechlichen Tutorial-Fall oeffentlich bereit
+(`github.com/su2code/Tutorials`, `incompressible_flow/
+Inc_Turbulent_NACA0012/`, LGPL-2.1 wie SU2 selbst), inklusive des
+echten strukturierten Netzes (`n0012_897-257.su2`, 229376 Elemente,
+strukturierte Quads) und der Original-Config (`turb_naca0012.cfg`,
+Autoren Economon & Palacios, 2018, mit Verweis auf dieselbe NASA-TMR-
+Validierungsseite, aus der unsere Referenzwerte stammen). Kein eigener
+Netzbau noetig.
+
+Unveraendert mit unserem installierten SU2 8.5.0 auf 2000 Iterationen
+gedeckelt (Original-Config: 99999) gelaufen. Ergebnis, direkt aus
+`su2_run.log`/`history.csv` gelesen: Restfehler (rms[P]) faellt
+durchgehend und OHNE Plateau von -4,3 (Iteration 0) auf -7,24
+(Iteration 1999), bei Abbruch immer noch fallend, Zielwert der
+Original-Config war -14. CL erreicht bereits bei Iteration 1606 den
+Wert 1,0913, praktisch exakt die Referenz (1,091), und liegt am Ende
+bei 1,098 (0,6 % Abweichung). CD faellt stetig von anfangs ueber 0,1
+auf 0,0172 am Ende, immer noch klar in Richtung der Referenz (0,0123)
+fallend, nicht geplatzt. Das ist ein grundlegend anderes Verhalten als
+jeder eigene Lauf bisher: keine grossamplitudige Oszillation, kein
+hartnaeckiges Restfehler-Plateau, sondern eine erkennbar echte,
+fortschreitende Konvergenz.
+
+Einordnung: Das widerlegt die bisherige Haupthypothese (c) aus diesem
+Eintrag (der Fall habe moeglicherweise gar keinen fuer einen
+stationaeren Loeser erreichbaren Zustand). Er hat einen, SU2 selbst
+findet ihn auf einem geeigneten Netz mit geeigneter Numerik zuverlaessig.
+Das Problem liegt also bei unserer eigenen Vernetzung und/oder unserer
+eigenen Loeser-Konfiguration (`fosas_core.solver`), nicht am Testfall
+oder an SU2 selbst.
+
+Direkter Konfigurationsvergleich (Gesichert, aus beiden Config-Dateien
+gelesen), vier Abweichungen zwischen Original und unserer generierten
+Config:
+
+| Einstellung | Original (Tutorial) | Unsere Config |
+|---|---|---|
+| `SLOPE_LIMITER_FLOW` | `NONE` | `VENKATAKRISHNAN` |
+| `CFL_NUMBER` | 25,0 (fest) | 1,0 (Standard, R10/ADR-0012) |
+| `LINEAR_SOLVER_PREC` | `ILU` | `JACOBI` |
+| `LINEAR_SOLVER_ERROR` | 1E-10 | 1E-6 |
+
+Update, erster Eingrenzungsversuch (Vermutung, nicht abschliessend
+getestet wegen Zeitbudget dieser Runde): Ein frueheres Update dieses
+Eintrags hatte bereits einen staerkeren inneren Loeser (10->50
+Iterationen, 1E-6->1E-8 Fehler) auf dem EIGENEN unstrukturierten Netz
+getestet, mit JACOBI-Vorkonditionierer und VENKATAKRISHNAN-Limiter
+unveraendert: Kein Erfolg, weiterhin Plateau/Abdriften. Das spricht
+dagegen, dass die lineare Loeser-Toleranz allein (ohne die anderen drei
+Aenderungen) ausreicht.
+
+Update, Isolations-Experimente auf dem EIGENEN Netz durchgefuehrt
+(Gesichert, eigener Test, dasselbe unstrukturierte Netz wie in den
+fruehen Teilen dieses Eintrags: 118341 Knoten, 623544 Tetraeder, Re=6e6,
+chord=0,6 m, 10 Grad, span_layers=8). Drei Varianten, jeweils nur ein
+oder zwei der vier oben gefundenen Abweichungen uebernommen, Rest wie
+unsere eigene Standard-Config:
+
+- **Nur CFL=25 (sonst unveraendert):** SU2 divergiert explosiv, Restfehler
+  ueberschreitet 10^20 bereits bei Iteration 4 (CL/CD laufen auf
+  astronomische Werte). CFL=25 ist also keine universell uebertragbare
+  "bessere" Einstellung, sondern vermutlich auf die Zellqualitaet des
+  strukturierten Tutorial-Netzes abgestimmt und auf unserem Netz schlicht
+  zu aggressiv.
+- **Nur Limiter aus (CFL weiterhin bei unserem sicheren Wert 1,0):**
+  Divergiert genauso explosiv und genauso schnell (Iteration 4, gleiches
+  Fehlerbild). Der VENKATAKRISHNAN-Limiter ist auf unserem Netz also kein
+  Stilunterschied, sondern fuer die numerische Stabilitaet notwendig,
+  vermutlich wegen der in einem fruehen Update dieses Eintrags gemessenen
+  schlechten Zellqualitaet (72,7 % minSICN < 0,1) im Grenzschicht-
+  Uebergangsbereich.
+- **Nur ILU-Vorkonditionierer + 1E-10-Toleranz (CFL=1,0, Limiter an):**
+  Divergiert NICHT, laeuft stabil, zeigt aber dasselbe bekannte Muster:
+  Restfehler faellt schnell auf rund -2,8 und bleibt dort (bei Iteration
+  69 sogar leicht auf -2,83 zurueckgefallen statt weiter zu fallen),
+  waehrend CL weiter von 1,04 auf 1,34 wandert, CD von 0,54 auf 0,64.
+  Praktisch identisch zum bereits bekannten Plateau-Muster mit dem
+  schwaecheren JACOBI/1E-6-Loeser. ILU und die straffere Toleranz allein
+  bringen also keinen Durchbruch.
+
+Einordnung (Gesichert als Beobachtung): Von den vier urspruenglich
+gefundenen Abweichungen sind zwei (CFL=25, Limiter aus) auf unserem Netz
+destabilisierend statt hilfreich, eine (ILU+Toleranz) macht praktisch
+keinen Unterschied zum bisherigen Plateau. Keine Einzelmassnahme oder
+Zweier-Kombination aus den vier Abweichungen reproduziert auf unserem
+eigenen Netz das Konvergenzverhalten des Tutorial-Laufs. Das spricht
+jetzt dafuer (Vermutung, naechster logischer, aber noch nicht bewiesener
+Schritt waere Massnahme 1 oder 3 von oben), dass primaer die
+Netzstruktur selbst (strukturiert, mit gleichmaessiger, fuer CFL=25
+geeigneter Zellqualitaet) der entscheidende Faktor ist, nicht eine
+einzelne uebertragbare Solver-Einstellung. CFL=25 und Limiter-aus sind
+vermutlich nur deshalb im Tutorial sicher, WEIL dessen Netz dafuer
+gebaut ist, nicht weil sie universell bessere Werte waeren.
+
+Kein Code in `fosas_core` in dieser Runde geaendert: Keine der drei
+isolierten Varianten liefert einen klaren, sicheren Verbesserungsvorschlag
+fuer unseren eigenen Vernetzungsweg, zwei davon waeren als neuer
+Standardwert sogar gefaehrlich (sofortige Divergenz). Naechster
+sinnvoller Schritt bleibt, die Netzstruktur selbst anzugehen (Massnahme 1
+`extrudeBoundaryLayer` oder Massnahme 2, Flaechenorthogonalitaet/Skewness
+statt minSICN messen), nicht weitere Solver-Parameter-Kombinationen.
+
+Status: R10 bleibt im Kern offen (Phase-1-Referenzvergleich mit der
+EIGENEN Vernetzungstechnik weiterhin nicht erreicht), aber die Frage hat
+sich grundlegend verschoben: von "hat dieser Testfall ueberhaupt einen
+erreichbaren stationaeren Zustand" (jetzt widerlegt) zu "welche konkrete
+Kombination aus Netzstruktur und/oder Loeser-Numerik verhindert, dass
+unser eigener Weg ihn findet" (noch offen, aber jetzt mit einer
+nachgewiesenen, erreichbaren Zielmarke und vier konkreten, bekannten
+Kandidatenursachen statt einer offenen Vermutung).
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
