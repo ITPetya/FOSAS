@@ -719,6 +719,98 @@ unser eigener Weg ihn findet" (noch offen, aber jetzt mit einer
 nachgewiesenen, erreichbaren Zielmarke und vier konkreten, bekannten
 Kandidatenursachen statt einer offenen Vermutung).
 
+Update, y+-Ist-Wert gegen y+-Ziel geprueft (Gesichert, eigene Auswertung
+der `surface_flow.csv` aus dem ILU+enge-Toleranz-Lauf oben, 1845
+Oberflaechenpunkte): Der tatsaechlich erreichte y+ liegt im Mittel bei
+3,03 (Minimum 0,27, Maximum 3,94, Median 3,10) gegenueber dem
+Zielwert 1,0. Das ist eine Abweichung um den Faktor rund 3, deutlich
+weniger dramatisch als die urspruengliche 50-bis-100-fache Abweichung
+aus der widerlegten Hypothese (a) weiter oben. Als alleinige Erklaerung
+fuer ein hartes Konvergenz-Plateau ist ein Faktor 3 bei y+ eher
+unwahrscheinlich (Vermutung), auch wenn es nicht ideal ist.
+
+Update, direkter Vergleich BoundaryLayer-Feld gegen isotropes Netz, erste
+echte Netzqualitaetsmessung ueberhaupt (Gesichert, eigener Test mit den
+jetzt auf dem x86_64-Server verfuegbaren echten Gmsh-Python-Bindings,
+siehe `/tmp/r10_quality_compare` auf dem AWS-Server): Zwei Netze fuer
+dieselbe NACA-0012-Geometrie wurden erzeugt, identisch bis auf ein Detail:
+Variante A exakt wie `fosas_core.meshing` sie heute baut (mit
+BoundaryLayer-Feld), Variante B dieselbe Geometrie/Felder, aber ohne das
+BoundaryLayer-Feld (nur isotropes Hintergrundfeld). minSICN-Qualitaet im
+selben raeumlichen Band um das Profil (innerhalb der zweifachen
+Grenzschichtdicke): Variante A 69,5 Prozent der Elemente unter 0,1
+(nahezu identisch zur fruehen 72,7-Prozent-Messung oben, guter
+Konsistenzcheck), Variante B 0,0 Prozent unter 0,1 (Minimum 0,35,
+Mittelwert 0,62). Der Unterschied ist real und reproduzierbar.
+
+Aber (Gesichert, direkt nachgeprueft, und das relativiert die bisherige
+Einordnung dieser Messung erheblich): minSICN misst Form-Regelmaessigkeit
+(wie nah an gleichseitig), nicht geometrische Gueltigkeit. Eine
+vorsaetzlich extrem gestreckte, aber korrekt orientierte
+Grenzschichtzelle hat praktisch immer eine sehr niedrige minSICN, ganz
+unabhaengig davon, ob sie fuer die Loesung brauchbar ist, weil genau das
+der Zweck einer Grenzschichtzelle ist (erste Zellhoehe hier 2,674
+Mikrometer gegen Hintergrundzellen im Millimeter- bis Zentimeterbereich,
+ein Seitenverhaeltnis von mehreren Tausend zu eins). Entscheidend ist
+stattdessen, ob Elemente invertiert (negative minSICN) sind, das waere
+ein echter, harter Defekt. Direkte Pruefung auf Variante A (309000
+Elemente): kein einziges Element mit negativer minSICN, das absolute
+Minimum liegt bei +0,000032 (positiv, nur extrem klein). Es handelt sich
+also, soweit mit diesem Mass pruefbar, nicht um invalide/umgeklappte
+Zellen, sondern um erwartbar stark anisotrope, aber gueltige
+Grenzschichtzellen. Die fruehere Einordnung "72,7 Prozent niedrige
+minSICN deutet auf eine Netzqualitaetsschwaeche hin" war selbst nur eine
+Vermutung, keine Pruefung auf echte Invaliditaet, und haelt dieser
+Pruefung so nicht stand.
+
+Update, Fan-Behandlung an der scharfen Hinterkante direkt getestet und
+die "curve 444444"-Vermutung dabei mitgeklaert (Gesichert, eigener Test):
+Gmsh liefert zwei eigene Beispielskripte exakt fuer diesen Fall
+(`naca_boundary_layer_2d.py`/`_3d.py`, im eigenen Gmsh-Paket enthalten).
+Deren Kommentar zur scharfen (nicht abgerundeten) Hinterkante: ohne
+expliziten `FanPointsList`-Eintrag am Eckpunkt kennt das BoundaryLayer-
+Feld die Sonderbehandlung der Ecke nicht. Das passt auffaellig gut zur
+seit Wochen offenen "Skipping curve with no begin or end point"/"No
+elements in curve 444444"-Beobachtung (vermutlich genau diese fehlende
+Fan-Zuweisung). Direkter Test mit `Field[3].FanPointsList` am
+Hinterkanten-Eckpunkt: Die Warnung bleibt unveraendert bestehen (curve
+444444 wird weiterhin als leer gemeldet), und die Qualitaetsverteilung
+aendert sich nur marginal (2D-Isolationstest: 49,0 auf 47,7 Prozent unter
+0,1). Eine raeumliche Auswertung der schlechtesten Elemente zeigt ausserdem:
+Sie liegen nicht konzentriert an den beiden Profil-Ecken, sondern nahezu
+gleich verteilt ueber die GESAMTE Sehnenlaenge (rund 920 von 9413
+"schlechten" Elementen pro Zehntel-Sehnenlaenge, von x/chord=0,1 bis 0,9).
+Das widerlegt die Ecken/Fan-Hypothese als Hauptursache: Es ist kein
+lokaler Eckendefekt, sondern ein durchgehendes Merkmal des gesamten
+Uebergangsrings zwischen Grenzschicht- und Hintergrundfeld, siehe
+Vermutung oben: wahrscheinlich einfach die erwartete Form von
+Grenzschichtzellen, kein Fehler.
+
+Einordnung nach diesen drei neuen Tests: Die im vorherigen Durchlauf als
+"wahrscheinlichste verbleibende Ursache" eingestufte Netzqualitaet
+(gemessen per minSICN) ist nach genauerer Pruefung keine belastbare
+Erklaerung mehr, weil das verwendete Mass (minSICN) genau das straft, was
+eine Grenzschichtzelle per Definition tun soll, und weil keine
+tatsaechlich invaliden (invertierten) Elemente gefunden wurden. Die
+Fan/Ecken-Idee aus Gmshs eigenen Beispielen ist ebenfalls direkt getestet
+und verworfen. Damit ist R10 wieder offener als im vorherigen
+Zwischenstand suggeriert: Von den inzwischen fuenf geprueften Hypothesen
+((a) y+, (b) Fernfeld, (c) Instationaritaet bei AoA, (d) einzelne
+Solver-Parameter, (e) minSICN-Netzqualitaet/Eckenbehandlung) ist keine
+einzige als Hauptursache bestaetigt, vier sind mit eigenen Tests
+widerlegt oder stark entkraeftet, eine (y+, Faktor 3 statt 50-100) bleibt
+ein kleiner, aber wahrscheinlich nicht alleine ausreichender Faktor.
+
+Massnahme, fuer eine spaetere Fortsetzung: Noch nicht getestet und am
+ehesten vielversprechend (Vermutung): eine CFD-uebliche
+Netzqualitaetskennzahl, die tatsaechlich fuer anisotrope Grenzschicht-
+netze gedacht ist (z. B. Flaechen-Orthogonalitaet am Uebergang
+Grenzschicht/Hintergrundfeld, oder die lokale Zellgroessen-Sprungrate
+zwischen benachbarten Zellen, statt einer generischen Form-Kennzahl wie
+minSICN), oder der komplett andere `extrudeBoundaryLayer`-Vernetzungsweg
+(geo-Kernel statt Feld-basiert, siehe Gmshs eigene 3D-Beispieldatei), der
+mangels Zeit in dieser Runde nicht mehr getestet wurde.
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
