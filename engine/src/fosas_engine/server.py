@@ -44,6 +44,12 @@ def main() -> None:
         "the engine reachable from other devices. Never pass 0.0.0.0.",
     )
     args = parser.parse_args()
+    if args.host in ("0.0.0.0", "::"):
+        # The help text already says not to do this; enforcing it too,
+        # not just documenting it, since this is the one flag that can
+        # turn a loopback/tailnet-only, bearer-token-only, no-TLS engine
+        # into one reachable from the public internet on every interface.
+        parser.error(f"--host {args.host} would bind every interface, including the public one. Pass a specific reachable IP instead.")
 
     token = secrets.token_urlsafe(32)
     port = args.port or _find_free_port()

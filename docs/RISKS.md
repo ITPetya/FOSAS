@@ -913,3 +913,33 @@ Bauteile sprengen regelmaessig den V1-Rahmen (ein Koerper, ein
 konstanter Querschnitt). Echte Unterstuetzung fuer mehrteilige/lofted
 Geometrie bleibt ein eigener, grosser Ausbauschritt, siehe
 OPEN_QUESTIONS.md.
+
+## R19: Fortsetzen eines Auftrags kann ein Netz aus der Zeit vor einem Pipeline-Fix unveraendert weiterverwenden (bekannte Grenze, nicht behoben)
+
+Beleg (bei der Selbstueberpruefung des R14/R17-Codes gefunden, nicht an
+einem echten Vorfall): `fosas_core.pipeline.run_case` prueft nur, ob
+`mesh.su2` im Arbeitsverzeichnis existiert, um zu entscheiden, ob neu
+vernetzt werden muss (siehe R14). Wenn sich zwischen dem urspruenglichen,
+gescheiterten Lauf und einem spaeteren `POST /jobs/{id}/resume` die
+Berechnung von Sehnenlaenge/Spannweite/Profilpunkten selbst aendert (wie
+es die R15-Korrektur, Millimeter-auf-Meter-Umrechnung, getan hat), wird
+das alte, nach altem Massstab gebaute Netz unveraendert weiterverwendet,
+waehrend `chord`/`span`/`mid_y` fuer die Referenzwerte und das
+Stroemungsfeld mit der neuen, korrigierten Rechnung bestimmt werden. Die
+Rechnung liefe durch, aber mit einem Einheiten-Missverhaeltnis zwischen
+Netzgeometrie und Physik, also einem stillen, falschen Ergebnis statt
+eines Fehlers.
+
+Einordnung: Kein allgemeines Problem der Resume-Funktion selbst, sondern
+ein grundsaetzliches Risiko jeder Aenderung an der Vernetzungs-/
+Geometrielogik: Ein bereits vorhandenes `mesh.su2` kann nach einem
+solchen Fix nicht mehr vertrauenswuerdig sein. Fuer den konkreten R15-Fix
+nicht akut, da der einzige damals betroffene reale Auftrag
+(`bb8db25c...`, R17) erst NACH dem R15-Fix erzeugt wurde, also keinen
+Alt-Mesh-Fall hat.
+
+Status: Nicht behoben, nur dokumentiert. Eine vollstaendige Loesung
+(z. B. eine Versions- oder Pruefsumme der mesh-relevanten Pipeline-Logik
+im `job_meta.json`, die bei Abweichung ein Neuvernetzen erzwingt) ist im
+Verhaeltnis zur seltenen, schmalen Zeitfenster-Natur des Problems noch
+nicht umgesetzt worden.

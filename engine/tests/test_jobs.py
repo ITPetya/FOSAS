@@ -7,7 +7,7 @@ from fosas_core.pipeline import CaseParams, CaseResult
 from fosas_core.quality import ConvergenceAssessment
 from fosas_core.solver import IterationHistory, SurfaceData
 
-from fosas_engine.jobs import JobNotDeletableError, JobNotResumableError, JobStore
+from fosas_engine.jobs import JobNotArchivableError, JobNotDeletableError, JobNotResumableError, JobStore
 
 
 def _fake_result(work_dir: Path) -> CaseResult:
@@ -185,3 +185,16 @@ def test_prepare_for_resume_refuses_a_running_job(tmp_path):
     store.mark_running(job.id)
     with pytest.raises(JobNotResumableError):
         store.prepare_for_resume(job.id)
+
+
+def test_archive_refuses_a_pending_or_running_job(tmp_path):
+    work_dir = tmp_path / "cases" / "job1"
+    work_dir.mkdir(parents=True)
+    store = JobStore()
+    job = store.create("job1", CaseParams(velocity=50, aoa_deg=5), "wing.step", work_dir / "input.step", work_dir)
+    with pytest.raises(JobNotArchivableError):
+        store.archive(job.id)
+    store.mark_running(job.id)
+    with pytest.raises(JobNotArchivableError):
+        store.archive(job.id)
+    assert job.archived is False

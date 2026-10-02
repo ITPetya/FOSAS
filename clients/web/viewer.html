@@ -76,7 +76,7 @@
 <body>
 
 <div id="topbar">
-  <a class="back-link" href="javascript:window.close()">&larr; Schliessen</a>
+  <a class="back-link" href="javascript:window.close()" title="Funktioniert nicht in jedem Browser (z. B. Firefox blockiert das Schliessen eines per Klick, nicht per Skript geoeffneten Tabs); notfalls den Tab normal schliessen.">&larr; Schliessen</a>
   <h1 id="job-title">FOSAS 3D-Vollbildansicht</h1>
   <button type="button" class="tool-btn" id="tool-color-cp">Farbe: cp</button>
   <button type="button" class="tool-btn" id="tool-color-yplus">Farbe: y+</button>
@@ -109,6 +109,11 @@ function authHeaders() {
 function getJobIdFromUrl() {
   return new URLSearchParams(window.location.search).get("job");
 }
+
+function arrayMin(arr) { return arr.reduce((m, v) => (v < m ? v : m), arr[0]); }
+function arrayMax(arr) { return arr.reduce((m, v) => (v > m ? v : m), arr[0]); }
+// See index.html's identical helper: Math.min(...arr) on a large array
+// can throw "Maximum call stack size exceeded" instead of just being slow.
 
 function cpToColor(value, vMin, vMax) {
   const t = vMax > vMin ? (value - vMin) / (vMax - vMin) : 0.5;
@@ -174,8 +179,8 @@ function drawCpChart(surface) {
   svg.innerHTML = "";
   if (!surface || surface.length === 0) return;
   const xs = surface.map(p => p.x), cps = surface.map(p => p.cp);
-  const xMin = Math.min(...xs), xMax = Math.max(...xs);
-  const cpMin = Math.min(...cps), cpMax = Math.max(...cps);
+  const xMin = arrayMin(xs), xMax = arrayMax(xs);
+  const cpMin = arrayMin(cps), cpMax = arrayMax(cps);
   const padX = 40, padY = 20, W = 600, H = 320;
   const sx = (x) => padX + (x - xMin) / (xMax - xMin || 1) * (W - 2 * padX);
   const sy = (cp) => padY + (cp - cpMax) / (cpMin - cpMax || 1) * (H - 2 * padY);
@@ -229,16 +234,16 @@ function setupViewer(surface) {
   const cpValues = surface.map(p => p.cp);
   const yPlusValues = surface.map(p => p.y_plus);
   const ranges = {
-    cp: [Math.min(...cpValues), Math.max(...cpValues)],
-    y_plus: [Math.min(...yPlusValues), Math.max(...yPlusValues)],
+    cp: [arrayMin(cpValues), arrayMax(cpValues)],
+    y_plus: [arrayMin(yPlusValues), arrayMax(yPlusValues)],
   };
   let colorField = "cp";
 
   const xs = surface.map(p => p.x), ys = surface.map(p => p.y), zs = surface.map(p => p.z);
-  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
-  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-  const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
-  const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), Math.max(...zs) - Math.min(...zs), 1e-6);
+  const cx = (arrayMin(xs) + arrayMax(xs)) / 2;
+  const cy = (arrayMin(ys) + arrayMax(ys)) / 2;
+  const cz = (arrayMin(zs) + arrayMax(zs)) / 2;
+  const extent = Math.max(arrayMax(xs) - arrayMin(xs), arrayMax(ys) - arrayMin(ys), arrayMax(zs) - arrayMin(zs), 1e-6);
 
   const positions = new Float32Array(surface.length * 3);
   const colors = new Float32Array(surface.length * 3);

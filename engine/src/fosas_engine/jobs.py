@@ -148,6 +148,11 @@ class JobNotResumableError(Exception):
     "done" has nothing to resume, "pending"/"running" is already active."""
 
 
+class JobNotArchivableError(Exception):
+    """Raised when trying to archive a job that is still pending/running:
+    see the comment in archive() for why that would orphan it."""
+
+
 class JobStore:
     def __init__(self):
         self._jobs: dict[str, Job] = {}
@@ -252,6 +257,17 @@ class JobStore:
     def archive(self, job_id: str) -> None:
         with self._lock:
             job = self._jobs[job_id]
+            if job.status in ("pending", "running"):
+                # Archiving only hides a job from the default list()
+                # (see list()'s include_archived filter); it does not
+                # protect it the way "done"/"failed" implicitly do. An
+                # active job archived this way would vanish from both
+                # the default and archived views (its finished_at is
+                # still None, so _sweep never un-hides it either) and,
+                # worse, get silently skipped by the startup
+                # resubmission loop in app.py (which also only looks at
+                # non-archived jobs), orphaning it on the next restart.
+                raise JobNotArchivableError(f"Job {job_id} is still {job.status}, cannot be archived")
             job.archived = True
             _write_job_meta(job)
 
@@ -290,22 +306,28 @@ class JobStore:
         """
         now = datetime.now(timezone.utc)
         with self._lock:
-            jobs = list(self._jobs.values())
-        for job in jobs:
-            if job.finished_at is None:
+            # Snapshot the fields this method decides on while still
+            # holding the lock: reading them later, off the live mutable
+            # Job objects, would race with mark_running/mark_done/
+            # mark_failed mutating those same objects field-by-field
+            # from a job's worker thread with no synchronization on this
+            # read side.
+            snapshots = [(j.id, j.status, j.finished_at, j.archived) for j in self._jobs.values()]
+        for job_id, status, finished_at, archived in snapshots:
+            if finished_at is None:
                 continue
-            age = now - job.finished_at
-            if job.status == "failed" and age >= _DELETE_FAILED_AFTER:
+            age = now - finished_at
+            if status == "failed" and age >= _DELETE_FAILED_AFTER:
                 try:
-                    self.delete(job.id)
+                    self.delete(job_id)
                 except (JobNotDeletableError, FileNotFoundError, KeyError):
                     pass
                 continue
-            if not job.archived:
-                threshold = _ARCHIVE_AFTER_FAILED if job.status == "failed" else _ARCHIVE_AFTER_DONE
+            if not archived:
+                threshold = _ARCHIVE_AFTER_FAILED if status == "failed" else _ARCHIVE_AFTER_DONE
                 if age >= threshold:
                     with self._lock:
-                        current = self._jobs.get(job.id)
-                        if current is not None and not current.archived:
+                        current = self._jobs.get(job_id)
+                        if current is not None and not current.archived and current.status in ("done", "failed"):
                             current.archived = True
                             _write_job_meta(current)

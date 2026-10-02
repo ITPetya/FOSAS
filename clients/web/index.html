@@ -130,7 +130,11 @@
      when hidden is present. */
   .viewer3d-note:not([hidden]) { display: flex; }
   #viewer3d, #viewer3d canvas { touch-action: none; user-select: none; }
-  .colorbar-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.75rem; color: var(--muted); }
+  .colorbar-row { align-items: center; gap: 8px; margin-top: 8px; font-size: 0.75rem; color: var(--muted); }
+  /* Same [hidden]-override bug as .viewer3d-note, same fix: see the
+     comment there. Without :not([hidden]), the row stayed visible (with
+     stale min/max labels) even when JS set colorbarRow.hidden = true. */
+  .colorbar-row:not([hidden]) { display: flex; }
   .colorbar { flex: 1; height: 10px; border-radius: 999px; background: linear-gradient(to right, #2f6fed, #e6e8eb, #e0523f); }
   .job-row {
     display: flex; align-items: center; gap: 12px; padding: 10px 12px;
@@ -492,20 +496,23 @@ const INFO_TEXT = {
     (siehe docs/RISKS.md R10 fuer einen bekannten, realen Fall davon).</p>
   `,
   cl: `
-    <span class="tag gesichert">Gesichert</span>
+    <span class="tag annahme">Annahme (Richtwert)</span>
     <h4>CL, Auftriebsbeiwert</h4>
     <p>Eine dimensionslose Zahl fuer den erzeugten Auftrieb, unabhaengig
     von der absoluten Groesse des Bauteils (Auftriebskraft geteilt durch
-    Staudruck mal Bezugsflaeche).</p>
+    Staudruck mal Bezugsflaeche). Diese Definition/Formel ist Gesichert,
+    die folgenden Beispielwerte sind nur grobe, ungepruefte Richtwerte.</p>
     <p class="example">Richtwerte fuer einfache Fluegelprofile: um 0 bei
     0 Grad Anstellwinkel (symmetrisches Profil), oft 0,3 bis 0,6 im
     Reiseflug, bis etwa 1,5-2 kurz vor dem Stroemungsabriss.</p>
   `,
   cd: `
-    <span class="tag gesichert">Gesichert</span>
+    <span class="tag annahme">Annahme (Richtwert)</span>
     <h4>CD, Widerstandsbeiwert</h4>
     <p>Dimensionslose Zahl fuer den Luftwiderstand, analog zu CL
-    (Widerstandskraft geteilt durch Staudruck mal Bezugsflaeche).</p>
+    (Widerstandskraft geteilt durch Staudruck mal Bezugsflaeche). Diese
+    Definition/Formel ist Gesichert, die folgenden Beispielwerte sind
+    nur grobe, ungepruefte Richtwerte.</p>
     <p class="example">Richtwerte: ein schlankes Fluegelprofil bei
     kleinem Anstellwinkel liegt oft bei 0,01 bis 0,05, ein stumpfer
     Koerper (z. B. eine Platte quer zur Stroemung) kann leicht ueber 1
@@ -622,8 +629,8 @@ function drawCpChart(surface) {
 
   const xs = surface.map(p => p.x);
   const cps = surface.map(p => p.cp);
-  const xMin = Math.min(...xs), xMax = Math.max(...xs);
-  const cpMin = Math.min(...cps), cpMax = Math.max(...cps);
+  const xMin = arrayMin(xs), xMax = arrayMax(xs);
+  const cpMin = arrayMin(cps), cpMax = arrayMax(cps);
   const padX = 40, padY = 20, W = 600, H = 320;
 
   function sx(x) { return padX + (x - xMin) / (xMax - xMin || 1) * (W - 2 * padX); }
@@ -658,6 +665,13 @@ function drawCpChart(surface) {
 }
 
 let viewer3dState = null;
+
+function arrayMin(arr) { return arr.reduce((m, v) => (v < m ? v : m), arr[0]); }
+function arrayMax(arr) { return arr.reduce((m, v) => (v > m ? v : m), arr[0]); }
+// arrayMin/arrayMax instead of Math.min(...arr): spreading a large array
+// as call arguments can throw "Maximum call stack size exceeded" (engine
+// dependent, but well within reach once span_layers/n_profile_points are
+// pushed up), crashing the 3D view instead of just taking longer.
 
 function cpToColor(cp, cpMin, cpMax) {
   // Diverging colormap, low cp (suction) to high cp: blue -> near-white -> red,
@@ -707,16 +721,16 @@ function renderSurface3D(surface) {
   if (!surface || surface.length === 0) return;
 
   const cps = surface.map(p => p.cp);
-  const cpMin = Math.min(...cps), cpMax = Math.max(...cps);
+  const cpMin = arrayMin(cps), cpMax = arrayMax(cps);
   document.getElementById("cp-min-label").textContent = "cp " + cpMin.toFixed(2);
   document.getElementById("cp-max-label").textContent = "cp " + cpMax.toFixed(2);
   colorbarRow.hidden = false;
 
   const xs = surface.map(p => p.x), ys = surface.map(p => p.y), zs = surface.map(p => p.z);
-  const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
-  const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-  const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
-  const extent = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), Math.max(...zs) - Math.min(...zs), 1e-6);
+  const cx = (arrayMin(xs) + arrayMax(xs)) / 2;
+  const cy = (arrayMin(ys) + arrayMax(ys)) / 2;
+  const cz = (arrayMin(zs) + arrayMax(zs)) / 2;
+  const extent = Math.max(arrayMax(xs) - arrayMin(xs), arrayMax(ys) - arrayMin(ys), arrayMax(zs) - arrayMin(zs), 1e-6);
 
   const positions = new Float32Array(surface.length * 3);
   const colors = new Float32Array(surface.length * 3);
@@ -845,9 +859,28 @@ function renderProgress(job) {
 
   if (job.status === "failed") {
     const failedAt = job.stage;
-    setStep("step-geometry", failedAt === "geometry" ? "failed" : "done");
-    setStep("step-meshing", failedAt === "meshing" ? "failed" : (failedAt === "geometry" ? "pending" : "done"));
-    setStep("step-solving", failedAt === "solving" ? "failed" : (failedAt === "geometry" || failedAt === "meshing" ? "pending" : "done"));
+    // Ordinal lookup, not a chain of ternaries: _execute_job (app.py)
+    // can also set stage="unknown" for any exception PipelineError did
+    // not already categorize. An unrecognized stage must not make every
+    // step fall through to "done" (the old chain's bug: "unknown" never
+    // matched any of the three literal comparisons, so geometry/meshing/
+    // solving all rendered as succeeded right next to a failure message,
+    // actively misleading, exactly what CLAUDE.md's "no sugar-coating"
+    // rule forbids).
+    const stageOrder = ["geometry", "meshing", "solving"];
+    const failedIndex = stageOrder.indexOf(failedAt);
+    stageOrder.forEach((name, i) => {
+      const elId = "step-" + name;
+      if (failedIndex === -1) {
+        setStep(elId, "pending"); // unknown stage: claim nothing was done
+      } else if (i < failedIndex) {
+        setStep(elId, "done");
+      } else if (i === failedIndex) {
+        setStep(elId, "failed");
+      } else {
+        setStep(elId, "pending");
+      }
+    });
     fill.className = "progress-fill";
     fill.style.width = "0%";
     label.textContent = "Fehlgeschlagen in Phase '" + failedAt + "'";
@@ -955,6 +988,12 @@ function statusLabel(job) {
 function selectJob(jobId) {
   history.replaceState(null, "", "?job=" + jobId);
   document.getElementById("result-panel").hidden = true;
+  // Without this, switching away from a finished job (which has a live
+  // WebGLRenderer + requestAnimationFrame loop from renderSurface3D)
+  // to one with no result yet left that renderer running every frame
+  // into a now-hidden canvas until the next finished job happened to
+  // call renderSurface3D again (which disposes the previous one itself).
+  disposeViewer3D();
   setError(null);
   document.getElementById("status").textContent = "Lade Status von Job " + jobId + " ...";
   pollJob(jobId);

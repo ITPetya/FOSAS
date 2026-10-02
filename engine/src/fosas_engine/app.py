@@ -23,7 +23,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 
-from fosas_engine.jobs import JobNotDeletableError, JobNotResumableError, JobStore, new_job_id
+from fosas_engine.jobs import JobNotArchivableError, JobNotDeletableError, JobNotResumableError, JobStore, new_job_id
 from fosas_engine.models import JobOut
 from fosas_engine.settings import Settings
 
@@ -166,7 +166,10 @@ def create_app(settings: Settings) -> FastAPI:
     def archive_job(job_id: str):
         if app.state.jobs.get(job_id) is None:
             raise HTTPException(status_code=404, detail="No such job")
-        app.state.jobs.archive(job_id)
+        try:
+            app.state.jobs.archive(job_id)
+        except JobNotArchivableError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         return JobOut.from_job(app.state.jobs.get(job_id))
 
     @app.post("/jobs/{job_id}/unarchive", response_model=JobOut, dependencies=[Depends(require_token)])
