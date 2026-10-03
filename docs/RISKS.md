@@ -836,6 +836,55 @@ Tutorial-Werte sind vermutlich nur sicher, WEIL das Tutorial-Netz dafuer
 gebaut ist), jetzt ohne die Luecke einer nie wirklich isoliert
 getesteten Einzelmassnahme.
 
+Update, `extrudeBoundaryLayer` als Alternative zum Feld-Ansatz prototypisch
+getestet (Gesichert, eigener Test, siehe `/tmp/r10_extrudebl_proto.py` auf
+dem AWS-Server): Dieser von Gmsh selbst fuer genau diesen Anwendungsfall
+empfohlene Weg (geo-Kernel-Extrusion entlang der Wandnormalen statt
+Feld-basierter anisotroper Vernetzung, Massnahme 1 oben) wurde fuer das
+echte NACA-0012-Profil (zwei Splines, scharfe Hinterkante) nachgebaut.
+Ergebnis, mehrfach gegengeprueft: Die erzeugten Netze haben eine klar
+bessere mittlere Elementqualitaet als der Feld-Ansatz (minSICN-Mittel
+rund 0,66 bis 0,79 statt 0,12 im Wandnahbereich), ABER enthalten jetzt
+tatsaechlich eine kleine Zahl ECHT invertierter Elemente (negative
+minSICN, zwischen 3 und 11 Prozent je nach Parametrisierung), waehrend
+der bisherige Feld-Ansatz bei derselben Pruefung null invertierte
+Elemente hatte. Das ist nach dem einzigen eindeutigen Kriterium (invalide
+Elemente: ja oder nein) also ein Rueckschritt, nicht ein Fortschritt.
+
+Die invertierten Elemente treten immer in exakt einer radialen Spalte
+auf (ihre Anzahl ist bei jedem Testlauf exakt gleich der Anzahl
+Grenzschichtlagen, sie liegen also alle an derselben Stelle entlang des
+Profils, ueber alle Lagen hinweg). Zwei Erklaerungen wurden ueberprueft
+und beide verworfen: (1) zu grosse Gesamtdicke im Verhaeltnis zum
+lokalen Kruemmungsradius, widerlegt, weil der Defekt auch bei einer
+Dicke von nur 0,33 Prozent der Sehnenlaenge weiterhin auftritt, das ist
+fuer dieses Profil weit innerhalb jedes plausiblen Kruemmungsradius; (2)
+zu grobe Diskretisierung des Profils, widerlegt, weil der Defekt bei 40,
+60, 120 und 240 Stuetzpunkten gleich stark bleibt. Auffaellig und noch
+nicht erklaert (Vermutung): Die genaue x-Position des Defekts
+verschiebt sich zwischen Testlaeufen unvorhersehbar (0,162 oder 0,831
+Sehnenanteil je nach Punktanzahl), was eher auf eine Kante/Numerik-
+Eigenart von Gmshs eigener Normalenberechnung fuer `extrudeBoundaryLayer`
+auf gesplineten Kurven hindeutet als auf eine echte geometrische
+Unmoeglichkeit.
+
+Einordnung: `extrudeBoundaryLayer` ist damit kein einfacher Ersatz "schnell
+eingebaut, sofort besser". Es loest das eine Problem (niedrige minSICN im
+wandnahen Bereich, siehe oben ohnehin schon als vermutlich unproblematisch
+eingeordnet), erzeugt aber ein neues, echtes Problem (tatsaechlich
+invalide Elemente), das beim Feld-Ansatz nicht vorkommt. Um das nutzbar
+zu machen, waere eine eigene, noch nicht begonnene Fehlersuche in Gmshs
+Normalenberechnung oder ein anderer Kurvenaufbau (z. B. eine einzelne
+glatte Spline statt zwei, oder eine analytische statt interpolierte
+Kurve) noetig, kein kurzer Test mehr.
+
+Status nach dieser Runde: Beide bisher verfuegbaren Gmsh-Vernetzungswege
+fuer dieses Profil (Feld-basiert und Extrusions-basiert) haben je einen
+eigenen, unterschiedlichen Mangel, keiner ist eindeutig besser, und
+keiner wurde bisher mit einem tatsaechlich konvergierenden SU2-Lauf
+verknuepft (der extrudeBoundaryLayer-Pfad wurde mangels eines validen
+Netzes noch nicht einmal bis zum SU2-Lauf gebracht). R10 bleibt offen.
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
