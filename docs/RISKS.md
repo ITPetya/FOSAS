@@ -811,6 +811,31 @@ minSICN), oder der komplett andere `extrudeBoundaryLayer`-Vernetzungsweg
 (geo-Kernel statt Feld-basiert, siehe Gmshs eigene 3D-Beispieldatei), der
 mangels Zeit in dieser Runde nicht mehr getestet wurde.
 
+Korrektur und Schliessung einer Luecke in der obigen Isolationsmatrix
+(Gesichert, eigener Test): Beim genauen Nachlesen der eigenen
+Experimentskripte (`gen_configs.py` vs. `gen_configs_v2.py` auf dem
+AWS-Server) zeigt sich, dass "CFL=25 alone" oben tatsaechlich der
+vollen Vier-Parameter-Kombination (`tutorial_numerics`: CFL=25 UND
+Limiter aus UND ILU UND 1E-10) entsprach, nicht einer echten Isolation
+von CFL=25 fuer sich allein. Eine echte Einzelisolation (nur CFL=25,
+Praekonditionierer/Toleranz/Limiter unveraendert bei JACOBI/1E-6/
+VENKATAKRISHNAN) wurde deshalb nachtraeglich eigens durchgefuehrt.
+Ergebnis: CFL=25 allein divergiert ebenfalls, aber deutlich langsamer
+als die volle Kombination. rms[P] startet stabil fallend (-2.8 bei
+Iteration 7), kippt aber bei Iteration 85 ins Positive und waechst von
+dort monoton (rms[P]=+2,33 bei Iteration 99, CL/CD bereits im
+zweistelligen Millionenbereich), Lauf nach Iteration 99 manuell
+abgebrochen, da die Richtung eindeutig war. Damit ist jetzt tatsaechlich
+jede der vier einzelnen Tutorial-Abweichungen fuer sich allein auf dem
+eigenen Netz getestet (CFL=25 allein: divergiert, langsamer; Limiter
+aus allein: divergiert, Iteration 4; ILU+enge Toleranz zusammen: stabil,
+aber reproduziert nur das alte Plateau; alle vier zusammen: divergiert,
+Iteration 4), und keine davon, einzeln oder kombiniert, bringt das
+eigene Netz zur Konvergenz. Das staerkt die Einordnung von oben (die
+Tutorial-Werte sind vermutlich nur sicher, WEIL das Tutorial-Netz dafuer
+gebaut ist), jetzt ohne die Luecke einer nie wirklich isoliert
+getesteten Einzelmassnahme.
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
