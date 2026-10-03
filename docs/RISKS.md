@@ -885,6 +885,41 @@ keiner wurde bisher mit einem tatsaechlich konvergierenden SU2-Lauf
 verknuepft (der extrudeBoundaryLayer-Pfad wurde mangels eines validen
 Netzes noch nicht einmal bis zum SU2-Lauf gebracht). R10 bleibt offen.
 
+Update, direkter quantitativer Vergleich mit dem bekannt guten
+Tutorial-Netz versucht, Ergebnis unentschieden (Gesichert als Beobachtung
+des eigenen Messverfahrens, nicht als Aussage ueber die Netze selbst):
+Der Versuch, die tatsaechliche Zellgroesse als Funktion des
+Wandabstands direkt aus den vorhandenen `.su2`-Dateien beider Netze zu
+vergleichen (ohne neuen SU2-Lauf), scheiterte dreimal an der
+Messmethode selbst, bevor ein belastbares Ergebnis vorlag: (1) der
+erste Versuch mass bei unserem 3D-Netz versehentlich die Spannweiten-
+Ausdehnung der Elemente statt der Querschnittsgroesse (konstant rund
+0,15 m bei jedem Wandabstand, offensichtlich falsch); (2) nach der
+Korrektur ergab der Abstand zum naechsten Wandknoten (statt zum
+naechsten Wandsegment) fuer unser Netz eine kleinste gefundene Distanz
+von 0,0006 m statt der erwarteten 0,0000027 m, weil die Wandknoten
+selbst rund 0,0006 m entlang der Oberflaeche voneinander entfernt
+liegen, das Verfahren also die Entlang-der-Wand-Abtastung statt des
+echten Wandnormalenabstands gemessen hat; (3) nach Umstieg auf echten
+Punkt-zu-Segment-Abstand zeigte das Tutorial-Netz eine auffaellige,
+ueber viele Abstands-Bins hinweg nahezu konstante maximale Zellgroesse
+(rund 0,0098 m), die auch nach Ausschluss des Nachlaufbereichs
+(x > Sehnenlaenge) nicht verschwand, und deren Ursache (vermutlich eine
+Eigenart der strukturierten C-Netz-Topologie in Fruehkanten-Naehe, nicht
+notwendigerweise ein Fehler im eigenen Messskript) in der verfuegbaren
+Zeit nicht geklaert wurde.
+
+Einordnung: Dieser Vergleich wurde nicht zu Ende gefuehrt. Er ist damit
+kein Beleg fuer oder gegen irgendeine Hypothese, nur eine weitere
+investierte, aber nicht abgeschlossene Untersuchung. Fortsetzung nur mit
+klarem Mehrwert gegenueber dem Aufwand sinnvoll (z. B. durch Ausgabe der
+strukturierten Blockindizes statt einer nachtraeglichen geometrischen
+Abstandsschaetzung). Naechster Schritt laut Projektinhaber-Entscheidung:
+erst pruefen, ob es in der SU2/Gmsh-Community bereits eine bekannte,
+funktionierende Rezeptur fuer automatisierte unstrukturierte/hybride
+RANS-Vernetzung an scharfen Hinterkanten gibt, bevor weiter an eigenen
+Metriken oder Netztechniken gearbeitet wird.
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
