@@ -920,6 +920,59 @@ funktionierende Rezeptur fuer automatisierte unstrukturierte/hybride
 RANS-Vernetzung an scharfen Hinterkanten gibt, bevor weiter an eigenen
 Metriken oder Netztechniken gearbeitet wird.
 
+Update, Community-Recherche statt weiterer eigener Experimente
+(Gesichert, mit Quellen): Eine Gmsh-Mailingliste-Diskussion aus 2016
+behandelt exakt unser Problem (BoundaryLayer-Feld um ein 2D-Profil mit
+scharfer Hinterkante, "undesirable intersections"). Empfehlung eines
+Gmsh-Entwicklers (Guillaume Dilasser): `Field[].FanNodesList` an der
+Hinterkante setzen UND zusaetzlich `Mesh.RecombinationAlgorithm = 0`
+(Standard- statt Blossom-Rekombinationsalgorithmus), weil Letzterer sich
+laut seiner Aussage nicht mit der Fan-Behandlung vertraegt. Das ist ein
+konkreter, bei uns noch nicht getesteter Parameter.
+
+Direkt nachgetestet (Gesichert, eigener Test):
+`Mesh.RecombinationAlgorithm = 0` alleine (bei unserem aktuellen
+`Field[3].Quads = 0`, also reinen Dreiecken ohne Rekombination) aendert
+erwartungsgemaess nichts (Rekombination findet bei uns gar nicht statt).
+Mit der vollen empfohlenen Kombination (`Quads = 1`, `FanPointsList`,
+`Mesh.RecombinationAlgorithm = 0`, plus `Recombine` beim Spannweiten-
+Extrudieren) ergibt sich eine leichte, aber keine durchschlagende
+Verbesserung: minSICN-Mittel im wandnahen Band von 0,12 auf 0,18, Anteil
+unter 0,1 von 69,5 auf 63,6 Prozent, weiterhin null invertierte Elemente
+(die gab es wie oben gezeigt ohnehin schon nicht), und die "curve
+444444"-Warnung bleibt unveraendert bestehen. Einordnung: Das ist ein
+echter, jetzt belegter Gmsh-Kniff, aber kein Hebel fuer unser eigentliches
+Problem, weil wir nie nachweisen konnten, dass die minSICN-Werte selbst
+die Konvergenz verhindern (siehe oben: keine invertierten Elemente, auch
+ohne diesen Fix).
+
+Zweiter, wichtigerer Recherchefund: Ein seit 2017/2018 offenes, nie
+geloestes SU2-GitHub-Issue (su2code/SU2 #533, "RANS simulations on 3D
+wing - convergence problem") beschreibt einen sehr aehnlichen Fall:
+RANS-Konvergenz zu einem falschen Auftriebsbeiwert (0,27 statt erwarteter
+0,4-0,5, sogar negativer Widerstand) auf einem 3D-Fluegel, sowohl mit
+einem strukturierten Gmsh-Netz als auch einem 10-Millionen-Zellen-ICEM-
+Netz. Der Melder testete systematisch praktisch dieselben Stellschrauben
+wie wir (ROE/JST-Schema, Green-Gauss/WLS-Gradienten, LU_SGS/ILU-
+Praekonditionierer, mehrere SU2-Versionen) ohne Erfolg. Das Issue wurde
+nie von einem SU2-Maintainer beantwortet und ist als "stale" markiert,
+also ungeloest liegen geblieben.
+
+Einordnung nach dieser Recherche: Es gibt keinen Hinweis auf einen
+bekannten, einfachen Fix fuer unser Problem, weder von der Gmsh- noch
+von der SU2-Seite. Die Aehnlichkeit zu einem seit Jahren ungeloesten,
+offiziellen SU2-Issue mit vergleichbarem Symptom (RANS-Konvergenz zu
+falschen Kraftbeiwerten auf einem unstrukturierten/strukturierten
+3D-Fluegelnetz trotz systematischem Durchprobieren derselben
+Stellschrauben) spricht dafuer, dass es sich um ein echtes, in der
+SU2-Community nicht trivial geloestes Robustheitsproblem handeln
+koennte, nicht nur um einen eigenen Konfigurationsfehler. Weiteres
+blindes Suchen nach "dem" Fix hat damit eine schlechter eingeschaetzte
+Erfolgsaussicht als vor dieser Recherche angenommen.
+
+Quellen: http://onelab.info/pipermail/gmsh/2016/010671.html,
+https://github.com/su2code/SU2/issues/533
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
