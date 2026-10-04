@@ -23,8 +23,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 
-from fosas_engine.jobs import JobNotArchivableError, JobNotDeletableError, JobNotResumableError, JobStore, new_job_id
-from fosas_engine.models import JobOut
+from fosas_engine.jobs import Job, JobNotArchivableError, JobNotDeletableError, JobNotResumableError, JobStore, new_job_id
+from fosas_engine.models import JobOut, PolarStudyOut
+from fosas_engine.polar_studies import PolarStudyStore, new_polar_study_id
 from fosas_engine.settings import Settings
 
 _WEB_CLIENT_PATH = Path(__file__).resolve().parents[3] / "clients" / "web" / "index.html"
@@ -43,6 +44,7 @@ def create_app(settings: Settings) -> FastAPI:
     app.state.settings = settings
     settings.work_root.mkdir(parents=True, exist_ok=True)
     app.state.jobs = JobStore.load_from_disk(settings.work_root)
+    app.state.polar_studies = PolarStudyStore.load_from_disk(settings.work_root)
     app.state.executor = ThreadPoolExecutor(max_workers=settings.max_concurrent_jobs)
 
     # A job that was still "running" when the engine last stopped (crash
@@ -126,14 +128,8 @@ def create_app(settings: Settings) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        job_id = new_job_id()
-        work_dir = settings.work_root / job_id
-        work_dir.mkdir(parents=True, exist_ok=True)
-        step_path = work_dir / "input.step"
-        step_path.write_bytes(await step_file.read())
-
-        job = app.state.jobs.create(job_id, params, step_file.filename or "geometry.step", step_path, work_dir)
-        app.state.executor.submit(_execute_job, app, job.id, step_path, params, work_dir)
+        step_bytes = await step_file.read()
+        job = _create_and_submit_job(app, params, step_file.filename or "geometry.step", step_bytes)
         return JobOut.from_job(job)
 
     @app.get("/jobs", response_model=list[JobOut], dependencies=[Depends(require_token)])
@@ -189,6 +185,102 @@ def create_app(settings: Settings) -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         return {"deleted": job_id}
 
+    @app.post("/polar-studies", response_model=PolarStudyOut, dependencies=[Depends(require_token)])
+    async def create_polar_study(
+        step_file: UploadFile,
+        aoa_values: list[float] = Form(..., description="Angle of attack values to sweep, degrees"),
+        velocity: float = Form(..., description="Freestream velocity magnitude, m/s"),
+        density: float = Form(1.225, description="Air density, kg/m^3"),
+        dynamic_viscosity: float = Form(1.81e-5, description="Dynamic viscosity, Pa*s"),
+        temperature: float = Form(288.15, description="Temperature, K"),
+        target_y_plus: float = Form(1.0),
+        growth_ratio: float = Form(1.2),
+        bl_thickness_factor: float = Form(0.05, description="Boundary layer thickness, as a factor of chord"),
+        span_layers: int = Form(24),
+        n_profile_points: int = Form(60),
+        max_iterations: int = Form(500),
+        mpi_ranks: int = Form(1),
+        time_discretization: str = Form("EULER_IMPLICIT"),
+        residual_threshold: float = Form(-8.0),
+    ):
+        # Every AoA value becomes its own, fully independent Job (see
+        # docs/DECISIONS.md ADR-0017): a polar sweep deliberately reuses
+        # 100% of the existing single-case Job machinery (progress,
+        # resume, archive, delete) unchanged, rather than teaching
+        # Job/JobStore about multiple results per job.
+        if not aoa_values:
+            raise HTTPException(status_code=422, detail="aoa_values must not be empty")
+
+        step_bytes = await step_file.read()
+        step_filename = step_file.filename or "geometry.step"
+        job_ids = []
+        for aoa in aoa_values:
+            try:
+                params = CaseParams(
+                    velocity=velocity,
+                    aoa_deg=aoa,
+                    density=density,
+                    dynamic_viscosity=dynamic_viscosity,
+                    temperature=temperature,
+                    target_y_plus=target_y_plus,
+                    growth_ratio=growth_ratio,
+                    bl_thickness_factor=bl_thickness_factor,
+                    span_layers=span_layers,
+                    n_profile_points=n_profile_points,
+                    max_iterations=max_iterations,
+                    mpi_ranks=mpi_ranks,
+                    time_discretization=time_discretization,
+                    residual_threshold=residual_threshold,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            job = _create_and_submit_job(app, params, step_filename, step_bytes)
+            job_ids.append(job.id)
+
+        study = app.state.polar_studies.create(
+            new_polar_study_id(), step_filename, tuple(aoa_values), tuple(job_ids), settings.work_root
+        )
+        return PolarStudyOut.from_study(study, app.state.jobs)
+
+    @app.get("/polar-studies", response_model=list[PolarStudyOut], dependencies=[Depends(require_token)])
+    def list_polar_studies(archived: bool = False):
+        return [
+            PolarStudyOut.from_study(study, app.state.jobs)
+            for study in app.state.polar_studies.list(include_archived=archived)
+        ]
+
+    @app.get("/polar-studies/{study_id}", response_model=PolarStudyOut, dependencies=[Depends(require_token)])
+    def get_polar_study(study_id: str):
+        study = app.state.polar_studies.get(study_id)
+        if study is None:
+            raise HTTPException(status_code=404, detail="No such polar study")
+        return PolarStudyOut.from_study(study, app.state.jobs)
+
+    @app.post("/polar-studies/{study_id}/archive", response_model=PolarStudyOut, dependencies=[Depends(require_token)])
+    def archive_polar_study(study_id: str):
+        if app.state.polar_studies.get(study_id) is None:
+            raise HTTPException(status_code=404, detail="No such polar study")
+        app.state.polar_studies.archive(study_id)
+        return PolarStudyOut.from_study(app.state.polar_studies.get(study_id), app.state.jobs)
+
+    @app.post("/polar-studies/{study_id}/unarchive", response_model=PolarStudyOut, dependencies=[Depends(require_token)])
+    def unarchive_polar_study(study_id: str):
+        if app.state.polar_studies.get(study_id) is None:
+            raise HTTPException(status_code=404, detail="No such polar study")
+        app.state.polar_studies.unarchive(study_id)
+        return PolarStudyOut.from_study(app.state.polar_studies.get(study_id), app.state.jobs)
+
+    @app.delete("/polar-studies/{study_id}", dependencies=[Depends(require_token)])
+    def delete_polar_study(study_id: str):
+        # Removes only this study's own small reference record, never
+        # the constituent jobs/CFD results it points to - those are
+        # deleted individually via DELETE /jobs/{id} if actually wanted,
+        # see polar_studies.PolarStudyStore.delete.
+        if app.state.polar_studies.get(study_id) is None:
+            raise HTTPException(status_code=404, detail="No such polar study")
+        app.state.polar_studies.delete(study_id)
+        return {"deleted": study_id}
+
     @app.exception_handler(PipelineError)
     def _unhandled_pipeline_error(request, exc: PipelineError):
         # Should not normally surface here (background jobs catch this
@@ -209,6 +301,25 @@ def create_app(settings: Settings) -> FastAPI:
 # with ~2960 iterations done, recovered only via the resume mechanism.
 _SOLVE_SECONDS_PER_ITERATION = 10.0
 _SOLVE_TIMEOUT_FLOOR = 7200.0
+
+
+def _create_and_submit_job(app: FastAPI, params: CaseParams, step_filename: str, step_bytes: bytes) -> Job:
+    """Shared by POST /jobs and POST /polar-studies (one call per AoA
+    value): builds a fresh job id/work_dir, writes the uploaded STEP
+    bytes into it, creates the Job record, and submits it to the
+    executor. A pure, behaviour-preserving extraction out of the old
+    inline POST /jobs body.
+    """
+    settings: Settings = app.state.settings
+    job_id = new_job_id()
+    work_dir = settings.work_root / job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    step_path = work_dir / "input.step"
+    step_path.write_bytes(step_bytes)
+
+    job = app.state.jobs.create(job_id, params, step_filename, step_path, work_dir)
+    app.state.executor.submit(_execute_job, app, job.id, step_path, params, work_dir)
+    return job
 
 
 def _execute_job(app: FastAPI, job_id: str, step_path: Path, params: CaseParams, work_dir: Path) -> None:

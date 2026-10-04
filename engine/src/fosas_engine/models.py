@@ -8,7 +8,9 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from fosas_engine.jobs import Job, JobStatus
+from fosas_engine.jobs import Job, JobStatus, JobStore
+from fosas_engine.polar_progress import aggregate_status
+from fosas_engine.polar_studies import PolarStudy
 from fosas_engine.progress import compute_progress
 
 
@@ -120,4 +122,51 @@ class JobOut(BaseModel):
             error=job.error,
             result=result_out,
             progress=progress_out,
+        )
+
+
+class PolarPointOut(BaseModel):
+    aoa_deg: float
+    job_id: str
+    status: JobStatus
+    cl: float | None = None
+    cd: float | None = None
+    converged: bool | None = None
+
+
+class PolarStudyOut(BaseModel):
+    id: str
+    created_at: datetime
+    step_filename: str
+    status: JobStatus
+    archived: bool = False
+    points: list[PolarPointOut]
+
+    @classmethod
+    def from_study(cls, study: PolarStudy, jobs: JobStore) -> "PolarStudyOut":
+        points: list[PolarPointOut] = []
+        statuses: list[JobStatus] = []
+        for aoa, job_id in zip(study.aoa_values, study.job_ids):
+            job = jobs.get(job_id)
+            if job is None:
+                # Should not normally happen (a constituent job deleted
+                # individually without the study knowing): report it as
+                # failed rather than crashing the whole study view.
+                points.append(PolarPointOut(aoa_deg=aoa, job_id=job_id, status="failed"))
+                statuses.append("failed")
+                continue
+            cl = job.result.cl if job.result is not None else None
+            cd = job.result.cd if job.result is not None else None
+            converged = job.result.convergence.converged if job.result is not None else None
+            points.append(
+                PolarPointOut(aoa_deg=aoa, job_id=job_id, status=job.status, cl=cl, cd=cd, converged=converged)
+            )
+            statuses.append(job.status)
+        return cls(
+            id=study.id,
+            created_at=study.created_at,
+            step_filename=study.step_filename,
+            status=aggregate_status(statuses),
+            archived=study.archived,
+            points=points,
         )

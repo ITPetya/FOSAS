@@ -67,6 +67,19 @@ class ExecutablePaths:
     mpirun: str = "mpirun"
 
 
+def aoa_to_velocity_components(velocity: float, aoa_deg: float) -> tuple[float, float, float]:
+    """Freestream velocity vector (X, Y, Z) for a given angle of attack,
+    matching the project's axis convention (X chordwise/downstream, Y
+    spanwise, Z vertical, see docs/ARCHITECTURE.md): the inflow rotates
+    in the X-Z plane, Y stays zero. Extracted out of run_case so a
+    polar sweep (Phase 2) can reuse the exact same conversion per AoA
+    value without duplicating it.
+    """
+    vx = velocity * math.cos(math.radians(aoa_deg))
+    vz = velocity * math.sin(math.radians(aoa_deg))
+    return vx, 0.0, vz
+
+
 @dataclass(frozen=True)
 class CaseParams:
     velocity: float
@@ -252,8 +265,7 @@ def run_case(
         except MeshingError as exc:
             raise PipelineError("meshing", str(exc)) from exc
 
-    vx = params.velocity * math.cos(math.radians(params.aoa_deg))
-    vz = params.velocity * math.sin(math.radians(params.aoa_deg))
+    vx, _, vz = aoa_to_velocity_components(params.velocity, params.aoa_deg)
     solve_dir = work_dir / "solve"
     # If a previous attempt got partway through solving before being
     # interrupted (crash, engine restart), SU2 will have written its own
