@@ -973,6 +973,18 @@ Erfolgsaussicht als vor dieser Recherche angenommen.
 Quellen: http://onelab.info/pipermail/gmsh/2016/010671.html,
 https://github.com/su2code/SU2/issues/533
 
+Entscheidung des Projektinhabers (siehe DECISIONS.md ADR-0016): R10
+bleibt ungeloest, blockiert aber Phase 1 nicht laenger. Phase 1 gilt als
+erfuellt, cl/cd fuer Koerper mit Grenzschicht-Vernetzung bleibt dabei
+ausdruecklich als nicht validiert gekennzeichnet (die Konvergenz-Ampel
+zeigt ein erkanntes Plateau bereits als Warnung, nicht als
+"konvergiert", siehe `fosas_core.quality.assess_convergence`). Ein
+Wechsel auf einen anderen Testfall (z. B. Zylinder, Option C) wurde
+bewusst zurueckgestellt, nicht verworfen, siehe OPEN_QUESTIONS.md. Sollte
+dieses Risiko spaeter doch noch geloest werden (eigener Fortschritt,
+SU2-Update, Antwort zum verwandten Issue #533), wird das hier
+nachgetragen.
+
 ## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei

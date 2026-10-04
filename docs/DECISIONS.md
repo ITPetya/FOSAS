@@ -552,3 +552,64 @@ nicht auf bestimmte Fehlerursachen beschraenkt (z. B. nur Timeout): Ein
 erneuter Versuch bei einem unbehebbaren Fehler (z. B. Geometrieproblem)
 schlaegt einfach sofort wieder fehl, das ist kein gefaehrliches
 Verhalten, nur verschwendete Zeit.
+
+## ADR-0016: Phase 1 wird trotz ungeloestem R10 als erfuellt behandelt, cl/cd fuer Grenzschicht-Koerper bleibt explizit unvalidiert
+
+Kontext: R10 (siehe RISKS.md) ist nach einer sehr ausgedehnten
+Untersuchung (zwei unabhaengige Gmsh-Vernetzungstechniken, vollstaendige
+Isolationsmatrix der SU2-Loeserparameter, direkter Netzvergleich,
+Community-Recherche inklusive eines seit 2017 offenen, ungeloesten
+SU2-GitHub-Issues mit vergleichbarem Symptom) weiterhin offen: Die
+eigene automatische Vernetzung eines Grenzschicht-Koerpers (NACA0012)
+erreicht beim RANS-Loeser kein stationaeres cl/cd nahe der Referenz,
+obwohl nachgewiesen wurde, dass der Testfall selbst (ueber ein
+strukturiertes Vergleichsnetz) grundsaetzlich loesbar ist. Keine der
+geprueften Einzelursachen (y+, Netzqualitaet/minSICN, Zellgroessen-
+Sprung, Eckenbehandlung, jede einzelne und jede kombinierte
+Loeserparameter-Abweichung) erklaert das beobachtete Plateau. Die
+Aehnlichkeit zum ungeloesten SU2-Issue spricht dafuer, dass es sich um
+ein echtes, auch von der SU2-Community nicht trivial geloestes
+Robustheitsproblem handeln kann, nicht nur um einen eigenen Fehler.
+
+Entscheidung (Projektinhaber, nach Abwaegung dreier Optionen: A,
+trotzdem abschliessen; B, offen lassen bis geloest; C, Testfall
+wechseln): Phase 1 wird als technisch/mechanisch erfuellt behandelt und
+das Projekt geht zu Phase 2 weiter, OBWOHL R10 nicht gelost ist. cl/cd
+fuer Koerper mit Grenzschicht-Vernetzung (also praktisch jeder reale
+Fall) bleibt dabei explizit als nicht gegen Referenzdaten validiert
+gekennzeichnet, nicht als Annahme-Richtwert schoengefaerbt. Die dafuer
+noetige Offenlegung existiert technisch bereits
+(`fosas_core.quality.assess_convergence`, die Konvergenz-Ampel in der
+GUI zeigt ein erkanntes Plateau klar als Warnung statt als
+"konvergiert").
+
+Alternativen:
+- B (Phase 1 offen lassen, bis R10 geloest ist): abgelehnt. Das seit
+  2017 ungeloeste, vergleichbare SU2-Issue zeigt, dass der Zeithorizont
+  dafuer unbekannt und moeglicherweise sehr lang oder unendlich ist,
+  das Projekt soll davon nicht blockiert bleiben.
+- C (anderer Testfall, z. B. Zylinder ohne scharfe Hinterkante, als
+  Phase-1-Nachweis): nicht gewaehlt, aber bewusst nicht verworfen,
+  siehe Konsequenzen. Grund fuer das Zurueckstellen: eigene Messung
+  zeigt, dass die schwache Netzqualitaet gleichmaessig ueber das ganze
+  Profil verteilt ist, nicht an der scharfen Kante konzentriert, ein
+  Zylinder haette also vermutlich dasselbe Grundproblem, waere also
+  keine verlaessliche Abkuerzung, nur ein weiterer ungetesteter
+  Versuch.
+
+Konsequenzen:
+- R10 bleibt in RISKS.md als offenes Risiko stehen, nicht als geloest
+  oder stillschweigend uebergangen.
+- Phase 2 (Polaren, GCI-Netzstudie, Bericht) wird auf dieser Grundlage
+  aufgebaut. Die GCI-Netzstudie koennte das Problem zufaellig mit
+  aufdecken oder eingrenzen, das ist kein Plan, nur eine moegliche
+  Nebenwirkung.
+- Option C (anderer Testfall, insbesondere ein Zylinder) bleibt als
+  spaeter nachholbarer, eigener Validierungsfall vorgemerkt, siehe
+  OPEN_QUESTIONS.md, nicht verworfen.
+- Sollte R10 zu einem spaeteren Zeitpunkt doch noch geloest werden
+  (eigener Fortschritt, SU2-Update, oder eine Antwort/ein Fix aus der
+  Community zum verwandten Issue #533), wird das rueckwirkend in
+  RISKS.md vermerkt und die Validierungs-Markierung in der Qualitaets-
+  ampel entsprechend wieder auf "validiert" angehoben. Dieser Fall ist
+  erwuenscht, kein Rueckschritt.

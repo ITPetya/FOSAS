@@ -94,6 +94,14 @@
 - Welche Koerperklassen ausser dem NACA-0012-Validierungsfall zuerst mit
   konkreten Toleranzen hinterlegt werden (Zylinder als naechster Klassiker
   wurde vom Projektinhaber selbst genannt, aber nicht formal festgelegt).
+  Zusaetzlicher Grund, das jetzt konkreter vorzumerken (siehe RISKS.md
+  R10, DECISIONS.md ADR-0016): Ein Zylinder waere auch die naheliegende
+  Option C, falls irgendwann ein zweiter, tatsaechlich konvergierender
+  Referenzfall gewuenscht wird. Nicht garantiert erfolgreich: nutzt
+  dieselbe Grenzschicht-Vernetzungstechnik (ADR-0007), eigene Messung
+  zeigt die schwache Netzqualitaet gleichmaessig ueber das ganze Profil
+  verteilt statt an der scharfen Hinterkante konzentriert, ein Zylinder
+  koennte also dasselbe Problem einfach ohne scharfe Kante wiederholen.
 - Genaues UI-Konzept fuer die vom Projektinhaber gewuenschte feingranulare
   Detailgrad-Einstellung der Animation (Partikel, Stromlinien, allgemeiner
   Detailbereich): noch nicht entworfen, gehoert in Phase 3/4.
