@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from build123d import BuildLine, BuildPart, BuildSketch, Circle, Plane, Spline, export_step, extrude, make_face
+from build123d import BuildLine, BuildPart, BuildSketch, Circle, Locations, Plane, Spline, export_step, extrude, make_face
 
 from .airfoils import naca4_points
 
@@ -72,11 +72,19 @@ def cylinder_step(path: Path, diameter: float = 0.01, span: float = 0.02) -> Pat
     ADR-0007's boundary-layer-at-a-sharp-corner complications apply.
 
     Unlike the NACA profile, a circle has an exact build123d primitive,
-    so this does not need a point-sampled approximation.
+    so this does not need a point-sampled approximation. The circle is
+    centred at (radius, 0) in the sketch plane, not at the origin, so
+    its X-extent is [0, diameter] like the NACA profiles' [0, chord]
+    (leading edge at X=0): confirmed necessary the hard way, a circle
+    centred at the origin made fosas_core.meshing's wing-vs-farfield
+    surface classification (a bounding box expressed relative to a
+    [0, chord] profile) miss roughly half the cylinder's own surface.
     """
+    radius_mm = diameter * 1000 / 2
     with BuildPart() as cylinder:
         with BuildSketch(Plane.XZ):
-            Circle(radius=diameter * 1000 / 2)
+            with Locations((radius_mm, 0)):
+                Circle(radius=radius_mm)
         extrude(amount=span * 1000)
 
     export_step(cylinder.part, str(path))
