@@ -27,12 +27,15 @@ def test_low_re_cylinder_converges(tmp_path, gmsh_executable, su2_executable, mp
 
     # LOW_RE_CYLINDER.params carries the physical case definition (Re,
     # density, viscosity, AoA); max_iterations/mpi_ranks here are pure
-    # test-runtime tuning, not part of the case itself. Confirmed by a
-    # real run: rms[P] was already at -10 (past the -8 default
-    # threshold) by iteration ~108 of the 500-iteration default, so the
-    # single-process run simply timed out well after convergence was
-    # already reached, not because it failed to converge.
-    params = dataclasses.replace(LOW_RE_CYLINDER.params, max_iterations=200, mpi_ranks=3)
+    # test-runtime tuning, not part of the case itself. Confirmed by two
+    # real runs: rms[P] was already at -10 (past the -8 default
+    # threshold) by iteration ~108 at mpi_ranks=1. A follow-up attempt
+    # at mpi_ranks=3 was NOT faster, it was slower (still short of 200
+    # iterations after 900s) - this AWS instance only has 2 vCPUs
+    # (confirmed via `nproc`), so 3 oversubscribed ranks add MPI
+    # communication overhead without adding real parallelism. Staying
+    # at mpi_ranks=1 and giving it enough iterations/time instead.
+    params = dataclasses.replace(LOW_RE_CYLINDER.params, max_iterations=150, mpi_ranks=1)
 
     result = run_case(
         step_path,
