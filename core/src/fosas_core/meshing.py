@@ -247,7 +247,19 @@ For i In {{0:#allBoundarySigned()-1}}
   allBoundary() += {{Abs(allBoundarySigned(i))}};
 EndFor
 
-wingSurfs() = Surface In BoundingBox{{{-0.05*chord!r}, {-0.01*span!r}, {-0.5*chord!r}, {1.05*chord!r}, {1.01*span!r}, {0.5*chord!r}}};
+// The Z margin here used to be exactly +/-0.5*chord, with no slack at
+// all (unlike the X margin, which already has 5% on each side). That
+// was fine for every profile tested so far because a NACA0012's max
+// half-thickness (~6% chord) stays well inside +/-0.5*chord, but it
+// broke completely for a circular cylinder profile (chord == diameter,
+// so the true half-thickness is exactly 0.5*chord): meshing/OCC's own
+// floating-point tolerance pushed the real wing surface's bounding box
+// a hair (~1e-7) outside an exactly-sized query box, so Gmsh classified
+// the entire wing surface as farfield instead, leaving the "airfoil"
+// marker completely empty, confirmed directly against a real cylinder
+// mesh, see docs/RISKS.md. A small Z margin fixes this generally, not
+// just for a circle.
+wingSurfs() = Surface In BoundingBox{{{-0.05*chord!r}, {-0.01*span!r}, {-0.55*chord!r}, {1.05*chord!r}, {1.01*span!r}, {0.55*chord!r}}};
 
 farfieldSurfs() = {{}};
 For i In {{0:#allBoundary()-1}}
