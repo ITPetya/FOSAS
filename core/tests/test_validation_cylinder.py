@@ -9,6 +9,8 @@ information that goes back to the project owner before Milestone 1/2
 are built on top of this case, not something to work around quietly.
 """
 
+import dataclasses
+
 import pytest
 
 from fosas_core.pipeline import ExecutablePaths, run_case
@@ -23,13 +25,22 @@ def test_low_re_cylinder_converges(tmp_path, gmsh_executable, su2_executable, mp
         tmp_path / "cylinder.step", diameter=LOW_RE_CYLINDER.diameter, span=LOW_RE_CYLINDER.span
     )
 
+    # LOW_RE_CYLINDER.params carries the physical case definition (Re,
+    # density, viscosity, AoA); max_iterations/mpi_ranks here are pure
+    # test-runtime tuning, not part of the case itself. Confirmed by a
+    # real run: rms[P] was already at -10 (past the -8 default
+    # threshold) by iteration ~108 of the 500-iteration default, so the
+    # single-process run simply timed out well after convergence was
+    # already reached, not because it failed to converge.
+    params = dataclasses.replace(LOW_RE_CYLINDER.params, max_iterations=200, mpi_ranks=3)
+
     result = run_case(
         step_path,
-        LOW_RE_CYLINDER.params,
+        params,
         tmp_path / "work",
         executables=ExecutablePaths(gmsh=gmsh_executable, su2=su2_executable, mpirun=mpirun_executable),
         mesh_timeout=300,
-        solve_timeout=600,
+        solve_timeout=900,
     )
 
     # Printed, not just asserted: CLAUDE.md's "kein Schoenreden" rule
@@ -38,7 +49,7 @@ def test_low_re_cylinder_converges(tmp_path, gmsh_executable, su2_executable, mp
     print(f"converged={result.convergence.converged}, final_residual={result.convergence.final_residual}, "
           f"message={result.convergence.message}")
     print(f"cl={result.cl}, cd={result.cd}, mean_y_plus={result.mean_y_plus}, max_y_plus={result.max_y_plus}")
-    print("last 5 history rows (residual column):", result.history.column(LOW_RE_CYLINDER.params.residual_column)[-5:])
+    print("last 5 history rows (residual column):", result.history.column(params.residual_column)[-5:])
 
     assert result.chord == pytest.approx(LOW_RE_CYLINDER.diameter, rel=1e-2)
     assert result.span == pytest.approx(LOW_RE_CYLINDER.span, rel=1e-2)
