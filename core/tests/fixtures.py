@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from build123d import BuildLine, BuildPart, BuildSketch, Plane, Spline, export_step, extrude, make_face
+from build123d import BuildLine, BuildPart, BuildSketch, Circle, Plane, Spline, export_step, extrude, make_face
 
 from .airfoils import naca4_points
 
@@ -61,6 +61,25 @@ def naca0012_wing_step_wrong_axes(path: Path, chord: float = 0.6, span: float = 
         extrude(amount=span * 1000)
 
     export_step(wing.part, str(path))
+    return path
+
+
+def cylinder_step(path: Path, diameter: float = 0.01, span: float = 0.02) -> Path:
+    """A constant-section circular cylinder, extruded along Y (spanwise),
+    same axis convention as naca0012_wing_step (X chordwise/streamwise,
+    Y spanwise, Z vertical). Used as the Phase 2 validation case (see
+    docs/DECISIONS.md ADR-0017): no sharp trailing edge, so none of
+    ADR-0007's boundary-layer-at-a-sharp-corner complications apply.
+
+    Unlike the NACA profile, a circle has an exact build123d primitive,
+    so this does not need a point-sampled approximation.
+    """
+    with BuildPart() as cylinder:
+        with BuildSketch(Plane.XZ):
+            Circle(radius=diameter * 1000 / 2)
+        extrude(amount=span * 1000)
+
+    export_step(cylinder.part, str(path))
     return path
 
 

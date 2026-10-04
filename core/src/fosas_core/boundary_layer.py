@@ -46,6 +46,10 @@ def flat_plate_skin_friction_coefficient(reynolds: float) -> float:
     return 0.026 * reynolds ** (-1.0 / 7.0)
 
 
+_LAMINAR_REGIME_REYNOLDS_THRESHOLD = 1e5
+_LAMINAR_REGIME_FALLBACK_FACTOR = 1.0 / 1000.0
+
+
 def first_cell_height(
     density: float,
     velocity: float,
@@ -59,10 +63,26 @@ def first_cell_height(
     shear stress and friction velocity, then inverts the y+ definition
     y+ = y * u_tau * rho / mu for y. This is a preprocessing estimate,
     the actual y+ must still be checked from the converged solution.
+
+    Below the turbulent correlation's own validity floor (Re < 1e5, see
+    flat_plate_skin_friction_coefficient), target_y_plus has no physical
+    meaning: there is no thin turbulent near-wall layer for a wall-unit
+    target to describe (at the low Reynolds numbers this project uses
+    for a validation case meant to stay laminar/steady, the viscous
+    region around a small body is comparable to the body's own size,
+    not a thin boundary layer). Rather than reach for a second
+    correlation (e.g. the laminar flat-plate Blasius estimate) that
+    would look rigorous but is equally inapplicable in that regime (it
+    also assumes a thin attached boundary layer), this returns an
+    explicit, clearly-labelled placeholder cell height instead of
+    raising, so meshing can still proceed. Callers must not interpret
+    the resulting mesh as y+-controlled when this branch is used.
     """
     if target_y_plus <= 0:
         raise ValueError("target_y_plus must be positive")
     reynolds = reynolds_number(density, velocity, reference_length, dynamic_viscosity)
+    if reynolds < _LAMINAR_REGIME_REYNOLDS_THRESHOLD:
+        return reference_length * _LAMINAR_REGIME_FALLBACK_FACTOR
     cf = flat_plate_skin_friction_coefficient(reynolds)
     wall_shear_stress = cf * 0.5 * density * velocity**2
     friction_velocity = math.sqrt(wall_shear_stress / density)

@@ -65,3 +65,39 @@ def test_first_cell_height_scales_linearly_with_target_y_plus():
 def test_first_cell_height_rejects_non_positive_target_y_plus():
     with pytest.raises(ValueError):
         first_cell_height(density=1.2, velocity=50.0, reference_length=1.0, dynamic_viscosity=1.8e-5, target_y_plus=0)
+
+
+def test_first_cell_height_uses_explicit_fallback_below_turbulent_validity_floor():
+    # Re ~ 20: the low-Re laminar cylinder validation case (Phase 2).
+    # The turbulent flat-plate correlation this function otherwise uses
+    # is not valid here (flat_plate_skin_friction_coefficient would
+    # raise), so this must not raise either, and must not silently
+    # pretend the usual y+-based formula still applies.
+    y1 = first_cell_height(
+        density=1.225, velocity=0.0296, reference_length=0.01, dynamic_viscosity=1.81e-5, target_y_plus=1.0
+    )
+    assert y1 == pytest.approx(0.01 / 1000.0)
+
+
+def test_first_cell_height_fallback_does_not_depend_on_target_y_plus():
+    # Unlike the turbulent branch, the low-Re fallback is an explicit
+    # placeholder, not a y+-controlled value, so it must not scale with
+    # target_y_plus (scaling it would wrongly imply a real y+ target
+    # was honoured).
+    y1_default = first_cell_height(
+        density=1.225, velocity=0.0296, reference_length=0.01, dynamic_viscosity=1.81e-5, target_y_plus=1.0
+    )
+    y1_other = first_cell_height(
+        density=1.225, velocity=0.0296, reference_length=0.01, dynamic_viscosity=1.81e-5, target_y_plus=30.0
+    )
+    assert y1_default == y1_other
+
+
+def test_first_cell_height_turbulent_branch_unchanged_at_and_above_threshold():
+    # Regression: the existing turbulent formula must still be used
+    # unchanged right at and above the 1e5 threshold, the fallback must
+    # only kick in strictly below it.
+    at_threshold = first_cell_height(
+        density=1.225, velocity=1.81e-5 * 1e5 / (1.225 * 1.0), reference_length=1.0, dynamic_viscosity=1.81e-5
+    )
+    assert at_threshold != pytest.approx(1.0 / 1000.0)
