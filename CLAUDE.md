@@ -41,8 +41,14 @@ die vorige ausdruecklich freigegeben hat.
   Spikes, Architekturvorschlag siehe `docs/ARCHITECTURE.md`).
 - Phase 1, Vertikalschnitt ohne UI: Core, FastAPI, Cache, ein einziger
   SU2-Zustand auf einem NACA 0012 per STEP, vollautomatisch, mit cl, cd,
-  cp-Verteilung gegen Referenzdaten und Qualitaetsampel.
-- Phase 2, Polaren, Netzstudie mit GCI, Bericht.
+  cp-Verteilung gegen Referenzdaten und Qualitaetsampel. Vom
+  Projektinhaber am 2026-10-04 als erfuellt freigegeben, trotz einer
+  bewusst in Kauf genommenen, offenen Einschraenkung: cl/cd fuer Koerper
+  mit Grenzschicht-Vernetzung gilt weiterhin als nicht gegen
+  Referenzdaten validiert (R10, siehe RISKS.md, Entscheidung siehe
+  DECISIONS.md ADR-0016).
+- Phase 2, Polaren, Netzstudie mit GCI, Bericht. Vom Projektinhaber am
+  2026-10-04 freigegeben, aktuell in Arbeit.
 - Phase 3, Web-UI und Ergebnisansicht.
 - Phase 4, Animation (quasi-stationaer), Cache, Parallelisierung.
 - Phase 5, Installer, Uninstaller, Prozessverwaltung, Servermodus,
