@@ -613,3 +613,39 @@ Konsequenzen:
   RISKS.md vermerkt und die Validierungs-Markierung in der Qualitaets-
   ampel entsprechend wieder auf "validiert" angehoben. Dieser Fall ist
   erwuenscht, kein Rueckschritt.
+
+## ADR-0017: Phase 2, GCI als separater Lauf, Zylinder als primaerer Nachweisfall
+
+Kontext: Zwei konkrete Zuschnittsfragen mussten vor dem Start von
+Phase 2 geklaert werden, siehe ADR-0016 und RISKS.md R10: (1) Eine
+GCI-Netzstudie braucht mindestens drei Netzaufloesungen pro Fall, also
+mindestens den dreifachen Rechenaufwand eines Einzellaufs. (2) Der
+bisherige Testfall (NACA0012, 10 Grad) hat ein ungeloestes
+Konvergenzproblem (R10); eine GCI-Kennzahl auf einem Fall, der bei
+keiner Netzaufloesung wirklich konvergiert, waere vermutlich unklar
+oder irrefuehrend.
+
+Entscheidung (Projektinhaber):
+- Die GCI-Netzstudie laeuft nicht automatisch bei jedem Einzellauf mit,
+  sondern nur als separater, bewusst ausgeloester Validierungslauf pro
+  Geometrie/Setup-Kombination (z. B. ueber einen eigenen Endpunkt).
+  Normale Einzellaeufe bleiben damit schnell.
+- Ein Zylinder (kein scharfe-Hinterkante-Koerper, keine
+  Grenzschicht-Vernetzungstechnik-Komplikation wie bei ADR-0007 fuer
+  schlanke Profile, Annahme: konvergiert eher) wird der primaere
+  Nachweisfall, an dem Polaren-, GCI- und Berichtsfunktionalitaet zuerst
+  aufgebaut und getestet wird. NACA0012 bleibt als Testfall bestehen,
+  aber mit der bekannten, offenen Einschraenkung aus ADR-0016/R10.
+
+Alternativen: GCI automatisch bei jedem Lauf (verworfen, zu teuer fuer
+den Normalfall). NACA0012 trotz R10 als alleiniger Phase-2-Testfall
+weiterverwenden (verworfen, Risiko einer von Anfang an unklaren/
+irrefuehrenden GCI-Kennzahl ohne einen zweiten, funktionierenden
+Vergleichsfall).
+
+Konsequenzen: Der Zylinder ist noch nicht als eigener Validierungsfall
+mit konkreten Toleranzen hinterlegt, das wird jetzt Teil der
+Phase-2-Umsetzung statt eines spaeteren, offenen Punkts. Ob der
+Zylinder tatsaechlich konvergiert, ist eine Annahme, nicht Gesichert,
+das wird als erster Schritt in Phase 2 ueberprueft, bevor Polaren/GCI
+darauf aufgebaut werden.
