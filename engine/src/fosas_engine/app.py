@@ -44,6 +44,7 @@ from fosas_engine.settings import Settings
 
 _WEB_CLIENT_PATH = Path(__file__).resolve().parents[3] / "clients" / "web" / "index.html"
 _VIEWER_CLIENT_PATH = Path(__file__).resolve().parents[3] / "clients" / "web" / "viewer.html"
+_APP_JS_PATH = Path(__file__).resolve().parents[3] / "clients" / "web" / "app.js"
 
 
 def create_app(settings: Settings) -> FastAPI:
@@ -104,6 +105,17 @@ def create_app(settings: Settings) -> FastAPI:
             raise HTTPException(status_code=500, detail=f"Viewer client not found at {_VIEWER_CLIENT_PATH}.")
         html = _VIEWER_CLIENT_PATH.read_text()
         return html.replace("__FOSAS_TOKEN__", settings.token)
+
+    @app.get("/app.js")
+    def app_js():
+        # Same trust boundary as "/" and "/viewer", see the comment on
+        # "/": no token check, the token itself has to reach the browser
+        # through this exact file (it embeds __FOSAS_TOKEN__, replaced
+        # below, same as the two HTML routes).
+        if not _APP_JS_PATH.exists():
+            raise HTTPException(status_code=500, detail=f"app.js not found at {_APP_JS_PATH}.")
+        js = _APP_JS_PATH.read_text()
+        return Response(content=js.replace("__FOSAS_TOKEN__", settings.token), media_type="application/javascript")
 
     @app.post("/jobs", response_model=JobOut, dependencies=[Depends(require_token)])
     async def create_job(

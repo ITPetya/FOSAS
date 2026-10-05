@@ -198,6 +198,94 @@ gezielte Mindestradius-Massnahme fuer Grenzschichtvernetzung ist vorgesehen
 und wird offengelegt), instationaere Animation, eigener Solver, Innenstroemung,
 rotierende Teile, transsonische/supersonische Stroemung.
 
+## Phase 3, Erweiterungsanforderung: Technische-Mechanik-Visualisierung
+
+Vom Projektinhaber am 2026-10-05 als zusaetzliche Anforderung an die
+Ergebnisansicht gestellt, waehrend an Phase-3-Schritt 1 (Formulare fuer
+Polaren-/GCI-Studien, siehe unten) gearbeitet wurde: Zielgruppe sind
+Maschinenbauer mit Kenntnissen in Technischer Mechanik (zentrales/
+allgemeines Kraeftesystem, Freikoerperbild, Kraftzerlegung, Momente), die
+Ergebnisse sollen mit genau diesem Wissen direkt verstaendlich sein, als
+einzeln einblendbare Ebenen (wie Layer im CAD), alle Werte in SI. Bewusst
+nicht in Schritt 1 umgesetzt (Projektinhaber-Vorgabe: laufenden Plan nicht
+unterbrechen), hier als Backlog mit grober Einordnung festgehalten, wo
+jeder Punkt spaeter andockt. Nummerierung wie in der Originalanforderung.
+
+Wichtigster Befund vorab (direkt im Code gegengeprueft, nicht nur Annahme):
+`fosas_core.pipeline.CaseResult` liefert aktuell nur `cl`, `cd`,
+`mean_y_plus`/`max_y_plus`, `chord`, `span`, keine Momentenbeiwerte, keine
+Schiebewinkel-Unterstuetzung, keine waehlbare Referenzflaeche/-laenge
+(siehe `pipeline.py`-Docstring: "Reference length/area/moment origin are
+derived from the geometry's bounding box, not user-overridable yet.").
+SU2 bekommt zwar bereits `REF_LENGTH`/`REF_AREA` (siehe `solver.py`) und
+berechnet darueber vermutlich schon Momentenbeiwerte in seiner eigenen
+`AERO_COEFF`-Historiengruppe (Annahme, nicht geprueft), `fosas_core` liest
+davon aber bisher nur die Kraftbeiwerte aus. Die meisten Punkte unten
+haengen an dieser einen Luecke.
+
+1. Koordinatensysteme (Windachsen/Koerperachsen, alpha/beta als
+   Winkelbogen, Vorzeichenkonvention) -> 3D-Viewer (`index.html`/
+   `viewer.html`), neue Layer-Ebene. Alpha existiert schon als Eingabe;
+   Beta (Schiebewinkel) ist nicht modelliert, `aoa_to_velocity_components`
+   dreht nur in der X-Z-Ebene. Braucht zuerst eine Core-Erweiterung
+   (Drehung zusaetzlich in der X-Y-Ebene), bevor es visualisiert werden
+   kann.
+2. Anstroemung (Pfeil mit v, rho, Staudruck q, Reynolds-Zahl) ->
+   Ergebnis-Metadaten (Ergebnis-Panel + Bericht). q = 0.5*rho*v^2 und
+   Re = rho*v*chord/mu sind aus bereits vorhandenen Eingaben direkt
+   berechenbar, kein Core-Umbau noetig, nur eine neue abgeleitete Angabe
+   im Ergebnis.
+3. Bezugsflaeche (projizierte Stirnflaeche/Draufsicht, farbig,
+   waehlbar) und Bezugslaenge fuer Momentenbeiwerte -> aktuell fest aus
+   der Geometrie-Bounding-Box abgeleitet (siehe oben), waehlbar machen
+   heisst ein neues `CaseParams`-Feld plus Darstellung als Ebene im
+   3D-Viewer.
+4. Kraftpfeile (R massstaeblich in N, Zerlegung in D/L/S oder
+   Fx/Fy/Fz, Winkel der Resultierenden, Gleitzahl L/D, Beschriftung mit
+   Kraft und Beiwert) -> neues Berechnungsmodul in `fosas_core` (aus
+   cl/cd/q/A ableitbar, L/D ist sogar schon aus cl/cd berechenbar ohne
+   neue Daten), Visualisierung als 3D-Pfeile im Viewer.
+5. Momente (Druckpunkt markiert, Bezugspunkt waehlbar: Schwerpunkt/
+   Ursprung/frei, Mx/My/Mz in Nm mit Momentenbeiwerten) -> die oben
+   beschriebene groesste Luecke: muss zuerst in `fosas_core`/`solver.py`
+   ergaenzt werden (SU2-Historienspalten auslesen, pruefen ob dort schon
+   vorhanden). Druckpunkt-Bestimmung und Bezugspunkt-Umrechnung
+   (Momentensatz, M_neu = M_alt + r x F) sind reine Nachverarbeitung,
+   sobald die Rohmomente vorliegen; explizit zu testen (siehe
+   Projektvorgabe): Summe der Oberflaechenkraefte muss der ausgegebenen
+   Resultierenden entsprechen, Momente muessen beim Bezugspunktwechsel
+   korrekt umgerechnet werden.
+6. Oberflaeche (cp-Farbkarte existiert bereits im 3D-Viewer; lokale
+   Druckkraftpfeile, Wandschubspannung, Aufteilung Druck-/
+   Reibungswiderstand) -> `fosas_core.solver.SurfaceData` ist laut
+   eigenem Docstring bereits fuer "Cp, y+, skin friction" ausgelegt,
+   aktuell wird aber nur cp bis zur API durchgereicht (zu pruefen, ob
+   skin friction tatsaechlich schon aus SU2 extrahiert wird oder nur im
+   Docstring vorgesehen ist).
+7. Freikoerperbild-Modus (2D-Schnittansicht, optional Gewichtskraft und
+   Befestigungspunkt mit Lagerreaktionen) -> eigene neue Ansicht, setzt
+   Punkt 4/5 voraus, eigener spaeterer Schritt.
+8. Rechenweg (F = c*q*A, M = cm*q*A*l mit eingesetzten Zahlen) ->
+   Ergebnis-Panel und Bericht (`fosas_core.report` + Typst-Vorlagen),
+   sobald 2-5 vorhanden sind, reine Darstellung bereits berechneter
+   Werte.
+9. Plausibilitaets-Referenzwerte (Kugel, Platte, Pkw, Profil) ->
+   eigene kleine Konstantentabelle. Achtung: braucht belegbare Quellen,
+   siehe CLAUDE.md-Regel "keine erfundenen Literaturwerte" -- vor
+   Umsetzung muessen diese Werte entweder mit Quelle belegt oder explizit
+   als Vermutung markiert werden, keine stillschweigenden Richtwerte.
+10. Tooltips mit Technische-Mechanik-Analogie -> `INFO_TEXT`-Objekt in
+    `app.js`, exakt das in Schritt 1 bereits verwendete Muster
+    (Gesichert/Annahme-Kennzeichnung je Begriff); fuer neue Begriffe (R,
+    D/L/S, cm, Freikoerperbild, ...) wird es ergaenzt, sobald die
+    jeweilige Ebene entsteht.
+11. Aktive Ansichten/Werte in den Bericht uebernehmen -> `fosas_core.report`
+    + Typst-Vorlagen, letzter Schritt, erst wenn 1-9 existieren.
+
+Harte Vorgabe fuer die Umsetzung, sobald sie beginnt: alle Werte werden in
+der Logikschicht (`fosas_core`) berechnet, die UI zeigt nur an, keine
+eigene Physik/Umrechnung im Client.
+
 ## Entwicklungsumgebung
 
 Ein Teil der Entwicklung findet aktuell in einer Linux-Sandbox (ARM64, ohne
