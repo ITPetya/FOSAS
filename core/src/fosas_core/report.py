@@ -42,6 +42,7 @@ import matplotlib
 
 matplotlib.use("Agg")  # headless rendering, no display/X server available on the engine host
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import typst
 
 _TEMPLATE_DIR = Path(__file__).parent / "report_templates"
@@ -179,18 +180,37 @@ class GciReportData:
 
 
 def _render_gci_chart_png(data: GciReportData) -> bytes:
-    # x-axis: element_count, log scale (standard for a mesh-convergence
-    # plot) - only plotted for levels that actually have both a count
-    # and a value, same "skip incomplete rows" approach as the polar
-    # chart, see docs/DECISIONS.md ADR-0016/ADR-0017's disclosure
-    # principle (do not silently fabricate a point for missing data).
+    # x-axis: element_count, linear (see _format_axis below for why
+    # NOT log scale, despite that being the textbook default) - only
+    # plotted for levels that actually have both a count and a value,
+    # same "skip incomplete rows" approach as the polar chart, see
+    # docs/DECISIONS.md ADR-0016/ADR-0017's disclosure principle (do
+    # not silently fabricate a point for missing data).
     plotted_cl = [lvl for lvl in data.levels if lvl.element_count is not None and lvl.cl is not None]
     plotted_cd = [lvl for lvl in data.levels if lvl.element_count is not None and lvl.cd is not None]
     fig, (ax_cl, ax_cd) = plt.subplots(1, 2, figsize=(8, 3.2))
+
+    def _format_axis(ax):
+        # A log-scale x-axis is the textbook default for a mesh-
+        # convergence plot, but was actively wrong for this project's
+        # own data: confirmed the hard way with a real GCI study
+        # (refinement ratio 1.2-1.5, so element counts span less than
+        # a factor of 2). matplotlib's LogLocator either crams many
+        # overlapping decade-adjacent ticks into that narrow a span, or
+        # (after constraining numticks) finds no decade boundary to
+        # place a tick on at all and renders an unlabeled axis - tried
+        # and rejected both. A linear axis has neither problem and is
+        # not actually less correct here: log scale only earns its
+        # keep over a wide span of mesh sizes, not a ~20-50% refinement
+        # step, so this project's typical refinement ratios do not
+        # need it.
+        ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=4, integer=True))
+        ax.ticklabel_format(axis="x", style="plain")
+
     if plotted_cl:
         plotted_cl = sorted(plotted_cl, key=lambda lvl: lvl.element_count)
         ax_cl.plot([lvl.element_count for lvl in plotted_cl], [lvl.cl for lvl in plotted_cl], marker="o")
-        ax_cl.set_xscale("log")
+        _format_axis(ax_cl)
         ax_cl.set_xlabel("Elementanzahl")
         ax_cl.set_ylabel("cl")
         ax_cl.grid(True, alpha=0.3)
@@ -199,7 +219,7 @@ def _render_gci_chart_png(data: GciReportData) -> bytes:
         ax_cd.plot(
             [lvl.element_count for lvl in plotted_cd], [lvl.cd for lvl in plotted_cd], marker="o", color="tab:orange"
         )
-        ax_cd.set_xscale("log")
+        _format_axis(ax_cd)
         ax_cd.set_xlabel("Elementanzahl")
         ax_cd.set_ylabel("cd")
         ax_cd.grid(True, alpha=0.3)
