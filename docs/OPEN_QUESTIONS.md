@@ -149,11 +149,25 @@ laufende Produktions-Engine auf dem AWS-Server verifiziert:
   Mit beiden heute real abgeschlossenen Studien (Polare `1038c8e2...`,
   GCI-Studie `8a05c2ab...`) gegen die laufende Produktions-Engine
   erzeugt und als echte PDFs heruntergeladen.
-  Weiterhin offen: mehrere Studien/Faelle in einem Bericht,
-  Vorlagenlayout-Feinschliff, Pruefung der Windows-Wheel-Verfuegbarkeit
-  fuer `typst` (R3, in dieser Linux-Sandbox nicht pruefbar), jegliche
-  Visualisierung der Polaren-/GCI-Ergebnisse in der GUI ueber eine
-  minimale Listenansicht plus PDF-Download-Knopf hinaus.
+  Update (2026-10-05, direkt im Anschluss): Dritter Berichtstyp
+  `render_combined_report` ergaenzt, Polare und GCI-Netzstudie
+  derselben Geometrie in einem PDF (neue Route `GET /reports/combined?
+  polar_study_id=...&gci_study_id=...`). Bewusst keine automatische
+  Zuordnung zwischen den beiden Studientypen (im Datenmodell nicht
+  verknuepft): beide IDs sind ein expliziter Aufrufer-Wunsch, bei
+  abweichenden Dateinamen zeigt der Bericht selbst einen Hinweis statt
+  stillschweigend eine Zusammengehoerigkeit zu unterstellen. Neuer
+  GUI-Abschnitt mit zwei Auswahllisten plus Download-Knopf. Mit den
+  beiden echten, heute abgeschlossenen Zylinder-Studien gegen die
+  laufende Produktions-Engine erzeugt (echtes 2-seitiges PDF, 115 KB).
+  Weiterhin offen: Vorlagenlayout-Feinschliff, Pruefung der
+  Windows-Wheel-Verfuegbarkeit fuer `typst` (R3, in dieser
+  Linux-Sandbox nicht pruefbar), jegliche Visualisierung der
+  Polaren-/GCI-Ergebnisse in der GUI ueber eine minimale Listenansicht
+  plus PDF-Download-Knopf hinaus, Vergleich mehrerer unabhaengiger
+  Polarstudien (z. B. verschiedene Geometrievarianten) in einem
+  Bericht (anderer Anwendungsfall als die hier umgesetzte
+  Polare+GCI-Kombination derselben Geometrie, noch nicht entworfen).
 
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 
