@@ -1238,7 +1238,36 @@ async function loadPolarStudiesList() {
         });
       }
       listEl.appendChild(table);
+
+      const reportBtn = document.createElement("button");
+      reportBtn.type = "button";
+      reportBtn.className = "job-action-btn";
+      reportBtn.textContent = "Bericht (PDF)";
+      reportBtn.addEventListener("click", () => downloadPolarReport(study.id, study.step_filename));
+      listEl.appendChild(reportBtn);
     }
+  }
+}
+
+async function downloadPolarReport(studyId, stepFilename) {
+  // The report route needs the bearer token as a header, not a query
+  // param, so a plain <a href> link cannot carry auth - fetch the PDF
+  // as a blob and trigger the browser's own save dialog instead.
+  try {
+    const res = await fetch("/polar-studies/" + studyId + "/report", { headers: authHeaders() });
+    if (res.status === 401) { reloadToRefreshToken(); return; }
+    if (!res.ok) { alert("Bericht konnte nicht erzeugt werden (" + res.status + ")."); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "polar_report_" + stepFilename.replace(/\.[^.]+$/, "") + ".pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("Bericht konnte nicht geladen werden.");
   }
 }
 

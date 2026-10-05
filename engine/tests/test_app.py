@@ -550,3 +550,49 @@ def test_delete_gci_study_does_not_delete_constituent_jobs(client, settings, tmp
     assert client.delete(f"/gci-studies/{study_id}", headers=headers).status_code == 200
     assert client.get(f"/gci-studies/{study_id}", headers=headers).status_code == 404
     assert client.get(f"/jobs/{job_id}", headers=headers).status_code == 200
+
+
+def test_polar_study_report_not_found(client, settings):
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    assert client.get("/polar-studies/does-not-exist/report", headers=headers).status_code == 404
+
+
+def test_polar_study_report_returns_a_real_pdf_even_when_every_point_failed(client, settings, tmp_path, monkeypatch):
+    # Exercises the real route -> PolarStudyOut -> PolarReportData ->
+    # fosas_core.report.render_polar_report -> real typst.compile
+    # chain end to end (no mocking of the report-rendering itself,
+    # only of the CFD solve, which isn't what this route tests). Uses
+    # the all-points-failed case specifically, since
+    # core/tests/test_report.py already proves render_polar_report
+    # handles a real "done" point correctly, and a full CaseResult
+    # fixture is not worth constructing again just for route wiring.
+    import fosas_engine.app as app_module
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/polar-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_values": ["0", "5"]},
+        )
+    study_id = response.json()["id"]
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        body = client.get(f"/polar-studies/{study_id}", headers=headers).json()
+        if body["status"] == "failed":
+            break
+        time.sleep(0.05)
+    assert body["status"] == "failed"
+
+    report_response = client.get(f"/polar-studies/{study_id}/report", headers=headers)
+    assert report_response.status_code == 200
+    assert report_response.headers["content-type"] == "application/pdf"
+    assert report_response.content.startswith(b"%PDF")

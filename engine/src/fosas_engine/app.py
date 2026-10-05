@@ -16,12 +16,14 @@ shape is validated.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
+from fosas_core.report import PolarReportData, PolarReportPoint, ReportError, render_polar_report
 
 from fosas_engine.gci_studies import GciStudyStore, new_gci_study_id
 from fosas_engine.jobs import Job, JobNotArchivableError, JobNotDeletableError, JobNotResumableError, JobStore, new_job_id
@@ -282,6 +284,39 @@ def create_app(settings: Settings) -> FastAPI:
             raise HTTPException(status_code=404, detail="No such polar study")
         app.state.polar_studies.delete(study_id)
         return {"deleted": study_id}
+
+    @app.get("/polar-studies/{study_id}/report", dependencies=[Depends(require_token)])
+    def get_polar_study_report(study_id: str):
+        # Phase 2, first/narrow report: one polar, no GCI data yet (see
+        # docs/DECISIONS.md and the plan this was built from). Pulls
+        # straight from PolarStudyOut.points, which already carries
+        # cl/cd/status/converged per AoA value - no separate JobStore
+        # lookup needed beyond what from_study already did.
+        study = app.state.polar_studies.get(study_id)
+        if study is None:
+            raise HTTPException(status_code=404, detail="No such polar study")
+        study_out = PolarStudyOut.from_study(study, app.state.jobs)
+
+        report_data = PolarReportData(
+            title=study_out.step_filename,
+            generated_at=datetime.now(timezone.utc),
+            points=tuple(
+                PolarReportPoint(
+                    aoa_deg=p.aoa_deg, cl=p.cl, cd=p.cd, status=p.status, converged=p.converged
+                )
+                for p in study_out.points
+            ),
+        )
+        try:
+            pdf_bytes = render_polar_report(report_data)
+        except ReportError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="polar_report_{study_id}.pdf"'},
+        )
 
     @app.post("/gci-studies", response_model=GciStudyOut, dependencies=[Depends(require_token)])
     async def create_gci_study(
