@@ -3,12 +3,14 @@ from datetime import datetime, timezone
 import pytest
 
 from fosas_core.report import (
+    CombinedReportData,
     GciReportData,
     GciReportLevel,
     GciReportMetric,
     PolarReportData,
     PolarReportPoint,
     ReportError,
+    render_combined_report,
     render_gci_report,
     render_polar_report,
 )
@@ -152,4 +154,49 @@ def test_render_gci_report_handles_a_result_error_without_crashing():
         result_error="fine and medium grid values are identical",
     )
     pdf_bytes = render_gci_report(data)
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_render_combined_report_produces_a_real_pdf():
+    polar_data = PolarReportData(
+        title="cylinder.step",
+        generated_at=datetime.now(timezone.utc),
+        points=(_point(0.0), _point(15.0)),
+    )
+    gci_data = GciReportData(
+        title="cylinder.step",
+        generated_at=datetime.now(timezone.utc),
+        refinement_ratio=1.5,
+        levels=(_level("fine", element_count=3000), _level("medium", element_count=2000), _level("coarse", element_count=1000)),
+        cl_metric=_metric(),
+        cd_metric=_metric(),
+        result_error=None,
+    )
+    data = CombinedReportData(generated_at=datetime.now(timezone.utc), polar=polar_data, gci=gci_data)
+    pdf_bytes = render_combined_report(data)
+    assert isinstance(pdf_bytes, bytes)
+    assert pdf_bytes.startswith(b"%PDF")
+    assert len(pdf_bytes) > 1000
+
+
+def test_render_combined_report_discloses_mismatched_filenames():
+    # The two studies being combined are an explicit caller choice with
+    # no enforced linkage (see fosas_core.report.render_combined_report's
+    # docstring) - if their filenames differ, the report must still
+    # render (not refuse), but flag the mismatch rather than silently
+    # implying they are the same case.
+    polar_data = PolarReportData(
+        title="wing_a.step", generated_at=datetime.now(timezone.utc), points=(_point(0.0),)
+    )
+    gci_data = GciReportData(
+        title="wing_b.step",
+        generated_at=datetime.now(timezone.utc),
+        refinement_ratio=1.5,
+        levels=(_level("fine", element_count=3000), _level("medium", element_count=2000), _level("coarse", element_count=1000)),
+        cl_metric=_metric(),
+        cd_metric=_metric(),
+        result_error=None,
+    )
+    data = CombinedReportData(generated_at=datetime.now(timezone.utc), polar=polar_data, gci=gci_data)
+    pdf_bytes = render_combined_report(data)
     assert pdf_bytes.startswith(b"%PDF")

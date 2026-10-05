@@ -48,21 +48,25 @@ import typst
 _TEMPLATE_DIR = Path(__file__).parent / "report_templates"
 _POLAR_TEMPLATE_PATH = _TEMPLATE_DIR / "polar_report.typ"
 _GCI_TEMPLATE_PATH = _TEMPLATE_DIR / "gci_report.typ"
+_COMBINED_TEMPLATE_PATH = _TEMPLATE_DIR / "combined_report.typ"
 
 
 class ReportError(Exception):
     """A report could not be rendered (no data, or the Typst compiler itself failed)."""
 
 
-def _compile_report(template_path: Path, payload: dict[str, Any], chart_png: bytes) -> bytes:
+def _compile_report(template_path: Path, payload: dict[str, Any], files: dict[str, bytes]) -> bytes:
     """Shared Typst-compile step for every report kind: writes the
-    template, a JSON data file, and a pre-rendered chart PNG into one
-    temporary project directory, compiles it, and returns PDF bytes.
+    template, a JSON data file, and any pre-rendered chart PNGs (keyed
+    by their root-relative filename, e.g. "chart.png" or
+    "polar_chart.png") into one temporary project directory, compiles
+    it, and returns PDF bytes.
     """
     with tempfile.TemporaryDirectory(prefix="fosas_report_") as tmp_dir_str:
         tmp_dir = Path(tmp_dir_str)
         (tmp_dir / "data.json").write_text(json.dumps(payload))
-        (tmp_dir / "chart.png").write_bytes(chart_png)
+        for filename, content in files.items():
+            (tmp_dir / filename).write_bytes(content)
         main_typ_path = tmp_dir / "main.typ"
         main_typ_path.write_bytes(template_path.read_bytes())
 
@@ -137,7 +141,7 @@ def render_polar_report(data: PolarReportData) -> bytes:
             for p in data.points
         ],
     }
-    return _compile_report(_POLAR_TEMPLATE_PATH, payload, chart_png)
+    return _compile_report(_POLAR_TEMPLATE_PATH, payload, {"chart.png": chart_png})
 
 
 # --- GCI-Bericht -------------------------------------------------------
@@ -243,18 +247,9 @@ def _metric_payload(metric: GciReportMetric | None) -> dict[str, Any] | None:
     }
 
 
-def render_gci_report(data: GciReportData) -> bytes:
-    """Renders a one-GCI-study PDF report: a cl/cd-vs-element-count
-    chart (log x-axis) plus a per-resolution table and the computed
-    GCI metrics, disclosing a missing/failed result rather than hiding
-    it (see docs/DECISIONS.md ADR-0016/ADR-0017, and R20 on why a
-    computed GCI percentage near a zero-valued quantity is reported as
-    -is, not masked or suppressed). Raises ReportError if the Typst
-    compiler itself fails.
-    """
-    chart_png = _render_gci_chart_png(data)
+def _gci_payload(data: GciReportData) -> dict[str, Any]:
     any_level_not_done = any(lvl.status != "done" for lvl in data.levels)
-    payload = {
+    return {
         "title": data.title,
         "generated_at": data.generated_at.isoformat(),
         "refinement_ratio": data.refinement_ratio,
@@ -273,4 +268,57 @@ def render_gci_report(data: GciReportData) -> bytes:
         "cl_metric": _metric_payload(data.cl_metric),
         "cd_metric": _metric_payload(data.cd_metric),
     }
-    return _compile_report(_GCI_TEMPLATE_PATH, payload, chart_png)
+
+
+def render_gci_report(data: GciReportData) -> bytes:
+    """Renders a one-GCI-study PDF report: a cl/cd-vs-element-count
+    chart (linear x-axis, see _render_gci_chart_png for why not log)
+    plus a per-resolution table and the computed GCI metrics,
+    disclosing a missing/failed result rather than hiding it (see
+    docs/DECISIONS.md ADR-0016/ADR-0017, and R20 on why a computed GCI
+    percentage near a zero-valued quantity is reported as-is, not
+    masked or suppressed). Raises ReportError if the Typst compiler
+    itself fails.
+    """
+    chart_png = _render_gci_chart_png(data)
+    return _compile_report(_GCI_TEMPLATE_PATH, _gci_payload(data), {"chart.png": chart_png})
+
+
+# --- Kombinierter Bericht (Polare + GCI derselben Geometrie) -----------
+
+
+@dataclass(frozen=True)
+class CombinedReportData:
+    generated_at: datetime
+    polar: PolarReportData
+    gci: GciReportData
+
+
+def render_combined_report(data: CombinedReportData) -> bytes:
+    """Renders a single PDF combining a polar sweep and a GCI mesh
+    study for the same geometry/setup, requested together explicitly
+    by the caller (no automatic case-matching: a PolarStudy and a
+    GciStudy have no linkage field in the data model, so the two study
+    ids to combine are always an explicit choice, never inferred e.g.
+    from a matching filename - see the route in app.py). Both
+    sub-reports' own disclosure rules (non-converged points, failed
+    mesh levels, oscillatory GCI convergence, a GCI result_error) carry
+    through unchanged, just placed in one document instead of two.
+    """
+    polar_chart_png = _render_polar_chart_png(data.polar)
+    gci_chart_png = _render_gci_chart_png(data.gci)
+    any_not_converged = any(p.status != "done" or p.converged is False for p in data.polar.points)
+    payload = {
+        "generated_at": data.generated_at.isoformat(),
+        "polar": {
+            "title": data.polar.title,
+            "any_not_converged": any_not_converged,
+            "points": [
+                {"aoa_deg": p.aoa_deg, "cl": p.cl, "cd": p.cd, "status": p.status, "converged": p.converged}
+                for p in data.polar.points
+            ],
+        },
+        "gci": _gci_payload(data.gci),
+    }
+    files = {"polar_chart.png": polar_chart_png, "gci_chart.png": gci_chart_png}
+    return _compile_report(_COMBINED_TEMPLATE_PATH, payload, files)

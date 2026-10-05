@@ -639,3 +639,76 @@ def test_gci_study_report_returns_a_real_pdf_even_when_every_level_failed(client
     assert report_response.status_code == 200
     assert report_response.headers["content-type"] == "application/pdf"
     assert report_response.content.startswith(b"%PDF")
+
+
+def test_combined_report_not_found(client, settings, tmp_path, monkeypatch):
+    import fosas_engine.app as app_module
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    with open(step_path, "rb") as f:
+        polar_response = client.post(
+            "/polar-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_values": ["0"]},
+        )
+    polar_study_id = polar_response.json()["id"]
+
+    assert client.get(
+        f"/reports/combined?polar_study_id=does-not-exist&gci_study_id=does-not-exist", headers=headers
+    ).status_code == 404
+    assert client.get(
+        f"/reports/combined?polar_study_id={polar_study_id}&gci_study_id=does-not-exist", headers=headers
+    ).status_code == 404
+
+
+def test_combined_report_returns_a_real_pdf_combining_both_studies(client, settings, tmp_path, monkeypatch):
+    import fosas_engine.app as app_module
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    with open(step_path, "rb") as f:
+        polar_response = client.post(
+            "/polar-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_values": ["0", "5"]},
+        )
+    polar_study_id = polar_response.json()["id"]
+
+    with open(step_path, "rb") as f:
+        gci_response = client.post(
+            "/gci-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_deg": "5"},
+        )
+    gci_study_id = gci_response.json()["id"]
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        polar_body = client.get(f"/polar-studies/{polar_study_id}", headers=headers).json()
+        gci_body = client.get(f"/gci-studies/{gci_study_id}", headers=headers).json()
+        if polar_body["status"] == "failed" and gci_body["status"] == "failed":
+            break
+        time.sleep(0.05)
+    assert polar_body["status"] == "failed"
+    assert gci_body["status"] == "failed"
+
+    report_response = client.get(
+        f"/reports/combined?polar_study_id={polar_study_id}&gci_study_id={gci_study_id}", headers=headers
+    )
+    assert report_response.status_code == 200
+    assert report_response.headers["content-type"] == "application/pdf"
+    assert report_response.content.startswith(b"%PDF")

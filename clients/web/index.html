@@ -245,6 +245,22 @@
   </div>
 
   <div class="panel">
+    <h2 style="margin:0 0 6px;font-size:1.1rem;">Kombinierter Bericht</h2>
+    <p class="hint" style="margin:6px 0 10px;">
+      Polare und GCI-Netzstudie derselben Geometrie in einem PDF. Keine
+      automatische Zuordnung, bewusst eine explizite Auswahl (siehe
+      docs/DECISIONS.md): pruefen, ob beide Studien tatsaechlich
+      zusammengehoeren, bevor der Bericht als zusammenhaengende Aussage
+      verwendet wird.
+    </p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <select id="combined-report-polar-select" style="flex:1;min-width:200px;"></select>
+      <select id="combined-report-gci-select" style="flex:1;min-width:200px;"></select>
+      <button type="button" class="job-action-btn" id="combined-report-btn">Bericht (PDF)</button>
+    </div>
+  </div>
+
+  <div class="panel">
     <form id="case-form">
       <label class="first" data-info="step_file">STEP-Datei</label>
       <input type="file" id="step_file" accept=".step,.stp" required>
@@ -1191,6 +1207,21 @@ function formatStudyDetail(study, pointsLabel) {
   return study.step_filename + " · " + done + " von " + total + " fertig · " + formatRelativeTime(study.created_at);
 }
 
+function populateStudySelect(selectId, studies) {
+  const select = document.getElementById(selectId);
+  const previousValue = select.value;
+  select.innerHTML = "";
+  for (const study of studies) {
+    const option = document.createElement("option");
+    option.value = study.id;
+    option.textContent = study.step_filename + " (" + study.id.slice(0, 8) + ")";
+    select.appendChild(option);
+  }
+  if (studies.some((s) => s.id === previousValue)) {
+    select.value = previousValue; // keep the user's choice across a poll refresh
+  }
+}
+
 async function loadPolarStudiesList() {
   const listEl = document.getElementById("polar-studies-list");
   let studies;
@@ -1202,6 +1233,8 @@ async function loadPolarStudiesList() {
   } catch (err) {
     return;
   }
+
+  populateStudySelect("combined-report-polar-select", studies);
 
   if (studies.length === 0) {
     listEl.innerHTML = "";
@@ -1282,6 +1315,8 @@ async function loadGciStudiesList() {
   } catch (err) {
     return;
   }
+
+  populateStudySelect("combined-report-gci-select", studies);
 
   if (studies.length === 0) {
     listEl.innerHTML = "";
@@ -1364,6 +1399,31 @@ loadPolarStudiesList();
 loadGciStudiesList();
 setInterval(loadPolarStudiesList, 4000);
 setInterval(loadGciStudiesList, 4000);
+
+document.getElementById("combined-report-btn").addEventListener("click", async () => {
+  const polarId = document.getElementById("combined-report-polar-select").value;
+  const gciId = document.getElementById("combined-report-gci-select").value;
+  if (!polarId || !gciId) { alert("Bitte eine Polarstudie und eine GCI-Netzstudie auswaehlen."); return; }
+  try {
+    const res = await fetch(
+      "/reports/combined?polar_study_id=" + polarId + "&gci_study_id=" + gciId,
+      { headers: authHeaders() }
+    );
+    if (res.status === 401) { reloadToRefreshToken(); return; }
+    if (!res.ok) { alert("Bericht konnte nicht erzeugt werden (" + res.status + ")."); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "combined_report.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("Bericht konnte nicht geladen werden.");
+  }
+});
 
 function getJobIdFromUrl() {
   return new URLSearchParams(window.location.search).get("job");
