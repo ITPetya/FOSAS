@@ -195,6 +195,8 @@ parallel als bekannt eingeschraenkter Fall (R10) bestehen.
 
 - Windows-spezifische Tests (Installer, Job Object/MPI-Zusammenspiel,
   WebView2) koennen in der aktuellen Linux-Entwicklungsumgebung nicht
-  durchgefuehrt werden und muessen vom Projektinhaber auf einer echten
-  Windows-Maschine uebernommen werden, sobald Phase 5 ansteht. Eine
-  Pruefliste dafuer wird zu gegebener Zeit erstellt.
+  durchgefuehrt werden und muessten vom Projektinhaber auf einer echten
+  Windows-Maschine uebernommen werden, falls der Desktop-Installer-Zweig
+  von Phase 5 begonnen wird. Zurueckgestellt (siehe DECISIONS.md
+  ADR-0018, 2026-10-06): der Projektinhaber bleibt bis auf Weiteres
+  beim Server-/Browser-Modell, dieser Punkt ist aktuell nicht relevant.

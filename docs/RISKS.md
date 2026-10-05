@@ -135,7 +135,12 @@ Community-Bericht zu Intel MPI (nicht MS-MPI) beschreibt verwaiste
 Worker-Prozesse nach taskkill auf den Hauptprozess, das ist nur ein
 Risikoindikator, keine Aussage ueber MS-MPI.
 
-Status: Offen, ungeprueft auf echtem Windows.
+Status: Offen, ungeprueft auf echtem Windows. Zurueckgestellt (siehe
+DECISIONS.md ADR-0018, 2026-10-06): betrifft ausschliesslich den
+Desktop-Installer-Zweig von Phase 5, der Projektinhaber bleibt bis auf
+Weiteres beim Server-/Browser-Modell. Nicht geloest, nur nicht aktuell
+verfolgt; bei einem spaeteren Beginn des Installer-Zweigs weiterhin
+zuerst zu klaeren.
 
 Massnahme: Job Object mit KILL_ON_JOB_CLOSE als Sicherheitsnetz einplanen,
 zusaetzlich beim geordneten Abbruch aktiv den MPI-eigenen Abbruchmechanismus
@@ -169,7 +174,10 @@ Beleg: Beide Redistributables sind offiziell zur Weitergabe vorgesehen
 EULA-Wortlaut wurde aber nur ueber Sekundaerquellen und Zusammenfassungen
 eingeschaetzt, nicht direkt aus den Installer-Paketen gelesen.
 
-Status: Offen.
+Status: Offen. Zurueckgestellt (siehe DECISIONS.md ADR-0018,
+2026-10-06): betrifft ausschliesslich den Desktop-Installer-Zweig von
+Phase 5, der Projektinhaber bleibt bis auf Weiteres beim Server-/
+Browser-Modell. Nicht geloest, nur nicht aktuell verfolgt.
 
 Massnahme: Vor dem ersten Installer-Release beide EULA-Texte aus den
 tatsaechlichen Installer-Paketen extrahieren, archivieren und in

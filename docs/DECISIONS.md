@@ -649,3 +649,55 @@ Phase-2-Umsetzung statt eines spaeteren, offenen Punkts. Ob der
 Zylinder tatsaechlich konvergiert, ist eine Annahme, nicht Gesichert,
 das wird als erster Schritt in Phase 2 ueberprueft, bevor Polaren/GCI
 darauf aufgebaut werden.
+
+## ADR-0018: Server-/Browser-basiertes Deployment bleibt das primaere Einsatzmodell, Desktop-Installer (Phase 5) zurueckgestellt
+
+Kontext: Phase 5 sah laut CLAUDE.md "Installer, Uninstaller,
+Prozessverwaltung, Servermodus, KI-Schnittstelle" vor, also sowohl eine
+eigenstaendige Windows-Desktop-Installation (lokal auf dem Rechner des
+Nutzers, mit WebView2 als eingebettete Oberflaeche und MS-MPI unter
+Windows-Prozessverwaltung) als auch den bereits produktiv genutzten
+Servermodus (Engine auf einer separaten Maschine, Zugriff per Browser,
+aktuell per Tailscale, siehe ARCHITECTURE.md "Erreichbarkeit ueber
+Tailscale"). Beide Wege waren nebeneinander vorgesehen.
+
+Der Projektinhaber hat entschieden, bei der Server-/Browser-basierten
+Variante zu bleiben: FOSAS laeuft auf einem Server (lokal oder gemietet,
+siehe R3), Zugriff ueber den Browser. Die Desktop-Installer-Variante
+(Phase 5 im urspruenglichen Sinn: eigenstaendiges Windows-Programm mit
+Installer/Uninstaller, WebView2-Oberflaeche, lokalem MS-MPI-
+Prozessmanagement) wird bewusst zurueckgestellt, nicht verworfen: kein
+Baustopp eines angefangenen Features, sondern ein Verzicht auf das
+Beginnen dieses einen Zweigs, solange kein konkreter Bedarf dafuer
+besteht.
+
+Einordnung (Gesichert, direkt aus der bisherigen Architektur): Das
+aendert nichts an bereits Gebautem. Engine und Core waren von Anfang an
+Client-Server-getrennt konzipiert (siehe ARCHITECTURE.md, R3s eigene
+Massnahme "Engine so bauen, dass sie von Anfang an auf einer separaten
+Maschine laufen kann"), die gesamte bisherige Umsetzung (Phase 1 und 2)
+lief bereits ausschliesslich im Servermodus. Phase 3 (Web-UI) und
+Phase 4 (Animation) sind im Server-/Browser-Modell ebenso umsetzbar,
+keine der beiden Phasen haengt am Installer.
+
+Konsequenzen:
+- CLAUDE.md, Phase 5: umformuliert, "Servermodus" bleibt (bereits
+  erreicht), Installer/Uninstaller/Windows-Prozessverwaltung als
+  zurueckgestellt markiert statt als zu planender Arbeitsschritt.
+- RISKS.md R2 (MS-MPI-Prozessbeendigung unter Windows Job Object) und
+  R4 (MS-MPI-/WebView2-Lizenztext): beide haengen ausschliesslich am
+  Desktop-Installer-Pfad, als zurueckgestellt markiert, nicht als
+  geloest oder aus der Liste entfernt. Sollte der Installer-Zweig
+  spaeter doch begonnen werden, sind beide weiterhin offene, zuerst zu
+  klaerende Punkte.
+- R3 (Zielhardware reicht nicht fuer "fein"/grosse Animationen) bleibt
+  unveraendert bestehen, betrifft aber ohnehin schon den Server-Fall,
+  nicht nur den lokalen Laptop.
+- OPEN_QUESTIONS.md, Abschnitt "Rollen und Zustaendigkeit"
+  (Windows-spezifische Tests): als zurueckgestellt markiert.
+
+Alternativen: Installer-Entwicklung trotzdem parallel vorbereiten
+(verworfen, kein aktueller Bedarf, haette nur Arbeitszeit ohne
+Nutzungsaussicht gebunden). Phase 5 komplett aus der Planung streichen
+(verworfen, der Projektinhaber will die Option bewusst offen halten,
+nicht endgueltig verwerfen).

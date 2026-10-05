@@ -52,7 +52,13 @@ die vorige ausdruecklich freigegeben hat.
 - Phase 3, Web-UI und Ergebnisansicht.
 - Phase 4, Animation (quasi-stationaer), Cache, Parallelisierung.
 - Phase 5, Installer, Uninstaller, Prozessverwaltung, Servermodus,
-  KI-Schnittstelle.
+  KI-Schnittstelle. Servermodus ist bereits erreicht (Phase 1/2 liefen
+  ausschliesslich so, siehe ARCHITECTURE.md "Erreichbarkeit ueber
+  Tailscale"). Der Desktop-Installer-Zweig (eigenstaendiges
+  Windows-Programm, WebView2, lokales MS-MPI-Prozessmanagement) ist
+  vom Projektinhaber am 2026-10-06 bewusst zurueckgestellt worden,
+  nicht verworfen: FOSAS bleibt bis auf Weiteres server-/
+  browserbasiert. Siehe DECISIONS.md ADR-0018.
 
 ## Projektueberblick
 
