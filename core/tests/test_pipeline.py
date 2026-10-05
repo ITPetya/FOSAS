@@ -88,6 +88,44 @@ def test_run_case_actually_uses_n_profile_points(tmp_path, monkeypatch):
     assert points_with_20 > points_with_10
 
 
+def test_run_case_passes_background_size_factors_through(tmp_path, monkeypatch):
+    """Regression test: run_case used to silently ignore
+    background_size_min_factor/background_size_max_factor, always
+    falling back to ConstantSectionMeshParams's own class defaults
+    (0.01/0.5) regardless of what CaseParams said - there was no field
+    for them on CaseParams at all. This matters for a GCI mesh study
+    (Phase 2, see docs/DECISIONS.md ADR-0017), which needs exactly this
+    knob to vary far-field/wake element density across 3 resolutions.
+    Confirmed here via the embedded Mesh.MeshSizeMin/Max values in the
+    generated .geo script, same technique as the n_profile_points test
+    above, without needing a real Gmsh/SU2 run.
+    """
+    step_path = naca0012_wing_step(tmp_path / "wing.step", chord=0.6, span=1.2, n=10)
+
+    captured = {}
+
+    def fake_run_gmsh(geo_script, output_su2_path, **kwargs):
+        captured["geo_script"] = geo_script
+        raise MeshingError("stop before actually invoking Gmsh")
+
+    monkeypatch.setattr("fosas_core.pipeline.run_gmsh", fake_run_gmsh)
+    params = CaseParams(
+        velocity=30, aoa_deg=5, background_size_min_factor=0.02, background_size_max_factor=0.8
+    )
+    with pytest.raises(PipelineError):
+        run_case(step_path, params, tmp_path / "work")
+
+    geo_script = captured["geo_script"]
+    size_max_match = re.search(r"^Mesh\.MeshSizeMax = ([0-9.eE+-]+);", geo_script, re.MULTILINE)
+    size_min_match = re.search(r"^Mesh\.MeshSizeMin = ([0-9.eE+-]+);", geo_script, re.MULTILINE)
+    assert size_max_match is not None and size_min_match is not None
+    # chord=0.6, so 0.02*0.6=0.012 and 0.8*0.6=0.48, not the defaults
+    # (0.01*0.6=0.006, 0.5*0.6=0.3) that a silently-ignored field would
+    # have produced instead.
+    assert float(size_min_match.group(1)) == pytest.approx(0.012, rel=1e-3)
+    assert float(size_max_match.group(1)) == pytest.approx(0.48, rel=1e-3)
+
+
 def test_run_case_reports_geometry_error_for_missing_file(tmp_path):
     params = CaseParams(velocity=50, aoa_deg=5)
     with pytest.raises(PipelineError) as exc_info:

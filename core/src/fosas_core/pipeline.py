@@ -97,6 +97,17 @@ class CaseParams:
     residual_column: str = "rms[P]"
     residual_threshold: float = -8.0
     time_discretization: str = "EULER_IMPLICIT"
+    # Background mesh density, as a factor of chord (see
+    # meshing.ConstantSectionMeshParams); previously always silently
+    # fixed at ConstantSectionMeshParams's own class defaults, since
+    # run_case never passed anything else through. Exposed here
+    # specifically so a GCI mesh-independence study (Phase 2, see
+    # docs/DECISIONS.md ADR-0017) can vary ONLY the far-field/wake
+    # element density across 3 runs while holding domain size and
+    # near-wall sizing (target_y_plus, growth_ratio, bl_thickness_factor)
+    # fixed, as the GCI method requires.
+    background_size_min_factor: float = 0.01
+    background_size_max_factor: float = 0.5
 
     def __post_init__(self):
         if self.velocity <= 0:
@@ -249,6 +260,8 @@ def run_case(
             thickness=params.bl_thickness_factor * chord,
         ),
         span_layers=params.span_layers,
+        background_size_min_factor=params.background_size_min_factor,
+        background_size_max_factor=params.background_size_max_factor,
     )
     mesh_path = work_dir / "mesh.su2"
     if mesh_path.exists():
