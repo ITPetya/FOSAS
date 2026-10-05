@@ -326,6 +326,125 @@ def test_create_and_poll_a_real_job(client, settings, tmp_path, gmsh_executable,
 
     assert job is not None
     assert job["status"] == "done", job
+
+
+def test_create_polar_study_rejects_empty_aoa_values(client, settings, tmp_path):
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/polar-studies",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30"},
+        )
+    assert response.status_code == 422
+
+
+def test_create_polar_study_creates_one_job_per_aoa_value(client, settings, tmp_path, monkeypatch):
+    import fosas_engine.app as app_module
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/polar-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_values": ["0", "5", "10"]},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["points"]) == 3
+    assert [p["aoa_deg"] for p in body["points"]] == [0.0, 5.0, 10.0]
+    job_ids = [p["job_id"] for p in body["points"]]
+    assert len(set(job_ids)) == 3  # three distinct, fully independent jobs
+
+    # Each AoA value's job is an ordinary job, independently visible and
+    # manageable via the existing /jobs routes (see docs/DECISIONS.md
+    # ADR-0017: reuse, not a new parallel job concept).
+    jobs_list = client.get("/jobs", headers=headers).json()
+    assert {j["id"] for j in jobs_list} == set(job_ids)
+
+
+def test_create_polar_study_rejects_invalid_params(client, settings, tmp_path):
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/polar-studies",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "0", "aoa_values": ["0"]},  # velocity must be positive
+        )
+    assert response.status_code == 422
+
+
+def test_polar_study_status_aggregates_from_constituent_jobs(client, settings, tmp_path, monkeypatch):
+    import fosas_engine.app as app_module
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/polar-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_values": ["0", "5"]},
+        )
+    study_id = response.json()["id"]
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        body = client.get(f"/polar-studies/{study_id}", headers=headers).json()
+        if body["status"] == "failed":
+            break
+        time.sleep(0.05)
+
+    assert body["status"] == "failed"  # both constituent jobs fail (fake_run_case), so the study aggregates to failed
+    assert all(p["status"] == "failed" for p in body["points"])
+
+
+def test_polar_study_not_found(client, settings):
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    assert client.get("/polar-studies/does-not-exist", headers=headers).status_code == 404
+    assert client.post("/polar-studies/does-not-exist/archive", headers=headers).status_code == 404
+    assert client.post("/polar-studies/does-not-exist/unarchive", headers=headers).status_code == 404
+    assert client.delete("/polar-studies/does-not-exist", headers=headers).status_code == 404
+
+
+def test_delete_polar_study_does_not_delete_constituent_jobs(client, settings, tmp_path, monkeypatch):
+    import fosas_engine.app as app_module
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/polar-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_values": ["0"]},
+        )
+    study_id = response.json()["id"]
+    job_id = response.json()["points"][0]["job_id"]
+
+    assert client.delete(f"/polar-studies/{study_id}", headers=headers).status_code == 200
+    assert client.get(f"/polar-studies/{study_id}", headers=headers).status_code == 404
+    # The job itself is untouched, still independently visible.
+    assert client.get(f"/jobs/{job_id}", headers=headers).status_code == 200
     assert job["result"]["cl"] != 0.0
     assert abs(job["result"]["cl"]) < 50  # catches a diverged run, not just an unrotated one
     assert abs(job["result"]["cd"]) < 50
