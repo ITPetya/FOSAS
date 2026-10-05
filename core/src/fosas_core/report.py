@@ -55,6 +55,14 @@ class ReportError(Exception):
     """A report could not be rendered (no data, or the Typst compiler itself failed)."""
 
 
+def _format_timestamp(dt: datetime) -> str:
+    """Renders e.g. "05.10.2026 19:34 UTC" instead of a raw isoformat()
+    string (which includes microseconds and a "+00:00" offset) - a
+    real, visible readability defect found during Phase 2 report
+    polish, not a change to any underlying data."""
+    return dt.strftime("%d.%m.%Y %H:%M") + f" {dt.tzname() or 'UTC'}"
+
+
 def _compile_report(template_path: Path, payload: dict[str, Any], files: dict[str, bytes]) -> bytes:
     """Shared Typst-compile step for every report kind: writes the
     template, a JSON data file, and any pre-rendered chart PNGs (keyed
@@ -103,6 +111,19 @@ class PolarReportData:
             raise ValueError("points must not be empty")
 
 
+def _disable_y_offset_notation(ax):
+    # Found during Phase 2 report polish (real generated chart,
+    # cd clustered tightly around ~13.4): matplotlib's default y-axis
+    # behaviour shows a "+1.34e1" offset annotation above the axis
+    # instead of plain numbers whenever values share a large common
+    # base - technically correct, but a real readability defect for a
+    # reader without a matplotlib background (see docs/CLAUDE.md, this
+    # project's target user is explicitly not assumed to be a CFD/
+    # software expert). Plain numbers are clearer here even though the
+    # axis span itself is small.
+    ax.ticklabel_format(axis="y", style="plain", useOffset=False)
+
+
 def _render_polar_chart_png(data: PolarReportData) -> bytes:
     plotted = [p for p in data.points if p.cl is not None and p.cd is not None]
     fig, (ax_cl, ax_cd) = plt.subplots(1, 2, figsize=(8, 3.2))
@@ -112,10 +133,12 @@ def _render_polar_chart_png(data: PolarReportData) -> bytes:
         ax_cl.set_xlabel("Anstellwinkel (Grad)")
         ax_cl.set_ylabel("cl")
         ax_cl.grid(True, alpha=0.3)
+        _disable_y_offset_notation(ax_cl)
         ax_cd.plot(aoas, [p.cd for p in plotted], marker="o", color="tab:orange")
         ax_cd.set_xlabel("Anstellwinkel (Grad)")
         ax_cd.set_ylabel("cd")
         ax_cd.grid(True, alpha=0.3)
+        _disable_y_offset_notation(ax_cd)
     fig.tight_layout()
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150)
@@ -134,7 +157,7 @@ def render_polar_report(data: PolarReportData) -> bytes:
     any_not_converged = any(p.status != "done" or p.converged is False for p in data.points)
     payload = {
         "title": data.title,
-        "generated_at": data.generated_at.isoformat(),
+        "generated_at": _format_timestamp(data.generated_at),
         "any_not_converged": any_not_converged,
         "points": [
             {"aoa_deg": p.aoa_deg, "cl": p.cl, "cd": p.cd, "status": p.status, "converged": p.converged}
@@ -210,6 +233,7 @@ def _render_gci_chart_png(data: GciReportData) -> bytes:
         # need it.
         ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=4, integer=True))
         ax.ticklabel_format(axis="x", style="plain")
+        _disable_y_offset_notation(ax)  # see its own docstring: same "+1.34e1" issue can hit cl/cd here too
 
     if plotted_cl:
         plotted_cl = sorted(plotted_cl, key=lambda lvl: lvl.element_count)
@@ -251,7 +275,7 @@ def _gci_payload(data: GciReportData) -> dict[str, Any]:
     any_level_not_done = any(lvl.status != "done" for lvl in data.levels)
     return {
         "title": data.title,
-        "generated_at": data.generated_at.isoformat(),
+        "generated_at": _format_timestamp(data.generated_at),
         "refinement_ratio": data.refinement_ratio,
         "any_level_not_done": any_level_not_done,
         "result_error": data.result_error,
@@ -309,7 +333,7 @@ def render_combined_report(data: CombinedReportData) -> bytes:
     gci_chart_png = _render_gci_chart_png(data.gci)
     any_not_converged = any(p.status != "done" or p.converged is False for p in data.polar.points)
     payload = {
-        "generated_at": data.generated_at.isoformat(),
+        "generated_at": _format_timestamp(data.generated_at),
         "polar": {
             "title": data.polar.title,
             "any_not_converged": any_not_converged,

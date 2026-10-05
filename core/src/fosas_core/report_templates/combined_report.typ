@@ -16,6 +16,10 @@
 #let polar = data.polar
 #let gci = data.gci
 
+#let fmt_num(x, digits: 4) = if x == none { "-" } else { str(calc.round(x, digits: digits)) }
+#let header_fill = rgb("#e9ecef")
+#let table_fill(col, row) = if row == 0 { header_fill } else { white }
+
 = FOSAS Kombinierter Bericht (Polare + GCI-Netzstudie)
 
 *Datei (Polare):* #polar.title \
@@ -53,13 +57,14 @@ nahe-Null-Kraftbeiwerten).
 
 #table(
   columns: 5,
+  fill: table_fill,
   [*Anstellwinkel (Grad)*], [*Status*], [*Konvergiert*], [*cl*], [*cd*],
   ..polar.points.map(p => (
     str(p.aoa_deg),
     p.status,
     if p.converged == none { "-" } else if p.converged { "ja" } else { "nein" },
-    if p.cl == none { "-" } else { str(p.cl) },
-    if p.cd == none { "-" } else { str(p.cd) },
+    fmt_num(p.cl),
+    fmt_num(p.cd),
   )).flatten()
 )
 
@@ -77,13 +82,14 @@ nahe-Null-Kraftbeiwerten).
 
 #table(
   columns: 5,
+  fill: table_fill,
   [*Aufloesung*], [*Status*], [*Elemente*], [*cl*], [*cd*],
   ..gci.levels.map(l => (
     l.resolution,
     l.status,
     if l.element_count == none { "-" } else { str(l.element_count) },
-    if l.cl == none { "-" } else { str(l.cl) },
-    if l.cd == none { "-" } else { str(l.cd) },
+    fmt_num(l.cl),
+    fmt_num(l.cd),
   )).flatten()
 )
 
@@ -99,6 +105,7 @@ nahe-Null-Kraftbeiwerten).
 ] else [
   #table(
     columns: 2,
+    fill: table_fill,
     [*cl*], [#gci.cl_metric.message],
     [*cd*], [#gci.cd_metric.message],
   )

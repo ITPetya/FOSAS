@@ -14,6 +14,13 @@
 
 #let data = json("/data.json")
 
+// Gerundete Anzeige statt roher Fliesskommazahlen (Feinschliff, Phase
+// 2): rundet nur fuer die Darstellung, die zugrunde liegenden Werte in
+// data.json bleiben unveraendert/unverkuerzt.
+#let fmt_num(x, digits: 4) = if x == none { "-" } else { str(calc.round(x, digits: digits)) }
+#let header_fill = rgb("#e9ecef")
+#let table_fill(col, row) = if row == 0 { header_fill } else { white }
+
 = FOSAS Polarenbericht
 
 *Datei:* #data.title \
@@ -41,12 +48,13 @@ Risiken, siehe docs/RISKS.md).
 
 #table(
   columns: 5,
+  fill: table_fill,
   [*Anstellwinkel (Grad)*], [*Status*], [*Konvergiert*], [*cl*], [*cd*],
   ..data.points.map(p => (
     str(p.aoa_deg),
     p.status,
     if p.converged == none { "-" } else if p.converged { "ja" } else { "nein" },
-    if p.cl == none { "-" } else { str(p.cl) },
-    if p.cd == none { "-" } else { str(p.cd) },
+    fmt_num(p.cl),
+    fmt_num(p.cd),
   )).flatten()
 )
