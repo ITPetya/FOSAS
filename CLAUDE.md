@@ -52,7 +52,14 @@ die vorige ausdruecklich freigegeben hat.
   erster Politur-Runde) am 2026-10-06 abgeschlossen.
 - Phase 3, Web-UI und Ergebnisansicht. Vom Projektinhaber am
   2026-10-06 freigegeben, Schwerpunktsetzung dem Assistenten
-  ueberlassen ("meine Einschaetzung nutzen").
+  ueberlassen ("meine Einschaetzung nutzen"). Schritt 1 (echte
+  Formulare fuer Polaren-/GCI-Studien, Inline-Diagramme, `app.js`
+  ausgelagert) am 2026-10-05 umgesetzt und gegen eine echte lokale
+  Engine verifiziert; echter Browser-Klicktest durch den
+  Projektinhaber steht noch aus. Zusaetzliche Anforderung
+  "Technische-Mechanik-Visualisierung" (Kraft-/Momentensystem,
+  Freikoerperbild) vom Projektinhaber am 2026-10-05 gestellt, als
+  Backlog mit Einordnung siehe ARCHITECTURE.md.
 - Phase 4, Animation (quasi-stationaer), Cache, Parallelisierung.
 - Phase 5, Installer, Uninstaller, Prozessverwaltung, Servermodus,
   KI-Schnittstelle. Servermodus ist bereits erreicht (Phase 1/2 liefen
