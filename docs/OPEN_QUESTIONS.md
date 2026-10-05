@@ -127,7 +127,29 @@ laufende Produktions-Engine auf dem AWS-Server verifiziert:
   tatsaechlich installierten Version 0.15.0 nicht, direkt am
   Paket-eigenen Type-Stub und mit einem echten Testlauf auf dem
   AWS-Server nachgewiesen, bevor Code darauf aufgebaut wurde.
-  Weiterhin offen: GCI-Abschnitt im Bericht, mehrere Studien/Faelle,
+  Update (2026-10-05, direkt im Anschluss): GCI-Abschnitt im Bericht
+  ergaenzt, zweiter Berichtstyp `render_gci_report` (cl/cd-ueber-
+  Elementanzahl-Diagramm, Netzstufen-Tabelle, GCI-Kennzahlen fuer cl
+  und cd), neue Route `GET /gci-studies/{id}/report`, Download-Knopf in
+  der GUI. Damit deckt der Bericht jetzt beide in ARCHITECTURE.md
+  (Zeile 185) genannten V1-Bestandteile ab ("Typst-Bericht mit
+  GCI-Netzstudie"). Offenlegungsprinzip konsequent weitergefuehrt: eine
+  fehlgeschlagene/fehlende Netzstufe, ein `result_error` aus einer
+  gescheiterten GCI-Berechnung und oszillierende Konvergenz werden im
+  Bericht sichtbar markiert, nicht versteckt.
+  Dabei ein echter, per visueller Pruefung des generierten Berichts
+  gefundener Darstellungsfehler behoben: eine logarithmische x-Achse
+  (der Lehrbuch-Standard fuer Netzkonvergenzdiagramme) war fuer dieses
+  Projekts eigene Daten aktiv falsch, weil die ueblichen
+  Verfeinerungsverhaeltnisse (1,2 bis 1,5) die Elementanzahl nur um
+  weniger als das Doppelte veraendern: matplotlibs Standard-Log-Ticker
+  erzeugte entweder ueberlappende, unlesbare Beschriftungen oder (nach
+  Einschraenkung) gar keine Beschriftung. Auf eine lineare Achse
+  umgestellt, am echten Bericht erneut geprueft.
+  Mit beiden heute real abgeschlossenen Studien (Polare `1038c8e2...`,
+  GCI-Studie `8a05c2ab...`) gegen die laufende Produktions-Engine
+  erzeugt und als echte PDFs heruntergeladen.
+  Weiterhin offen: mehrere Studien/Faelle in einem Bericht,
   Vorlagenlayout-Feinschliff, Pruefung der Windows-Wheel-Verfuegbarkeit
   fuer `typst` (R3, in dieser Linux-Sandbox nicht pruefbar), jegliche
   Visualisierung der Polaren-/GCI-Ergebnisse in der GUI ueber eine
