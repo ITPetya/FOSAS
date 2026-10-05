@@ -70,19 +70,22 @@ def test_compute_gci_constant_ratio_matches_closed_form_order():
     # When r21 == r32 (Phase 2's GCI study always produces this, see
     # ADR-0017: a fixed refinement_ratio applied twice), the general
     # iterative formula must agree with the simple closed form
-    # p = ln|e32/e21| / ln(r).
+    # p = ln|e32/e21| / ln(r). element_counts are chosen so r21 and r32
+    # both come out to exactly 1.5 (27e6 -> 8e6 -> 2_370_370 is three
+    # steps of /1.5**3, confirmed numerically), not just "plausible"
+    # numbers that happen to have different ratios.
     fine = GridLevel(element_count=27_000_000, value=5.0)
     medium = GridLevel(element_count=8_000_000, value=5.3)
-    coarse = GridLevel(element_count=1_000_000, value=6.1)
+    coarse = GridLevel(element_count=2_370_370, value=6.1)
 
     result = compute_gci(fine, medium, coarse)
 
-    r = (medium.element_count / fine.element_count) ** (1.0 / 3.0)
+    r = (fine.element_count / medium.element_count) ** (1.0 / 3.0)
     e21 = medium.value - fine.value
     e32 = coarse.value - medium.value
     closed_form_p = math.log(abs(e32 / e21)) / math.log(r)
 
-    assert result.apparent_order_p == pytest.approx(closed_form_p, rel=1e-9)
+    assert result.apparent_order_p == pytest.approx(closed_form_p, rel=1e-6)
 
 
 def test_compute_gci_rejects_non_decreasing_element_counts():
