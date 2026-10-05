@@ -69,10 +69,21 @@
   GitHub-Repos gelesen), keine GPL-Problematik wie bei Gmsh (ADR-0002),
   kein externer Systemdienst/Binary-Download durch den Nutzer noetig,
   einfache `typst.compile(...)`-API. Das waere der naheliegende Weg fuer
-  die PDF-Berichtserzeugung in Phase 2. Nicht geprueft: ob die
-  Python-Anbindung auf der Zielhardware (Windows, siehe R3/CLAUDE.md)
-  ueberhaupt ein vorgefertigtes Wheel hat oder dort selbst kompiliert
-  werden muesste.
+  die PDF-Berichtserzeugung in Phase 2.
+  Update (2026-10-06, Gesichert, direkt aus PyPIs eigener JSON-API
+  gelesen, `pypi.org/pypi/typst/json` bzw. `.../matplotlib/json`):
+  Sowohl `typst` 0.15.0 als auch `matplotlib` 3.11.2 (die inzwischen
+  als Abhaengigkeit fuer die Berichtserzeugung ergaenzte Diagramm-
+  Bibliothek, siehe `fosas_core.report`) stellen fertige
+  `win_amd64`-Wheels bereit (`typst-0.15.0-cp38-abi3-win_amd64.whl`,
+  mehrere `matplotlib-3.11.2-cp31x-win_amd64.whl` je Python-Version),
+  kein Kompilieren auf der Zielhardware noetig. Das beantwortet nur die
+  Installierbarkeit (Wheel vorhanden), nicht die tatsaechliche
+  Lauffaehigkeit auf echtem Windows (z. B. Schriftdarstellung,
+  Dateipfad-Handling) - das bleibt ungeprueft, siehe R3, ist aber durch
+  ADR-0018 (Desktop-Zweig zurueckgestellt) ohnehin nicht mehr dringend:
+  der Server, auf dem die Engine tatsaechlich laeuft, ist aktuell
+  Linux, nicht Windows.
 - Phase 2 ist laut CLAUDE.md mehr als nur ein PDF-Bericht fuer einen
   Einzelfall: "Polaren, Netzstudie mit GCI, Bericht". Polaren bedeuten
   mehrere Zustaende (z. B. eine Anstellwinkel-Sweep-Reihe), nicht nur
@@ -160,14 +171,28 @@ laufende Produktions-Engine auf dem AWS-Server verifiziert:
   GUI-Abschnitt mit zwei Auswahllisten plus Download-Knopf. Mit den
   beiden echten, heute abgeschlossenen Zylinder-Studien gegen die
   laufende Produktions-Engine erzeugt (echtes 2-seitiges PDF, 115 KB).
-  Weiterhin offen: Vorlagenlayout-Feinschliff, Pruefung der
-  Windows-Wheel-Verfuegbarkeit fuer `typst` (R3, in dieser
-  Linux-Sandbox nicht pruefbar), jegliche Visualisierung der
+  Update (2026-10-06): Windows-Wheel-Verfuegbarkeit fuer `typst` UND
+  `matplotlib` direkt per PyPI-JSON-API geprueft (Gesichert, siehe
+  Eintrag weiter oben): beide haben fertige `win_amd64`-Wheels,
+  Installierbarkeit also kein Risiko mehr (tatsaechliche Lauffaehigkeit
+  auf echtem Windows bleibt dennoch ungeprueft, aber durch ADR-0018
+  ohnehin nicht mehr dringend). Vorlagenlayout-Feinschliff umgesetzt:
+  gerundete Tabellenwerte statt roher Fliesskommazahlen, lesbarer
+  Zeitstempel statt rohem ISO-String, hervorgehobene Tabellenkoepfe in
+  allen drei Berichtstypen, matplotlibs verwirrende Versatznotation
+  ("+1.34e1") auf den Diagrammen abgeschaltet (echter, per visueller
+  Pruefung gefundener Lesbarkeits-Mangel fuer eine Zielgruppe ohne
+  matplotlib-Hintergrund).
+  Bewusst zurueckgestellt (kein konkreter Bedarf, Phase 3 ersetzt die
+  jetzige Testoberflaeche ohnehin): jegliche Visualisierung der
   Polaren-/GCI-Ergebnisse in der GUI ueber eine minimale Listenansicht
   plus PDF-Download-Knopf hinaus, Vergleich mehrerer unabhaengiger
   Polarstudien (z. B. verschiedene Geometrievarianten) in einem
-  Bericht (anderer Anwendungsfall als die hier umgesetzte
+  Bericht (anderer Anwendungsfall als die bereits umgesetzte
   Polare+GCI-Kombination derselben Geometrie, noch nicht entworfen).
+  Damit ist die Phase-2-Politur-Runde abgeschlossen, Fortsetzung mit
+  Phase 3 (Web-UI und Ergebnisansicht, vom Projektinhaber am
+  2026-10-06 freigegeben).
 
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 

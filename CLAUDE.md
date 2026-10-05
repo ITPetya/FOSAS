@@ -48,8 +48,11 @@ die vorige ausdruecklich freigegeben hat.
   Referenzdaten validiert (R10, siehe RISKS.md, Entscheidung siehe
   DECISIONS.md ADR-0016).
 - Phase 2, Polaren, Netzstudie mit GCI, Bericht. Vom Projektinhaber am
-  2026-10-04 freigegeben, aktuell in Arbeit.
-- Phase 3, Web-UI und Ergebnisansicht.
+  2026-10-04 freigegeben, Kernumfang (alle drei Bestandteile, inklusive
+  erster Politur-Runde) am 2026-10-06 abgeschlossen.
+- Phase 3, Web-UI und Ergebnisansicht. Vom Projektinhaber am
+  2026-10-06 freigegeben, Schwerpunktsetzung dem Assistenten
+  ueberlassen ("meine Einschaetzung nutzen").
 - Phase 4, Animation (quasi-stationaer), Cache, Parallelisierung.
 - Phase 5, Installer, Uninstaller, Prozessverwaltung, Servermodus,
   KI-Schnittstelle. Servermodus ist bereits erreicht (Phase 1/2 liefen
