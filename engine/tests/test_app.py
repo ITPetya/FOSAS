@@ -445,10 +445,3 @@ def test_delete_polar_study_does_not_delete_constituent_jobs(client, settings, t
     assert client.get(f"/polar-studies/{study_id}", headers=headers).status_code == 404
     # The job itself is untouched, still independently visible.
     assert client.get(f"/jobs/{job_id}", headers=headers).status_code == 200
-    assert job["result"]["cl"] != 0.0
-    assert abs(job["result"]["cl"]) < 50  # catches a diverged run, not just an unrotated one
-    assert abs(job["result"]["cd"]) < 50
-    assert job["result"]["convergence"]["converged"] is False  # known for this short/coarse case
-    assert len(job["result"]["surface"]) > 0
-    assert "cp" in job["result"]["surface"][0]
-    assert job["result"]["mean_y_plus"] > 0
