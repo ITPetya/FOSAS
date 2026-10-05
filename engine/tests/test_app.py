@@ -596,3 +596,46 @@ def test_polar_study_report_returns_a_real_pdf_even_when_every_point_failed(clie
     assert report_response.status_code == 200
     assert report_response.headers["content-type"] == "application/pdf"
     assert report_response.content.startswith(b"%PDF")
+
+
+def test_gci_study_report_not_found(client, settings):
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    assert client.get("/gci-studies/does-not-exist/report", headers=headers).status_code == 404
+
+
+def test_gci_study_report_returns_a_real_pdf_even_when_every_level_failed(client, settings, tmp_path, monkeypatch):
+    # Same reasoning as the polar report's equivalent test: exercises
+    # the real route -> GciStudyOut -> GciReportData ->
+    # fosas_core.report.render_gci_report -> real typst.compile chain,
+    # using the all-failed case since core/tests/test_report.py already
+    # proves the full-result and result-error paths work.
+    import fosas_engine.app as app_module
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/gci-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_deg": "5"},
+        )
+    study_id = response.json()["id"]
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        body = client.get(f"/gci-studies/{study_id}", headers=headers).json()
+        if body["status"] == "failed":
+            break
+        time.sleep(0.05)
+    assert body["status"] == "failed"
+
+    report_response = client.get(f"/gci-studies/{study_id}/report", headers=headers)
+    assert report_response.status_code == 200
+    assert report_response.headers["content-type"] == "application/pdf"
+    assert report_response.content.startswith(b"%PDF")

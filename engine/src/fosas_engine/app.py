@@ -23,7 +23,16 @@ from fastapi import Depends, FastAPI, Form, Header, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
-from fosas_core.report import PolarReportData, PolarReportPoint, ReportError, render_polar_report
+from fosas_core.report import (
+    GciReportData,
+    GciReportLevel,
+    GciReportMetric,
+    PolarReportData,
+    PolarReportPoint,
+    ReportError,
+    render_gci_report,
+    render_polar_report,
+)
 
 from fosas_engine.gci_studies import GciStudyStore, new_gci_study_id
 from fosas_engine.jobs import Job, JobNotArchivableError, JobNotDeletableError, JobNotResumableError, JobStore, new_job_id
@@ -420,6 +429,52 @@ def create_app(settings: Settings) -> FastAPI:
             raise HTTPException(status_code=404, detail="No such GCI study")
         app.state.gci_studies.delete(study_id)
         return {"deleted": study_id}
+
+    @app.get("/gci-studies/{study_id}/report", dependencies=[Depends(require_token)])
+    def get_gci_study_report(study_id: str):
+        study = app.state.gci_studies.get(study_id)
+        if study is None:
+            raise HTTPException(status_code=404, detail="No such GCI study")
+        study_out = GciStudyOut.from_study(study, app.state.jobs)
+
+        levels = tuple(
+            GciReportLevel(
+                resolution=lvl.resolution, element_count=lvl.element_count, cl=lvl.cl, cd=lvl.cd, status=lvl.status
+            )
+            for lvl in study_out.levels
+        )
+
+        def to_metric(metric_out) -> GciReportMetric | None:
+            if metric_out is None:
+                return None
+            return GciReportMetric(
+                r21=metric_out.r21,
+                apparent_order_p=metric_out.apparent_order_p,
+                extrapolated_value=metric_out.extrapolated_value,
+                gci_fine_percent=metric_out.gci_fine_percent,
+                oscillatory=metric_out.oscillatory,
+                message=metric_out.message,
+            )
+
+        report_data = GciReportData(
+            title=study_out.step_filename,
+            generated_at=datetime.now(timezone.utc),
+            refinement_ratio=study_out.refinement_ratio,
+            levels=levels,
+            cl_metric=to_metric(study_out.result.cl if study_out.result else None),
+            cd_metric=to_metric(study_out.result.cd if study_out.result else None),
+            result_error=study_out.result_error,
+        )
+        try:
+            pdf_bytes = render_gci_report(report_data)
+        except ReportError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="gci_report_{study_id}.pdf"'},
+        )
 
     @app.exception_handler(PipelineError)
     def _unhandled_pipeline_error(request, exc: PipelineError):
