@@ -108,10 +108,30 @@ laufende Produktions-Engine auf dem AWS-Server verifiziert:
   grossen Netz nochmals verfeinert wird. Noch nicht umgesetzt: eine
   automatische Warnung oder Speicherabschaetzung vor dem Start einer
   GCI-Studie.
-  Noch nicht begonnen: der Typst-Bericht selbst (bewusst als eigene,
-  spaetere Runde sequenziert) und jegliche Visualisierung der
-  Polaren-/GCI-Ergebnisse in der GUI ueber eine minimale Listenansicht
-  hinaus.
+  Update (2026-10-05): Ein erster Typst-Bericht ist jetzt umgesetzt und
+  echt verifiziert (`fosas_core.report`, `GET /polar-studies/{id}/
+  report`): ein Diagramm (cl/cd ueber Anstellwinkel, per matplotlib als
+  PNG vorgerendert, nicht ueber ein Typst-eigenes Plot-Paket, siehe
+  Begruendung im Modul-Docstring), eine Tabelle mit Status/Konvergenz
+  pro Punkt, sichtbarer Warnhinweis bei mindestens einem nicht
+  konvergierten/fehlgeschlagenen Punkt. Bewusst klein gehalten: nur
+  eine einzelne Polare, keine GCI-Daten (ARCHITECTURE.md nennt
+  "Typst-Bericht mit GCI-Netzstudie" als bestaetigten V1-Gesamtumfang,
+  das ist also eine spaetere Erweiterung dieses Berichts, keine
+  abweichende Entscheidung). Mit der echten, heute abgeschlossenen
+  3-Punkte-Zylinder-Polare erzeugt und visuell begutachtet (reales PDF,
+  67 KB, alle drei Punkte konvergiert, keine Falschdarstellung). Dabei
+  ein eigener Planungsfehler noch vor der Umsetzung gefunden und
+  korrigiert: die per Websuche angenommene `typst.compile`-API (ein
+  Dict mit mehreren benannten Dateien als Eingabe) existiert in der
+  tatsaechlich installierten Version 0.15.0 nicht, direkt am
+  Paket-eigenen Type-Stub und mit einem echten Testlauf auf dem
+  AWS-Server nachgewiesen, bevor Code darauf aufgebaut wurde.
+  Weiterhin offen: GCI-Abschnitt im Bericht, mehrere Studien/Faelle,
+  Vorlagenlayout-Feinschliff, Pruefung der Windows-Wheel-Verfuegbarkeit
+  fuer `typst` (R3, in dieser Linux-Sandbox nicht pruefbar), jegliche
+  Visualisierung der Polaren-/GCI-Ergebnisse in der GUI ueber eine
+  minimale Listenansicht plus PDF-Download-Knopf hinaus.
 
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 
