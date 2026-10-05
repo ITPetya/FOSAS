@@ -152,6 +152,9 @@
   .job-row .job-meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
   .jobs-empty { font-size: 0.85rem; color: var(--muted); }
   .jobs-header { display: flex; align-items: center; justify-content: space-between; }
+  .study-detail-table { width: 100%; border-collapse: collapse; margin: -4px 0 10px; font-size: 0.8rem; }
+  .study-detail-table th, .study-detail-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  .study-detail-table th { color: var(--muted); font-weight: 600; }
   .archive-toggle-btn {
     margin: 0; width: auto; background: transparent; border: 1px solid var(--border);
     color: var(--muted); padding: 6px 14px; font-size: 0.8rem; border-radius: 999px;
@@ -215,6 +218,30 @@
       endgueltig geloescht.
     </p>
     <div id="jobs-list"></div>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin:0 0 6px;font-size:1.1rem;">Polarstudien</h2>
+    <p class="hint" style="margin:6px 0 10px;">
+      Nur-Lese-Ansicht (Phase 2). Erstellung aktuell nur ueber
+      <code>POST /polar-studies</code>, z. B. per <a href="/docs" target="_blank">/docs</a>.
+      Jeder Anstellwinkel ist ein eigenstaendiger, unabhaengiger Auftrag
+      (siehe docs/DECISIONS.md ADR-0017); Loeschen einer Studie loescht
+      nicht die zugehoerigen Auftraege.
+    </p>
+    <div id="polar-studies-list"></div>
+  </div>
+
+  <div class="panel">
+    <h2 style="margin:0 0 6px;font-size:1.1rem;">GCI-Netzstudien</h2>
+    <p class="hint" style="margin:6px 0 10px;">
+      Nur-Lese-Ansicht (Phase 2). Erstellung aktuell nur ueber
+      <code>POST /gci-studies</code>, z. B. per <a href="/docs" target="_blank">/docs</a>.
+      Drei Netzaufloesungen (fein/mittel/grob), Ergebnis erscheint erst
+      wenn alle drei fertig sind, siehe docs/RISKS.md R20 zur
+      Interpretierbarkeit bei nahe-Null-Kraftbeiwerten.
+    </p>
+    <div id="gci-studies-list"></div>
   </div>
 
   <div class="panel">
@@ -1121,6 +1148,167 @@ async function loadJobsList() {
 
 loadJobsList();
 setInterval(loadJobsList, 4000);
+
+function statusDotClass(status) {
+  // Same four-value status space as a Job (see jobs.JobStatus), reused
+  // as-is for both study kinds' aggregate status.
+  return "job-status-dot " + status;
+}
+
+function statusLabelText(status) {
+  // A simpler sibling of statusLabel(job) above: polar/GCI points and
+  // levels only carry a bare status string, not a full Job with its
+  // own progress sub-object, so the "running (NN%)" detail statusLabel
+  // renders for a job is not available here.
+  if (status === "running") return "laeuft";
+  return { pending: "wartet", done: "fertig", failed: "fehlgeschlagen" }[status] || status;
+}
+
+function formatStudyRow(title, status, detailText, onToggle) {
+  const row = document.createElement("div");
+  row.className = "job-row";
+  const dot = document.createElement("span");
+  dot.className = statusDotClass(status);
+  const main = document.createElement("div");
+  main.className = "job-main";
+  const titleEl = document.createElement("div");
+  titleEl.className = "job-file";
+  titleEl.textContent = title; // textContent: title may embed a user-supplied filename
+  const metaEl = document.createElement("div");
+  metaEl.className = "job-meta";
+  metaEl.textContent = detailText;
+  main.appendChild(titleEl);
+  main.appendChild(metaEl);
+  row.appendChild(dot);
+  row.appendChild(main);
+  row.addEventListener("click", onToggle);
+  return row;
+}
+
+function formatStudyDetail(study, pointsLabel) {
+  const total = study[pointsLabel].length;
+  const done = study[pointsLabel].filter((p) => p.status === "done").length;
+  return study.step_filename + " · " + done + " von " + total + " fertig · " + formatRelativeTime(study.created_at);
+}
+
+async function loadPolarStudiesList() {
+  const listEl = document.getElementById("polar-studies-list");
+  let studies;
+  try {
+    const res = await fetch("/polar-studies", { headers: authHeaders() });
+    if (res.status === 401) { reloadToRefreshToken(); return; }
+    if (!res.ok) return;
+    studies = await res.json();
+  } catch (err) {
+    return;
+  }
+
+  if (studies.length === 0) {
+    listEl.innerHTML = "";
+    const empty = document.createElement("p");
+    empty.className = "jobs-empty";
+    empty.textContent = "Noch keine Polarstudien.";
+    listEl.appendChild(empty);
+    return;
+  }
+
+  studies.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  listEl.innerHTML = "";
+  for (const study of studies) {
+    const expanded = expandedStudies.has(study.id);
+    const row = formatStudyRow(study.step_filename, study.status, formatStudyDetail(study, "points"), () => {
+      expandedStudies.has(study.id) ? expandedStudies.delete(study.id) : expandedStudies.add(study.id);
+      loadPolarStudiesList();
+    });
+    listEl.appendChild(row);
+    if (expanded) {
+      const table = document.createElement("table");
+      table.className = "study-detail-table";
+      const header = table.insertRow();
+      ["AoA (Grad)", "Status", "cl", "cd"].forEach((text) => {
+        const th = document.createElement("th");
+        th.textContent = text;
+        header.appendChild(th);
+      });
+      for (const point of study.points) {
+        const tr = table.insertRow();
+        [point.aoa_deg, statusLabelText(point.status), point.cl, point.cd].forEach((value) => {
+          const td = tr.insertCell();
+          td.textContent = value === null || value === undefined ? "-" : value;
+        });
+      }
+      listEl.appendChild(table);
+    }
+  }
+}
+
+async function loadGciStudiesList() {
+  const listEl = document.getElementById("gci-studies-list");
+  let studies;
+  try {
+    const res = await fetch("/gci-studies", { headers: authHeaders() });
+    if (res.status === 401) { reloadToRefreshToken(); return; }
+    if (!res.ok) return;
+    studies = await res.json();
+  } catch (err) {
+    return;
+  }
+
+  if (studies.length === 0) {
+    listEl.innerHTML = "";
+    const empty = document.createElement("p");
+    empty.className = "jobs-empty";
+    empty.textContent = "Noch keine GCI-Netzstudien.";
+    listEl.appendChild(empty);
+    return;
+  }
+
+  studies.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  listEl.innerHTML = "";
+  for (const study of studies) {
+    const expanded = expandedStudies.has(study.id);
+    const row = formatStudyRow(study.step_filename, study.status, formatStudyDetail(study, "levels"), () => {
+      expandedStudies.has(study.id) ? expandedStudies.delete(study.id) : expandedStudies.add(study.id);
+      loadGciStudiesList();
+    });
+    listEl.appendChild(row);
+    if (expanded) {
+      const table = document.createElement("table");
+      table.className = "study-detail-table";
+      const header = table.insertRow();
+      ["Aufloesung", "Status", "Elemente", "cl", "cd"].forEach((text) => {
+        const th = document.createElement("th");
+        th.textContent = text;
+        header.appendChild(th);
+      });
+      for (const level of study.levels) {
+        const tr = table.insertRow();
+        [level.resolution, statusLabelText(level.status), level.element_count, level.cl, level.cd].forEach((value) => {
+          const td = tr.insertCell();
+          td.textContent = value === null || value === undefined ? "-" : value;
+        });
+      }
+      listEl.appendChild(table);
+      if (study.result) {
+        const resultEl = document.createElement("p");
+        resultEl.className = "hint";
+        resultEl.textContent = "cl: " + study.result.cl.message + " / cd: " + study.result.cd.message;
+        listEl.appendChild(resultEl);
+      } else if (study.result_error) {
+        const errEl = document.createElement("p");
+        errEl.className = "hint";
+        errEl.textContent = "GCI konnte nicht berechnet werden: " + study.result_error;
+        listEl.appendChild(errEl);
+      }
+    }
+  }
+}
+
+const expandedStudies = new Set();
+loadPolarStudiesList();
+loadGciStudiesList();
+setInterval(loadPolarStudiesList, 4000);
+setInterval(loadGciStudiesList, 4000);
 
 function getJobIdFromUrl() {
   return new URLSearchParams(window.location.search).get("job");

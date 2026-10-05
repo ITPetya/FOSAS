@@ -1322,3 +1322,35 @@ Status: Nicht behoben, nur dokumentiert. Eine vollstaendige Loesung
 im `job_meta.json`, die bei Abweichung ein Neuvernetzen erzwingt) ist im
 Verhaeltnis zur seltenen, schmalen Zeitfenster-Natur des Problems noch
 nicht umgesetzt worden.
+
+## R20: GCI-Kennzahl fuer eine physikalisch nahe-Null-Groesse ist mathematisch korrekt, aber nicht sinnvoll interpretierbar
+
+Beleg (Gesichert, eigener End-zu-Ende-Test der neuen GCI-Netzstudie,
+siehe Phase 2 Milestone 2): Eine echte Drei-Netz-GCI-Studie am
+Low-Re-Zylinder (AoA=0 Grad, Verfeinerungsverhaeltnis 1,2) lieferte fuer
+cd ein plausibles Ergebnis (scheinbare Konvergenzordnung p=1,51, GCI
+29,8 Prozent, extrapolierter Wert 17,74), aber fuer cl ein formal
+korrekt berechnetes, praktisch unbrauchbares Ergebnis (p=5,28, GCI 330
+Prozent). Ursache: Bei einem symmetrischen Kreisquerschnitt bei 0 Grad
+Anstellwinkel ist cl aus Symmetriegruenden physikalisch nahe null (hier
+gemessen: 0,0020 bis 0,0113 ueber die drei Aufloesungen), die Werte
+unterscheiden sich also fast nur durch numerisches Rauschen, nicht durch
+einen echten, systematischen Diskretisierungstrend. Die GCI-Formel
+teilt durch den Fein-Netz-Wert (`approximate_relative_error = |e21/f1|`),
+was bei einem nahe-Null-Nenner beliebig grosse, nicht aussagekraeftige
+Prozentwerte erzeugt, obwohl `fosas_core.gci.compute_gci` selbst korrekt
+rechnet (keine Programmierfehler, reine Eigenschaft der Formel bei
+diesem Grenzfall).
+
+Einordnung: Kein Fehler in `fosas_core.gci`, sondern eine bekannte
+Grenze der GCI-Methode selbst bei Kennzahlen, die nahe null liegen. Fuer
+die Praxis bedeutet das: eine GCI-Studie an einem symmetrischen Testfall
+bei einem Anstellwinkel, der eine der beiden Kraftbeiwerte physikalisch
+auf nahe null zwingt (wie hier cl bei 0 Grad), sollte diese eine
+Kennzahl nicht als belastbare Aussage behandeln, auch wenn die andere
+(hier cd) sinnvoll bleibt. Keine Code-Aenderung vorgenommen: das
+Verschleiern eines nahe-Null-Nenners durch einen willkuerlichen
+Schwellwert waere selbst eine Form von Schoenrechnen, siehe CLAUDE.md.
+Spaeter denkbare Ergaenzung, nicht umgesetzt: die GCI-Ausgabe koennte
+zusaetzlich auf eine Mindestgroesse des Nenners relativ zur
+Aufloesungsaenderung hinweisen, ohne das Ergebnis selbst zu veraendern.

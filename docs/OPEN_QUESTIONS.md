@@ -81,6 +81,38 @@
   also von beiden anderen Teilen ab (ein Bericht ueber eine Polare
   braucht mehrere Einzelrechnungen, keine neue Einzelrechnung).
 
+Status (2026-10-05): Milestone 0 (Low-Re-Zylinder konvergiert, siehe
+ADR-0017), Milestone 1 (Polaren-Sweep, `POST /polar-studies` und
+zugehoerige Routen) und Milestone 2 (GCI-Netzstudie, `POST /gci-studies`,
+`fosas_core.gci`) sind umgesetzt, automatisiert getestet (57 core- und
+59 engine-Tests, alle gruen) und je einmal echt end-to-end gegen die
+laufende Produktions-Engine auf dem AWS-Server verifiziert:
+- Polaren-Sweep (AoA 0/15/30 Grad am Zylinder): cl blieb bei allen drei
+  Winkeln nahe null (0,0110 bis 0,0112), cd praktisch konstant (13,399
+  bis 13,403), exakt die erwartete Rotationssymmetrie eines Kreises.
+- GCI-Studie (Verfeinerungsverhaeltnis 1,2, drei echte SU2-Laeufe mit
+  1,36/1,77/2,42 Mio. Elementen): lief fehlerfrei durch, lieferte fuer
+  cd eine plausible GCI-Kennzahl (p=1,51, 29,8 Prozent), fuer cl eine
+  formal korrekte, aber wegen eines nahe-Null-Nenners nicht
+  interpretierbare Kennzahl, siehe RISKS.md R20.
+- Ein erster GCI-Versuch mit Verfeinerungsverhaeltnis 1,5 und implizitem
+  Zeitschema fuehrte beim feinsten Netz (4,9 Mio. Elemente) zu einem
+  Speicherueberlauf auf der kleinen AWS-Testmaschine (7,6 GB RAM), siehe
+  R10 zum generellen Speicherbedarf des impliziten Schemas bei grossen
+  Netzen. Kein Fehler in der neuen GCI-Logik selbst (das Scheitern eines
+  einzelnen Jobs wird korrekt als "failed" aggregiert, ohne die
+  GCI-Berechnung fehlerhaft auf unvollstaendige Daten anzuwenden), aber
+  eine reale Ressourcengrenze: ein Nutzer mit wenig verfuegbarem
+  Speicher sollte ein moderates Verfeinerungsverhaeltnis und/oder das
+  explizite Zeitschema waehlen, bevor eine GCI-Studie an einem bereits
+  grossen Netz nochmals verfeinert wird. Noch nicht umgesetzt: eine
+  automatische Warnung oder Speicherabschaetzung vor dem Start einer
+  GCI-Studie.
+  Noch nicht begonnen: der Typst-Bericht selbst (bewusst als eigene,
+  spaetere Runde sequenziert) und jegliche Visualisierung der
+  Polaren-/GCI-Ergebnisse in der GUI ueber eine minimale Listenansicht
+  hinaus.
+
 ## Fachlich/Nutzerseitig, noch nicht final entschieden
 
 - Variante C der Sim-Box-Funktion (eingebettete Rechnung mit uebertragenen
