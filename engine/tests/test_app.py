@@ -445,3 +445,108 @@ def test_delete_polar_study_does_not_delete_constituent_jobs(client, settings, t
     assert client.get(f"/polar-studies/{study_id}", headers=headers).status_code == 404
     # The job itself is untouched, still independently visible.
     assert client.get(f"/jobs/{job_id}", headers=headers).status_code == 200
+
+
+def test_create_gci_study_rejects_invalid_refinement_ratio(client, settings, tmp_path):
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/gci-studies",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_deg": "5", "refinement_ratio": "1.0"},  # must be > 1.0
+        )
+    assert response.status_code == 422
+
+
+def test_create_gci_study_rejects_invalid_params(client, settings, tmp_path):
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/gci-studies",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "0", "aoa_deg": "5"},  # velocity must be positive
+        )
+    assert response.status_code == 422
+
+
+def test_create_gci_study_creates_three_jobs_with_decreasing_background_size_factors(client, settings, tmp_path, monkeypatch):
+    import fosas_engine.app as app_module
+
+    captured_params = []
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        captured_params.append(params)
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/gci-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_deg": "5", "refinement_ratio": "1.5"},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["levels"]) == 3
+    assert [lvl["resolution"] for lvl in body["levels"]] == ["fine", "medium", "coarse"]
+    job_ids = [lvl["job_id"] for lvl in body["levels"]]
+    assert len(set(job_ids)) == 3
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and len(captured_params) < 3:
+        time.sleep(0.05)
+    assert len(captured_params) == 3
+
+    # fine has the SMALLEST background_size factors (smallest cells,
+    # most elements), coarse the LARGEST (base defaults), confirmed
+    # directly on the actual CaseParams each job was given, not just on
+    # the refinement_ratio input.
+    fine_params, medium_params, coarse_params = captured_params
+    assert fine_params.background_size_min_factor < medium_params.background_size_min_factor < coarse_params.background_size_min_factor
+    assert fine_params.background_size_max_factor < medium_params.background_size_max_factor < coarse_params.background_size_max_factor
+    assert coarse_params.background_size_min_factor == pytest.approx(0.01)
+    assert coarse_params.background_size_max_factor == pytest.approx(0.5)
+    # Everything else about the three cases must be identical (same
+    # domain size, near-wall sizing): only far-field/wake density
+    # varies, as the GCI method requires.
+    assert fine_params.target_y_plus == medium_params.target_y_plus == coarse_params.target_y_plus
+    assert fine_params.growth_ratio == medium_params.growth_ratio == coarse_params.growth_ratio
+
+
+def test_gci_study_not_found(client, settings):
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    assert client.get("/gci-studies/does-not-exist", headers=headers).status_code == 404
+    assert client.post("/gci-studies/does-not-exist/archive", headers=headers).status_code == 404
+    assert client.post("/gci-studies/does-not-exist/unarchive", headers=headers).status_code == 404
+    assert client.delete("/gci-studies/does-not-exist", headers=headers).status_code == 404
+
+
+def test_delete_gci_study_does_not_delete_constituent_jobs(client, settings, tmp_path, monkeypatch):
+    import fosas_engine.app as app_module
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/gci-studies",
+            headers=headers,
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_deg": "5"},
+        )
+    study_id = response.json()["id"]
+    job_id = response.json()["levels"][0]["job_id"]
+
+    assert client.delete(f"/gci-studies/{study_id}", headers=headers).status_code == 200
+    assert client.get(f"/gci-studies/{study_id}", headers=headers).status_code == 404
+    assert client.get(f"/jobs/{job_id}", headers=headers).status_code == 200

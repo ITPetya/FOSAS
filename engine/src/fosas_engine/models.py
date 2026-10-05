@@ -8,6 +8,9 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from fosas_core.gci import GciResult, GridLevel, compute_gci
+
+from fosas_engine.gci_studies import GciStudy
 from fosas_engine.jobs import Job, JobStatus, JobStore
 from fosas_engine.polar_progress import aggregate_status
 from fosas_engine.polar_studies import PolarStudy
@@ -169,4 +172,119 @@ class PolarStudyOut(BaseModel):
             status=aggregate_status(statuses),
             archived=study.archived,
             points=points,
+        )
+
+
+class GciLevelOut(BaseModel):
+    resolution: str  # "fine" | "medium" | "coarse"
+    job_id: str
+    status: JobStatus
+    element_count: int | None = None
+    cl: float | None = None
+    cd: float | None = None
+
+
+class GciMetricOut(BaseModel):
+    """Mirrors fosas_core.gci.GciResult, once each for cl and cd."""
+
+    r21: float
+    apparent_order_p: float
+    extrapolated_value: float
+    approximate_relative_error: float
+    gci_fine_percent: float
+    oscillatory: bool
+    message: str
+
+    @classmethod
+    def from_result(cls, result: GciResult) -> "GciMetricOut":
+        return cls(
+            r21=result.r21,
+            apparent_order_p=result.apparent_order_p,
+            extrapolated_value=result.extrapolated_value,
+            approximate_relative_error=result.approximate_relative_error,
+            gci_fine_percent=result.gci_fine_percent,
+            oscillatory=result.oscillatory,
+            message=result.message,
+        )
+
+
+class GciResultOut(BaseModel):
+    cl: GciMetricOut
+    cd: GciMetricOut
+
+
+_RESOLUTIONS = ("fine", "medium", "coarse")
+
+
+class GciStudyOut(BaseModel):
+    id: str
+    created_at: datetime
+    step_filename: str
+    status: JobStatus
+    archived: bool = False
+    refinement_ratio: float
+    levels: list[GciLevelOut]
+    result: GciResultOut | None = None
+    result_error: str | None = None
+
+    @classmethod
+    def from_study(cls, study: GciStudy, jobs: JobStore) -> "GciStudyOut":
+        levels: list[GciLevelOut] = []
+        statuses: list[JobStatus] = []
+        grid_levels_cl: list[GridLevel] = []
+        grid_levels_cd: list[GridLevel] = []
+        for resolution, job_id in zip(_RESOLUTIONS, study.job_ids):
+            job = jobs.get(job_id)
+            if job is None:
+                levels.append(GciLevelOut(resolution=resolution, job_id=job_id, status="failed"))
+                statuses.append("failed")
+                continue
+            element_count = job.result.element_count if job.result is not None else None
+            cl = job.result.cl if job.result is not None else None
+            cd = job.result.cd if job.result is not None else None
+            levels.append(
+                GciLevelOut(
+                    resolution=resolution, job_id=job_id, status=job.status,
+                    element_count=element_count, cl=cl, cd=cd,
+                )
+            )
+            statuses.append(job.status)
+            if job.result is not None:
+                grid_levels_cl.append(GridLevel(element_count=element_count, value=cl))
+                grid_levels_cd.append(GridLevel(element_count=element_count, value=cd))
+
+        status = aggregate_status(statuses)
+        result_out = None
+        result_error = None
+        if status == "done":
+            # All three jobs done, in fixed fine/medium/coarse order
+            # (see gci_studies.GciStudy.job_ids docstring). compute_gci
+            # can still raise (e.g. identical cl/cd between two levels,
+            # or - if the background_size_*_factor sweep unexpectedly
+            # did not produce strictly decreasing element counts -
+            # a GridLevel ordering error): caught here so a GCI study
+            # whose three runs all finished successfully never crashes
+            # the whole response just because the GCI math itself
+            # could not be computed from their particular numbers.
+            fine_cl, medium_cl, coarse_cl = grid_levels_cl
+            fine_cd, medium_cd, coarse_cd = grid_levels_cd
+            try:
+                result_out = GciResultOut(
+                    cl=GciMetricOut.from_result(compute_gci(fine_cl, medium_cl, coarse_cl)),
+                    cd=GciMetricOut.from_result(compute_gci(fine_cd, medium_cd, coarse_cd)),
+                )
+            except ValueError as exc:
+                result_out = None
+                result_error = str(exc)
+
+        return cls(
+            id=study.id,
+            created_at=study.created_at,
+            step_filename=study.step_filename,
+            status=status,
+            archived=study.archived,
+            refinement_ratio=study.refinement_ratio,
+            levels=levels,
+            result=result_out,
+            result_error=result_error,
         )

@@ -23,8 +23,9 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 
+from fosas_engine.gci_studies import GciStudyStore, new_gci_study_id
 from fosas_engine.jobs import Job, JobNotArchivableError, JobNotDeletableError, JobNotResumableError, JobStore, new_job_id
-from fosas_engine.models import JobOut, PolarStudyOut
+from fosas_engine.models import GciStudyOut, JobOut, PolarStudyOut
 from fosas_engine.polar_studies import PolarStudyStore, new_polar_study_id
 from fosas_engine.settings import Settings
 
@@ -45,6 +46,7 @@ def create_app(settings: Settings) -> FastAPI:
     settings.work_root.mkdir(parents=True, exist_ok=True)
     app.state.jobs = JobStore.load_from_disk(settings.work_root)
     app.state.polar_studies = PolarStudyStore.load_from_disk(settings.work_root)
+    app.state.gci_studies = GciStudyStore.load_from_disk(settings.work_root)
     app.state.executor = ThreadPoolExecutor(max_workers=settings.max_concurrent_jobs)
 
     # A job that was still "running" when the engine last stopped (crash
@@ -279,6 +281,109 @@ def create_app(settings: Settings) -> FastAPI:
         if app.state.polar_studies.get(study_id) is None:
             raise HTTPException(status_code=404, detail="No such polar study")
         app.state.polar_studies.delete(study_id)
+        return {"deleted": study_id}
+
+    @app.post("/gci-studies", response_model=GciStudyOut, dependencies=[Depends(require_token)])
+    async def create_gci_study(
+        step_file: UploadFile,
+        velocity: float = Form(..., description="Freestream velocity magnitude, m/s"),
+        aoa_deg: float = Form(..., description="Angle of attack, degrees"),
+        refinement_ratio: float = Form(1.5, description="Mesh refinement ratio between consecutive levels"),
+        density: float = Form(1.225, description="Air density, kg/m^3"),
+        dynamic_viscosity: float = Form(1.81e-5, description="Dynamic viscosity, Pa*s"),
+        temperature: float = Form(288.15, description="Temperature, K"),
+        target_y_plus: float = Form(1.0),
+        growth_ratio: float = Form(1.2),
+        bl_thickness_factor: float = Form(0.05, description="Boundary layer thickness, as a factor of chord"),
+        span_layers: int = Form(24),
+        n_profile_points: int = Form(60),
+        max_iterations: int = Form(500),
+        mpi_ranks: int = Form(1),
+        time_discretization: str = Form("EULER_IMPLICIT"),
+        residual_threshold: float = Form(-8.0),
+    ):
+        # Exactly 3 resolutions (fine/medium/coarse, see
+        # docs/DECISIONS.md ADR-0017): only background_size_min_factor/
+        # max_factor vary between them (far-field/wake density), domain
+        # size and near-wall sizing (target_y_plus, growth_ratio,
+        # bl_thickness_factor) stay fixed, as the GCI method requires.
+        # farfield_factor_* is deliberately not exposed here at all.
+        if refinement_ratio <= 1.0:
+            raise HTTPException(status_code=422, detail="refinement_ratio must be greater than 1.0")
+
+        step_bytes = await step_file.read()
+        step_filename = step_file.filename or "geometry.step"
+
+        base_min_factor = 0.01
+        base_max_factor = 0.5
+        # fine, medium, coarse order (see GciStudy.job_ids docstring).
+        factor_scales = [refinement_ratio**2, refinement_ratio, 1.0]
+        job_ids = []
+        for scale in factor_scales:
+            try:
+                params = CaseParams(
+                    velocity=velocity,
+                    aoa_deg=aoa_deg,
+                    density=density,
+                    dynamic_viscosity=dynamic_viscosity,
+                    temperature=temperature,
+                    target_y_plus=target_y_plus,
+                    growth_ratio=growth_ratio,
+                    bl_thickness_factor=bl_thickness_factor,
+                    span_layers=span_layers,
+                    n_profile_points=n_profile_points,
+                    max_iterations=max_iterations,
+                    mpi_ranks=mpi_ranks,
+                    time_discretization=time_discretization,
+                    residual_threshold=residual_threshold,
+                    background_size_min_factor=base_min_factor / scale,
+                    background_size_max_factor=base_max_factor / scale,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            job = _create_and_submit_job(app, params, step_filename, step_bytes)
+            job_ids.append(job.id)
+
+        study = app.state.gci_studies.create(
+            new_gci_study_id(), step_filename, refinement_ratio, tuple(job_ids), settings.work_root
+        )
+        return GciStudyOut.from_study(study, app.state.jobs)
+
+    @app.get("/gci-studies", response_model=list[GciStudyOut], dependencies=[Depends(require_token)])
+    def list_gci_studies(archived: bool = False):
+        return [
+            GciStudyOut.from_study(study, app.state.jobs)
+            for study in app.state.gci_studies.list(include_archived=archived)
+        ]
+
+    @app.get("/gci-studies/{study_id}", response_model=GciStudyOut, dependencies=[Depends(require_token)])
+    def get_gci_study(study_id: str):
+        study = app.state.gci_studies.get(study_id)
+        if study is None:
+            raise HTTPException(status_code=404, detail="No such GCI study")
+        return GciStudyOut.from_study(study, app.state.jobs)
+
+    @app.post("/gci-studies/{study_id}/archive", response_model=GciStudyOut, dependencies=[Depends(require_token)])
+    def archive_gci_study(study_id: str):
+        if app.state.gci_studies.get(study_id) is None:
+            raise HTTPException(status_code=404, detail="No such GCI study")
+        app.state.gci_studies.archive(study_id)
+        return GciStudyOut.from_study(app.state.gci_studies.get(study_id), app.state.jobs)
+
+    @app.post("/gci-studies/{study_id}/unarchive", response_model=GciStudyOut, dependencies=[Depends(require_token)])
+    def unarchive_gci_study(study_id: str):
+        if app.state.gci_studies.get(study_id) is None:
+            raise HTTPException(status_code=404, detail="No such GCI study")
+        app.state.gci_studies.unarchive(study_id)
+        return GciStudyOut.from_study(app.state.gci_studies.get(study_id), app.state.jobs)
+
+    @app.delete("/gci-studies/{study_id}", dependencies=[Depends(require_token)])
+    def delete_gci_study(study_id: str):
+        # Removes only this study's own small reference record, never
+        # the constituent jobs/CFD results it points to.
+        if app.state.gci_studies.get(study_id) is None:
+            raise HTTPException(status_code=404, detail="No such GCI study")
+        app.state.gci_studies.delete(study_id)
         return {"deleted": study_id}
 
     @app.exception_handler(PipelineError)
