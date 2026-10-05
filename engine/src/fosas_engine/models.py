@@ -44,6 +44,8 @@ class CaseResultOut(BaseModel):
     convergence: ConvergenceOut
     mean_y_plus: float
     max_y_plus: float
+    dynamic_pressure: float
+    reynolds_number: float
     surface: list[SurfacePointOut]
 
 
@@ -99,6 +101,8 @@ class JobOut(BaseModel):
                 ),
                 mean_y_plus=job.result.mean_y_plus,
                 max_y_plus=job.result.max_y_plus,
+                dynamic_pressure=job.result.dynamic_pressure,
+                reynolds_number=job.result.reynolds_number,
                 surface=surface_out,
             )
         progress = compute_progress(job)

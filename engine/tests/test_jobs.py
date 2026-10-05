@@ -30,6 +30,8 @@ def _fake_result(work_dir: Path) -> CaseResult:
         surface=SurfaceData(columns={"x": (0.0, 0.6), "Pressure_Coefficient": (0.5, -0.3)}),
         mean_y_plus=0.9,
         max_y_plus=1.4,
+        dynamic_pressure=450.6,
+        reynolds_number=2.1e6,
         mesh_path=work_dir / "mesh.su2",
         solve_dir=work_dir / "solve",
     )

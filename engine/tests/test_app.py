@@ -72,6 +72,8 @@ def _fake_case_result(work_dir):
         }),
         mean_y_plus=0.9,
         max_y_plus=1.4,
+        dynamic_pressure=450.6,
+        reynolds_number=2.1e6,
         mesh_path=work_dir / "mesh.su2",
         solve_dir=work_dir / "solve",
     )

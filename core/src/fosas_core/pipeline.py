@@ -27,7 +27,7 @@ from pathlib import Path
 
 from build123d import Plane
 
-from .boundary_layer import first_cell_height
+from .boundary_layer import dynamic_pressure, first_cell_height, reynolds_number
 from .geometry import GeometryError, import_step
 from .meshing import (
     BoundaryLayerMeshParams,
@@ -132,6 +132,12 @@ class CaseResult:
     surface: SurfaceData
     mean_y_plus: float
     max_y_plus: float
+    # Derived purely from already-known inputs (freestream density/
+    # velocity, chord, viscosity), computed here rather than in the UI
+    # per the project's rule that all physics lives in the logic layer,
+    # see docs/ARCHITECTURE.md "Technische-Mechanik-Visualisierung".
+    dynamic_pressure: float
+    reynolds_number: float
     mesh_path: Path
     solve_dir: Path
 
@@ -333,6 +339,8 @@ def run_case(
         surface=result.surface,
         mean_y_plus=mean_y_plus,
         max_y_plus=max_y_plus,
+        dynamic_pressure=dynamic_pressure(params.density, params.velocity),
+        reynolds_number=reynolds_number(params.density, params.velocity, chord, params.dynamic_viscosity),
         mesh_path=mesh_path,
         solve_dir=solve_dir,
     )

@@ -213,6 +213,29 @@ const INFO_TEXT = {
     Koerper (z. B. eine Platte quer zur Stroemung) kann leicht ueber 1
     liegen.</p>
   `,
+  dynamic_pressure: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Staudruck q</h4>
+    <p>q = 0,5 * rho * v^2. Der Druck, der entsteht, wenn die
+    Anstroemgeschwindigkeit vollstaendig in Druck umgesetzt wird (wie am
+    Staupunkt, siehe cp-Verteilung). Alle Kraftbeiwerte (CL, CD, ...)
+    sind eine Kraft geteilt durch q mal Bezugsflaeche, q ist also der
+    gemeinsame Massstab, der die Kraft in eine dimensionslose Zahl
+    umrechnet.</p>
+  `,
+  reynolds_number: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Reynolds-Zahl Re</h4>
+    <p>Re = rho * v * Sehnenlaenge / Viskositaet. Dimensionslose Zahl, die
+    das Verhaeltnis von Traegheitskraeften zu Reibungskraeften in der
+    Stroemung beschreibt. Kleine Re (laminar, Reibung dominiert) ergeben
+    ein anderes Stroemungsbild als grosse Re (turbulent, Traegheit
+    dominiert), siehe docs/RISKS.md R10 zur Bedeutung fuer die
+    Konvergenz dieses Loesers.</p>
+    <p class="example">Richtwert: der Umschlag laminar/turbulent liegt
+    bei einer glatten Platte grob im Bereich Re = 10^5 bis 10^6, je nach
+    Stoerungsgrad der Anstroemung.</p>
+  `,
   mean_y_plus: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Mittleres y+</h4>
@@ -605,6 +628,8 @@ function renderResult(result, jobId) {
   document.getElementById("cl-value").textContent = result.cl.toFixed(4);
   document.getElementById("cd-value").textContent = result.cd.toFixed(4);
   document.getElementById("yplus-value").textContent = result.mean_y_plus.toFixed(2);
+  document.getElementById("q-value").textContent = result.dynamic_pressure.toFixed(1);
+  document.getElementById("re-value").textContent = result.reynolds_number.toExponential(2);
 
   const badge = document.getElementById("convergence-badge");
   const conv = result.convergence;

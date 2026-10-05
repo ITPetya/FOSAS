@@ -28,6 +28,15 @@ def reynolds_number(
     return density * velocity * reference_length / dynamic_viscosity
 
 
+def dynamic_pressure(density: float, velocity: float) -> float:
+    """Dynamic pressure q = 0.5 * rho * V^2."""
+    if density <= 0:
+        raise ValueError("density must be positive (kg/m^3)")
+    if velocity <= 0:
+        raise ValueError("velocity must be positive (m/s)")
+    return 0.5 * density * velocity**2
+
+
 def flat_plate_skin_friction_coefficient(reynolds: float) -> float:
     """Turbulent flat-plate skin friction estimate, Cf = 0.026 * Re^(-1/7).
 
@@ -84,6 +93,6 @@ def first_cell_height(
     if reynolds < _LAMINAR_REGIME_REYNOLDS_THRESHOLD:
         return reference_length * _LAMINAR_REGIME_FALLBACK_FACTOR
     cf = flat_plate_skin_friction_coefficient(reynolds)
-    wall_shear_stress = cf * 0.5 * density * velocity**2
+    wall_shear_stress = cf * dynamic_pressure(density, velocity)
     friction_velocity = math.sqrt(wall_shear_stress / density)
     return target_y_plus * dynamic_viscosity / (density * friction_velocity)
