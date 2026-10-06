@@ -256,10 +256,15 @@ angenommen.
    selbst (im 3D-Viewer) fehlt noch, reine Darstellung, kein
    Berechnungsaufwand mehr.
 3. Bezugsflaeche (projizierte Stirnflaeche/Draufsicht, farbig,
-   waehlbar) und Bezugslaenge fuer Momentenbeiwerte -> aktuell fest aus
-   der Geometrie-Bounding-Box abgeleitet (siehe oben), waehlbar machen
-   heisst ein neues `CaseParams`-Feld plus Darstellung als Ebene im
-   3D-Viewer.
+   waehlbar) und Bezugslaenge fuer Momentenbeiwerte -> **Anzeige-Teil
+   umgesetzt (2026-10-06):** Bezugsflaeche (Grundrissflaeche = Sehnenlaenge
+   * Spannweite) als eigene Kachel im Ergebnis-Panel, mit explizitem
+   Hinweis, dass das NICHT allgemein dieselbe Flaeche ist wie eine
+   projizierte Stirnflaeche (nur beim Zylinder-Testfall zufaellig
+   gleich, weil dort Sehnenlaenge = Durchmesser). Weiterhin offen: die
+   Flaeche ist noch fest aus der Geometrie-Bounding-Box abgeleitet,
+   waehlbar machen (eigene Stirnflaechen-Option) heisst ein neues
+   `CaseParams`-Feld plus farbige Darstellung als Ebene im 3D-Viewer.
 4. Kraftpfeile (R massstaeblich in N, Zerlegung in D/L/S oder
    Fx/Fy/Fz, Winkel der Resultierenden, Gleitzahl L/D, Beschriftung mit
    Kraft und Beiwert) -> **Zahlenteil umgesetzt (2026-10-05):**

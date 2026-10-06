@@ -213,6 +213,20 @@ const INFO_TEXT = {
     Koerper (z. B. eine Platte quer zur Stroemung) kann leicht ueber 1
     liegen.</p>
   `,
+  reference_area: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Bezugsflaeche A</h4>
+    <p>A = Sehnenlaenge * Spannweite (Grundrissflaeche), die bei
+    Fluegelprofilen uebliche Bezugsgroesse fuer CL/CD. Jede Kraftformel
+    F = c * q * A bezieht sich auf genau diese Flaeche.</p>
+    <p>Fuer einen Koerper, bei dem eher die Stirnflaeche quer zur
+    Stroemung die erwartete Bezugsgroesse waere (z. B. ein Fahrzeug oder
+    ein quer angestroemter Zylinder), kann das von der Grundrissflaeche
+    abweichen. Beim Zylinder-Testfall dieses Projekts stimmen beide
+    Flaechen nur deshalb zahlenmaessig ueberein, weil dort Sehnenlaenge
+    gleich Durchmesser ist, nicht allgemein. Aktuell automatisch aus der
+    Bounding-Box der Geometrie abgeleitet, noch nicht frei waehlbar.</p>
+  `,
   dynamic_pressure: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Staudruck q</h4>
@@ -675,6 +689,7 @@ function renderResult(result, jobId) {
   document.getElementById("cl-value").textContent = result.cl.toFixed(4);
   document.getElementById("cd-value").textContent = result.cd.toFixed(4);
   document.getElementById("yplus-value").textContent = result.mean_y_plus.toFixed(2);
+  document.getElementById("area-value").textContent = result.forces.reference_area.toPrecision(3);
   document.getElementById("q-value").textContent = result.dynamic_pressure.toFixed(1);
   document.getElementById("re-value").textContent = result.reynolds_number.toExponential(2);
   // toPrecision(3), not toFixed(2): forces span orders of magnitude
