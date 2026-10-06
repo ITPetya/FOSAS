@@ -31,6 +31,8 @@ def _fake_result(work_dir: Path) -> CaseResult:
         surface=SurfaceData(columns={"x": (0.0, 0.6), "Pressure_Coefficient": (0.5, -0.3)}),
         mean_y_plus=0.9,
         max_y_plus=1.4,
+        mean_wall_shear_stress=3.2,
+        max_wall_shear_stress=8.7,
         dynamic_pressure=450.6,
         reynolds_number=2.1e6,
         forces=ForceSystem(

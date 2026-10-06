@@ -133,6 +133,11 @@ class CaseResult:
     surface: SurfaceData
     mean_y_plus: float
     max_y_plus: float
+    # tau = cf * q (standard skin-friction-coefficient definition, same
+    # q already used to non-dimensionalize CL/CD/cp), so this needs the
+    # computed dynamic_pressure below; see where it is actually filled in.
+    mean_wall_shear_stress: float
+    max_wall_shear_stress: float
     # Derived purely from already-known inputs (freestream density/
     # velocity, chord, viscosity), computed here rather than in the UI
     # per the project's rule that all physics lives in the logic layer,
@@ -333,6 +338,15 @@ def run_case(
     final_cd = result.final("CD")
     q = dynamic_pressure(params.density, params.velocity)
 
+    cf_x = result.surface.column("Skin_Friction_Coefficient_x")
+    cf_y = result.surface.column("Skin_Friction_Coefficient_y")
+    cf_z = result.surface.column("Skin_Friction_Coefficient_z")
+    wall_shear_stresses = tuple(
+        q * math.sqrt(cf_x[i] ** 2 + cf_y[i] ** 2 + cf_z[i] ** 2) for i in range(len(cf_x))
+    )
+    mean_wall_shear_stress = sum(wall_shear_stresses) / len(wall_shear_stresses)
+    max_wall_shear_stress = max(wall_shear_stresses)
+
     return CaseResult(
         chord=chord,
         span=span,
@@ -346,6 +360,8 @@ def run_case(
         surface=result.surface,
         mean_y_plus=mean_y_plus,
         max_y_plus=max_y_plus,
+        mean_wall_shear_stress=mean_wall_shear_stress,
+        max_wall_shear_stress=max_wall_shear_stress,
         dynamic_pressure=q,
         reynolds_number=reynolds_number(params.density, params.velocity, chord, params.dynamic_viscosity),
         forces=compute_force_system(cl=final_cl, cd=final_cd, dynamic_pressure=q, reference_area=chord * span),

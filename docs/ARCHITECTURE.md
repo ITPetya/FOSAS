@@ -300,11 +300,26 @@ angenommen.
    die bereits vorliegenden Zahlen, und die 3D-Darstellung im Viewer.
 6. Oberflaeche (cp-Farbkarte existiert bereits im 3D-Viewer; lokale
    Druckkraftpfeile, Wandschubspannung, Aufteilung Druck-/
-   Reibungswiderstand) -> `fosas_core.solver.SurfaceData` ist laut
-   eigenem Docstring bereits fuer "Cp, y+, skin friction" ausgelegt,
-   aktuell wird aber nur cp bis zur API durchgereicht (zu pruefen, ob
-   skin friction tatsaechlich schon aus SU2 extrahiert wird oder nur im
-   Docstring vorgesehen ist).
+   Reibungswiderstand) -> **Wandschubspannung umgesetzt (2026-10-06):**
+   die Vermutung hat sich bestaetigt, SU2 schreibt
+   `Skin_Friction_Coefficient_x/y/z` bereits pro Oberflaechenpunkt in die
+   Surface-CSV. `fosas_core.pipeline.run_case` berechnet daraus
+   tau = cf * q (Betrag) je Punkt und gibt Mittelwert/Maximum in Pa als
+   zwei neue Kacheln im Ergebnis-Panel aus, gegen die rohen
+   Oberflaechenpunkte exakt zurueckgerechnet. Die einzelnen
+   Skin-Friction-Komponenten je Punkt sind jetzt auch ueber die API
+   verfuegbar (`SurfacePointOut`), fuer eine spaetere ortsaufgeloeste
+   3D-Darstellung.
+   Noch offen: lokale Druckkraftpfeile und eine ortsaufgeloeste
+   Wandschubspannungs-Darstellung im 3D-Viewer (reine Visualisierung,
+   Daten liegen vor); die Aufteilung des Gesamtwiderstands in Druck-
+   und Reibungsanteil ist dagegen NICHT mit den vorhandenen Daten
+   erledigt, SU2s History-Ausgabe (`AERO_COEFF`) enthaelt keine
+   getrennten CD_P/CD_V-Spalten (direkt an den echten Spalten dieser
+   Sitzung gegengeprueft) - das braucht eine echte flaechengewichtete
+   Integration von Druck und Wandschubspannung ueber alle Netzzellen,
+   nicht nur die bereits vorliegenden punktweisen Werte. Eigener,
+   groesserer Schritt.
 7. Freikoerperbild-Modus (2D-Schnittansicht, optional Gewichtskraft und
    Befestigungspunkt mit Lagerreaktionen) -> eigene neue Ansicht, setzt
    Punkt 4/5 voraus, eigener spaeterer Schritt.

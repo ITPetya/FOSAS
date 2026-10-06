@@ -31,6 +31,9 @@ class SurfacePointOut(BaseModel):
     z: float
     cp: float
     y_plus: float
+    skin_friction_x: float
+    skin_friction_y: float
+    skin_friction_z: float
 
 
 class ForceSystemOut(BaseModel):
@@ -61,6 +64,8 @@ class CaseResultOut(BaseModel):
     convergence: ConvergenceOut
     mean_y_plus: float
     max_y_plus: float
+    mean_wall_shear_stress: float
+    max_wall_shear_stress: float
     dynamic_pressure: float
     reynolds_number: float
     forces: ForceSystemOut
@@ -99,8 +104,14 @@ class JobOut(BaseModel):
             zs = surface.column("z")
             cps = surface.column("Pressure_Coefficient")
             y_pluses = surface.column("Y_Plus")
+            tau_x = surface.column("Skin_Friction_Coefficient_x")
+            tau_y = surface.column("Skin_Friction_Coefficient_y")
+            tau_z = surface.column("Skin_Friction_Coefficient_z")
             surface_out = [
-                SurfacePointOut(x=xs[i], y=ys[i], z=zs[i], cp=cps[i], y_plus=y_pluses[i])
+                SurfacePointOut(
+                    x=xs[i], y=ys[i], z=zs[i], cp=cps[i], y_plus=y_pluses[i],
+                    skin_friction_x=tau_x[i], skin_friction_y=tau_y[i], skin_friction_z=tau_z[i],
+                )
                 for i in range(surface.num_points)
             ]
             result_out = CaseResultOut(
@@ -120,6 +131,8 @@ class JobOut(BaseModel):
                 ),
                 mean_y_plus=job.result.mean_y_plus,
                 max_y_plus=job.result.max_y_plus,
+                mean_wall_shear_stress=job.result.mean_wall_shear_stress,
+                max_wall_shear_stress=job.result.max_wall_shear_stress,
                 dynamic_pressure=job.result.dynamic_pressure,
                 reynolds_number=job.result.reynolds_number,
                 forces=ForceSystemOut(

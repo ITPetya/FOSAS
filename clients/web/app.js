@@ -323,6 +323,21 @@ const INFO_TEXT = {
     Spannweite physikalisch meist klein, ein von null abweichender Wert
     ist hier oft Netzaufloesungs-Rauschen, keine reale Kraftwirkung.</p>
   `,
+  wall_shear_stress: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Wandschubspannung tau</h4>
+    <p>Die Reibkraft pro Flaeche, die die Stroemung direkt an der
+    Oberflaeche ausuebt (tau = cf * q, cf ist der von SU2 berechnete
+    Reibungsbeiwert pro Oberflaechenpunkt). Das ist die Groesse, aus der
+    sich letztlich der Reibungsanteil des Widerstands ergibt.</p>
+    <p>Mittelwert und Maximum ueber alle Oberflaechenpunkte dieses
+    Laufs; eine ortsaufgeloeste Darstellung auf der 3D-Oberflaeche
+    selbst gibt es noch nicht, nur diese zusammenfassenden Werte. Die
+    Aufteilung des Gesamtwiderstands in einen Druck- und einen
+    Reibungsanteil ist ebenfalls noch nicht umgesetzt (braucht eine
+    echte Flaechenintegration ueber alle Netzzellen, nicht nur diese
+    punktweisen Werte).</p>
+  `,
   mean_y_plus: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Mittleres y+</h4>
@@ -715,6 +730,8 @@ function renderResult(result, jobId) {
   document.getElementById("cl-value").textContent = result.cl.toFixed(4);
   document.getElementById("cd-value").textContent = result.cd.toFixed(4);
   document.getElementById("yplus-value").textContent = result.mean_y_plus.toFixed(2);
+  document.getElementById("tau-mean-value").textContent = result.mean_wall_shear_stress.toPrecision(3);
+  document.getElementById("tau-max-value").textContent = result.max_wall_shear_stress.toPrecision(3);
   document.getElementById("area-value").textContent = result.forces.reference_area.toPrecision(3);
   document.getElementById("q-value").textContent = result.dynamic_pressure.toFixed(1);
   document.getElementById("re-value").textContent = result.reynolds_number.toExponential(2);

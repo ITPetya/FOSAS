@@ -70,9 +70,14 @@ def _fake_case_result(work_dir):
         surface=SurfaceData(columns={
             "x": (0.0, 0.6), "y": (0.0, 0.0), "z": (0.0, 0.01),
             "Pressure_Coefficient": (0.5, -0.3), "Y_Plus": (1.0, 1.2),
+            "Skin_Friction_Coefficient_x": (0.01, 0.02),
+            "Skin_Friction_Coefficient_y": (0.0, 0.0),
+            "Skin_Friction_Coefficient_z": (0.001, -0.001),
         }),
         mean_y_plus=0.9,
         max_y_plus=1.4,
+        mean_wall_shear_stress=3.2,
+        max_wall_shear_stress=8.7,
         dynamic_pressure=450.6,
         reynolds_number=2.1e6,
         forces=ForceSystem(
