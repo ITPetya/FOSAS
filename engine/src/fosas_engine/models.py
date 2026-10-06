@@ -33,6 +33,15 @@ class SurfacePointOut(BaseModel):
     y_plus: float
 
 
+class ForceSystemOut(BaseModel):
+    reference_area: float
+    lift: float
+    drag: float
+    resultant: float
+    glide_ratio: float | None
+    resultant_angle_deg: float
+
+
 class CaseResultOut(BaseModel):
     chord: float
     span: float
@@ -46,6 +55,7 @@ class CaseResultOut(BaseModel):
     max_y_plus: float
     dynamic_pressure: float
     reynolds_number: float
+    forces: ForceSystemOut
     surface: list[SurfacePointOut]
 
 
@@ -103,6 +113,14 @@ class JobOut(BaseModel):
                 max_y_plus=job.result.max_y_plus,
                 dynamic_pressure=job.result.dynamic_pressure,
                 reynolds_number=job.result.reynolds_number,
+                forces=ForceSystemOut(
+                    reference_area=job.result.forces.reference_area,
+                    lift=job.result.forces.lift,
+                    drag=job.result.forces.drag,
+                    resultant=job.result.forces.resultant,
+                    glide_ratio=job.result.forces.glide_ratio,
+                    resultant_angle_deg=job.result.forces.resultant_angle_deg,
+                ),
                 surface=surface_out,
             )
         progress = compute_progress(job)

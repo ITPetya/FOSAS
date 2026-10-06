@@ -28,6 +28,7 @@ from pathlib import Path
 from build123d import Plane
 
 from .boundary_layer import dynamic_pressure, first_cell_height, reynolds_number
+from .forces import ForceSystem, compute_force_system
 from .geometry import GeometryError, import_step
 from .meshing import (
     BoundaryLayerMeshParams,
@@ -138,6 +139,7 @@ class CaseResult:
     # see docs/ARCHITECTURE.md "Technische-Mechanik-Visualisierung".
     dynamic_pressure: float
     reynolds_number: float
+    forces: ForceSystem
     mesh_path: Path
     solve_dir: Path
 
@@ -325,6 +327,9 @@ def run_case(
     y_plus_values = result.surface.column("Y_Plus")
     mean_y_plus = sum(y_plus_values) / len(y_plus_values)
     max_y_plus = max(y_plus_values)
+    final_cl = result.final("CL")
+    final_cd = result.final("CD")
+    q = dynamic_pressure(params.density, params.velocity)
 
     return CaseResult(
         chord=chord,
@@ -332,15 +337,16 @@ def run_case(
         node_count=mesh_info.node_count,
         element_count=mesh_info.element_count,
         markers=mesh_info.markers,
-        cl=result.final("CL"),
-        cd=result.final("CD"),
+        cl=final_cl,
+        cd=final_cd,
         convergence=convergence,
         history=result.history,
         surface=result.surface,
         mean_y_plus=mean_y_plus,
         max_y_plus=max_y_plus,
-        dynamic_pressure=dynamic_pressure(params.density, params.velocity),
+        dynamic_pressure=q,
         reynolds_number=reynolds_number(params.density, params.velocity, chord, params.dynamic_viscosity),
+        forces=compute_force_system(cl=final_cl, cd=final_cd, dynamic_pressure=q, reference_area=chord * span),
         mesh_path=mesh_path,
         solve_dir=solve_dir,
     )

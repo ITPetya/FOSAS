@@ -236,6 +236,43 @@ const INFO_TEXT = {
     bei einer glatten Platte grob im Bereich Re = 10^5 bis 10^6, je nach
     Stoerungsgrad der Anstroemung.</p>
   `,
+  lift_force: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Auftrieb L</h4>
+    <p>L = CL * q * A (Bezugsflaeche A = Sehnenlaenge * Spannweite, bei
+    diesem konstanten Profil). Die tatsaechliche Kraft senkrecht zur
+    Anstroemrichtung in Newton, nicht nur die dimensionslose Kennzahl
+    CL. Rechnet man wie im zentralen Kraeftesystem der Technischen
+    Mechanik gewohnt: Kraft = Beiwert mal Druck mal Flaeche.</p>
+  `,
+  drag_force: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Widerstand D</h4>
+    <p>D = CD * q * A, analog zu Auftrieb L, aber parallel zur
+    Anstroemrichtung (in deren Richtung wirkend, daher immer positiv fuer
+    einen realen, nicht antreibenden Koerper).</p>
+  `,
+  resultant_force: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Resultierende R</h4>
+    <p>R = Wurzel(L^2 + D^2), die geometrische Summe aus Auftrieb und
+    Widerstand, dieselbe Vektoraddition wie bei jedem zentralen
+    Kraeftesystem in der Technischen Mechanik. Der Winkel dieser
+    Resultierenden zur Anstroemrichtung ergibt sich aus
+    atan2(L, D).</p>
+  `,
+  glide_ratio: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Gleitzahl L/D</h4>
+    <p>Verhaeltnis von Auftrieb zu Widerstand, identisch zum Verhaeltnis
+    CL/CD (die Bezugsgroessen q und A kuerzen sich heraus). Ohne
+    Einheit; "-" wird angezeigt, wenn der Widerstand exakt null ist
+    (Gleitzahl dann nicht definiert, kommt bei einer echten Rechnung
+    praktisch nie vor).</p>
+    <p class="example">Richtwert: ein gutes Segelflugzeugprofil erreicht
+    Gleitzahlen über 30, ein stumpfer Koerper liegt oft deutlich unter
+    5.</p>
+  `,
   mean_y_plus: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Mittleres y+</h4>
@@ -630,6 +667,11 @@ function renderResult(result, jobId) {
   document.getElementById("yplus-value").textContent = result.mean_y_plus.toFixed(2);
   document.getElementById("q-value").textContent = result.dynamic_pressure.toFixed(1);
   document.getElementById("re-value").textContent = result.reynolds_number.toExponential(2);
+  document.getElementById("lift-value").textContent = result.forces.lift.toFixed(2);
+  document.getElementById("drag-value").textContent = result.forces.drag.toFixed(2);
+  document.getElementById("resultant-value").textContent = result.forces.resultant.toFixed(2);
+  document.getElementById("glide-ratio-value").textContent =
+    result.forces.glide_ratio == null ? "-" : result.forces.glide_ratio.toFixed(2);
 
   const badge = document.getElementById("convergence-badge");
   const conv = result.convergence;

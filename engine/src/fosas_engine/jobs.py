@@ -32,6 +32,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+from fosas_core.forces import ForceSystem
 from fosas_core.pipeline import CaseParams, CaseResult
 from fosas_core.quality import ConvergenceAssessment
 from fosas_core.solver import IterationHistory, SurfaceData
@@ -90,6 +91,7 @@ def _case_result_from_dict(data: dict[str, Any]) -> CaseResult:
     data["convergence"] = ConvergenceAssessment(**data["convergence"])
     data["history"] = IterationHistory(columns=_columns_from_dict(data["history"]["columns"]))
     data["surface"] = SurfaceData(columns=_columns_from_dict(data["surface"]["columns"]))
+    data["forces"] = ForceSystem(**data["forces"])
     return CaseResult(**data)
 
 

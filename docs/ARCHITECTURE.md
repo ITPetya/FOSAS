@@ -231,10 +231,13 @@ haengen an dieser einen Luecke.
    (Drehung zusaetzlich in der X-Y-Ebene), bevor es visualisiert werden
    kann.
 2. Anstroemung (Pfeil mit v, rho, Staudruck q, Reynolds-Zahl) ->
-   Ergebnis-Metadaten (Ergebnis-Panel + Bericht). q = 0.5*rho*v^2 und
-   Re = rho*v*chord/mu sind aus bereits vorhandenen Eingaben direkt
-   berechenbar, kein Core-Umbau noetig, nur eine neue abgeleitete Angabe
-   im Ergebnis.
+   Ergebnis-Metadaten (Ergebnis-Panel + Bericht). **Umgesetzt
+   (2026-10-05):** q und Re werden in `fosas_core.boundary_layer`
+   berechnet (`dynamic_pressure`, `reynolds_number`), in `CaseResult`
+   gefuehrt und als zwei neue Kacheln im Ergebnis-Panel angezeigt, gegen
+   eine echte Rechnung von Hand nachgerechnet. Der Windrichtungspfeil
+   selbst (im 3D-Viewer) fehlt noch, reine Darstellung, kein
+   Berechnungsaufwand mehr.
 3. Bezugsflaeche (projizierte Stirnflaeche/Draufsicht, farbig,
    waehlbar) und Bezugslaenge fuer Momentenbeiwerte -> aktuell fest aus
    der Geometrie-Bounding-Box abgeleitet (siehe oben), waehlbar machen
@@ -242,9 +245,16 @@ haengen an dieser einen Luecke.
    3D-Viewer.
 4. Kraftpfeile (R massstaeblich in N, Zerlegung in D/L/S oder
    Fx/Fy/Fz, Winkel der Resultierenden, Gleitzahl L/D, Beschriftung mit
-   Kraft und Beiwert) -> neues Berechnungsmodul in `fosas_core` (aus
-   cl/cd/q/A ableitbar, L/D ist sogar schon aus cl/cd berechenbar ohne
-   neue Daten), Visualisierung als 3D-Pfeile im Viewer.
+   Kraft und Beiwert) -> **Zahlenteil umgesetzt (2026-10-05):**
+   `fosas_core.forces.compute_force_system` berechnet L, D, R
+   (atan2-basierter Winkel, robust auch bei D=0 oder negativem L),
+   Gleitzahl L/D, alle vier als neue Kacheln im Ergebnis-Panel,
+   End-to-End gegen Handrechnung bestaetigt (inkl. negativem L bei
+   negativem AoA). Noch offen: die D/L/S- bzw. Fx/Fy/Fz-Zerlegung in
+   Koerperachsen (braucht Beta/Schiebewinkel, siehe Punkt 1, das
+   symmetrische Testprofil liefert dafuer bisher keinen sinnvollen
+   Pruefwert) und die eigentliche 3D-Pfeil-Visualisierung im Viewer
+   (reine Darstellung, keine neue Rechnung mehr noetig).
 5. Momente (Druckpunkt markiert, Bezugspunkt waehlbar: Schwerpunkt/
    Ursprung/frei, Mx/My/Mz in Nm mit Momentenbeiwerten) -> die oben
    beschriebene groesste Luecke: muss zuerst in `fosas_core`/`solver.py`
