@@ -278,6 +278,10 @@ angenommen.
    Flaeche ist noch fest aus der Geometrie-Bounding-Box abgeleitet,
    waehlbar machen (eigene Stirnflaechen-Option) heisst ein neues
    `CaseParams`-Feld plus farbige Darstellung als Ebene im 3D-Viewer.
+   **Wurde am 2026-10-06 wichtiger:** Punkt 9 (Plausibilitaets-
+   Referenzwerte) braucht genau diese waehlbare Stirnflaeche, um
+   ueberhaupt sinnvoll vergleichbar zu sein (siehe dort), ist also kein
+   rein kosmetischer Ausbau mehr.
 4. Kraftpfeile (R massstaeblich in N, Zerlegung in D/L/S oder
    Fx/Fy/Fz, Winkel der Resultierenden, Gleitzahl L/D, Beschriftung mit
    Kraft und Beiwert) -> **Zahlenteil umgesetzt (2026-10-05):**
@@ -379,10 +383,34 @@ angenommen.
    Noch offen: Uebernahme in den PDF-Bericht (`fosas_core.report` +
    Typst-Vorlagen), das ist Punkt 11.
 9. Plausibilitaets-Referenzwerte (Kugel, Platte, Pkw, Profil) ->
-   eigene kleine Konstantentabelle. Achtung: braucht belegbare Quellen,
-   siehe CLAUDE.md-Regel "keine erfundenen Literaturwerte" -- vor
-   Umsetzung muessen diese Werte entweder mit Quelle belegt oder explizit
-   als Vermutung markiert werden, keine stillschweigenden Richtwerte.
+   **Quellen recherchiert (2026-10-06), Umsetzung bewusst zurueckgestellt
+   auf Wunsch des Projektinhabers.** Gefundene, zitierfaehige Werte
+   (alle bezogen auf die projizierte Stirnflaeche):
+   - Platte quer zur Stroemung: cd = 1,28; Keilprofil: cd = 1,14;
+     Stromlinienkoerper/Geschoss: cd = 0,295; "Fluegelprofil"
+     (NASA-Pauschalwert): cd = 0,045. Quelle: NASA Glenn Research
+     Center, "Shape Effects on Drag"
+     (https://www.grc.nasa.gov/www/k-12/VirtualAero/BottleRocket/airplane/shaped.html),
+     Unterschall-Windkanal, vergleichbare Reynolds-Zahl.
+   - Kugel: stark Re-abhaengig ("Drag Crisis"), ein einzelner Wert ohne
+     Re-Angabe waere irrefuehrend: unterkritisch (Re < ca. 2-3e5)
+     cd ≈ 0,47-0,5; ueberkritisch (Re > ca. 3e5) cd ≈ 0,1-0,2. Quelle:
+     Wikipedia "Drag crisis" (https://en.wikipedia.org/wiki/Drag_crisis),
+     durch mehrere wissenschaftliche Quellen gestuetzt.
+   - Pkw (moderner Durchschnitt): cd ≈ 0,25-0,35. Quelle: Wikipedia
+     "Automobile drag coefficient"
+     (https://en.wikipedia.org/wiki/Automobile_drag_coefficient).
+
+   **Grund fuer die Zurueckstellung, nicht nur Quellenmangel:** Alle
+   diese Werte beziehen sich auf die projizierte Stirnflaeche, FOSAS
+   rechnet cd aber aktuell immer gegen die Grundrissflaeche (Sehnenlaenge
+   * Spannweite, siehe Punkt 3). Beim Zylinder-Testfall stimmt das
+   zahlenmaessig zufaellig ueberein, bei einem echten Fluegelprofil oder
+   Fahrzeug waere ein direkter Vergleich mit den obigen Werten
+   irrefuehrend, nicht nur ungenau. Punkt 9 wird daher erst nach Punkt 3
+   (waehlbare Stirnflaeche) umgesetzt, damit der Vergleich tatsaechlich
+   auf derselben Bezugsflaeche beruht. Die obigen Werte/Quellen bleiben
+   hier festgehalten, damit die Recherche nicht verloren geht.
 10. Tooltips mit Technische-Mechanik-Analogie -> `INFO_TEXT`-Objekt in
     `app.js`, exakt das in Schritt 1 bereits verwendete Muster
     (Gesichert/Annahme-Kennzeichnung je Begriff); fuer neue Begriffe (R,
