@@ -416,8 +416,24 @@ angenommen.
     (Gesichert/Annahme-Kennzeichnung je Begriff); fuer neue Begriffe (R,
     D/L/S, cm, Freikoerperbild, ...) wird es ergaenzt, sobald die
     jeweilige Ebene entsteht.
-11. Aktive Ansichten/Werte in den Bericht uebernehmen -> `fosas_core.report`
-    + Typst-Vorlagen, letzter Schritt, erst wenn 1-9 existieren.
+11. Aktive Ansichten/Werte in den Bericht uebernehmen -> **Umgesetzt
+    (2026-10-06):** neuer Einzelauftrags-Bericht (`render_job_report`,
+    `job_report.typ`, Route `GET /jobs/{id}/report`, neuer "Bericht
+    (PDF)"-Knopf im Ergebnis-Panel) spiegelt das Ergebnis-Panel
+    vollstaendig auf Papier: Kraftbeiwerte, Anstroemung, Kraeftesystem,
+    Momente (inkl. Bezugspunkt), Rechenweg, Freikoerperbild-Diagramm
+    (als vorgerendertes matplotlib-Bild, dieselbe Geometrie-/
+    Pfeil-Logik wie `drawFreeBodyDiagram` im Browser) und
+    Wandschubspannung/cp-Diagramm. Gegen eine echte Rechnung erzeugt
+    und per Textextraktion inhaltlich geprueft (nicht nur "ist ein
+    PDF"), ein Tippfehler (nicht escapetes `*` in reinem Markup-Text,
+    "unclosed delimiter") dabei gefunden und behoben. Wartet nicht auf
+    Punkt 9 (Referenzwerte), die haben keine eigene Darstellung, die
+    uebernommen werden muesste.
+    Nicht umgesetzt: Polaren-/GCI-Berichte zeigen weiterhin nur cl/cd,
+    nicht die neuen Kraft-/Momentenwerte pro Zustand - waere eine
+    eigene, separate Erweiterung derselben Berichte, kein Teil dieses
+    Einzelauftrags-Berichts.
 
 Harte Vorgabe fuer die Umsetzung, sobald sie beginnt: alle Werte werden in
 der Logikschicht (`fosas_core`) berechnet, die UI zeigt nur an, keine

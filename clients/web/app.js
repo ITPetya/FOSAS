@@ -1007,6 +1007,26 @@ document.getElementById("layer-toggle-forces").addEventListener("change", (e) =>
 
 let currentResultJobId = null;
 
+document.getElementById("job-report-btn").addEventListener("click", async () => {
+  if (!currentResultJobId) return;
+  try {
+    const res = await fetch("/jobs/" + currentResultJobId + "/report", { headers: authHeaders() });
+    if (res.status === 401) { reloadToRefreshToken(); return; }
+    if (!res.ok) { alert("Bericht konnte nicht erzeugt werden (" + res.status + ")."); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "job_report_" + currentResultJobId + ".pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("Bericht konnte nicht geladen werden.");
+  }
+});
+
 function renderCalculationSteps(result) {
   const q = result.dynamic_pressure;
   const A = result.forces.reference_area;

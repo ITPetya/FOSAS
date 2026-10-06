@@ -7,11 +7,14 @@ from fosas_core.report import (
     GciReportData,
     GciReportLevel,
     GciReportMetric,
+    JobReportData,
+    JobReportSurfacePoint,
     PolarReportData,
     PolarReportPoint,
     ReportError,
     render_combined_report,
     render_gci_report,
+    render_job_report,
     render_polar_report,
 )
 
@@ -199,4 +202,76 @@ def test_render_combined_report_discloses_mismatched_filenames():
     )
     data = CombinedReportData(generated_at=datetime.now(timezone.utc), polar=polar_data, gci=gci_data)
     pdf_bytes = render_combined_report(data)
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def _job_surface_points():
+    # A small, roughly circular point ring, enough to exercise the
+    # free-body-diagram and cp charts' upper/lower split (z >= 0 vs
+    # z < 0) without needing a real mesh.
+    import math
+
+    return tuple(
+        JobReportSurfacePoint(
+            x=0.005 + 0.005 * math.cos(t), z=0.005 * math.sin(t), cp=math.cos(t)
+        )
+        for t in [i * (2 * math.pi / 16) for i in range(16)]
+    )
+
+
+def _job_data(**overrides):
+    defaults = dict(
+        step_filename="cylinder.step",
+        generated_at=datetime.now(timezone.utc),
+        aoa_deg=5.0,
+        cl=-0.009,
+        cd=5.565,
+        converged=False,
+        convergence_message="Plateau erreicht, kein weiterer Fortschritt zu erwarten.",
+        mean_y_plus=0.0,
+        max_y_plus=0.0,
+        mean_wall_shear_stress=0.835,
+        max_wall_shear_stress=1.363,
+        dynamic_pressure=2.45,
+        reynolds_number=1353.6,
+        reference_area=0.0002,
+        lift=-4.4e-6,
+        drag=0.00273,
+        resultant=0.00273,
+        glide_ratio=-0.0016,
+        resultant_angle_deg=-0.09,
+        reference_length=0.01,
+        moment_origin=(0.005, -0.01, 0.0),
+        cmx=0.938,
+        cmy=-0.0033,
+        cmz=-10.92,
+        mx=4.6e-6,
+        my=-1.6e-8,
+        mz=-5.35e-5,
+        surface_points=_job_surface_points(),
+    )
+    defaults.update(overrides)
+    return JobReportData(**defaults)
+
+
+def test_job_report_data_rejects_empty_surface_points():
+    with pytest.raises(ValueError):
+        _job_data(surface_points=())
+
+
+def test_render_job_report_produces_a_real_pdf():
+    pdf_bytes = render_job_report(_job_data())
+    assert isinstance(pdf_bytes, bytes)
+    assert pdf_bytes.startswith(b"%PDF")
+    assert len(pdf_bytes) > 1000
+
+
+def test_render_job_report_handles_converged_case():
+    pdf_bytes = render_job_report(_job_data(converged=True, convergence_message="Konvergiert."))
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_render_job_report_handles_none_glide_ratio():
+    # Zero drag: glide ratio undefined, see fosas_core.forces.ForceSystem.
+    pdf_bytes = render_job_report(_job_data(drag=0.0, resultant=4.4e-6, glide_ratio=None, resultant_angle_deg=90.0))
     assert pdf_bytes.startswith(b"%PDF")

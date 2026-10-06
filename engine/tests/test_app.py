@@ -730,3 +730,40 @@ def test_combined_report_returns_a_real_pdf_combining_both_studies(client, setti
     assert report_response.status_code == 200
     assert report_response.headers["content-type"] == "application/pdf"
     assert report_response.content.startswith(b"%PDF")
+
+
+def test_job_report_not_found(client, settings):
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    assert client.get("/jobs/does-not-exist/report", headers=headers).status_code == 404
+
+
+def test_job_report_conflict_when_not_done(client, settings, tmp_path):
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    _create_finished_job(app, settings.work_root, "job1", status="failed")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+
+    response = client.get("/jobs/job1/report", headers=headers)
+    assert response.status_code == 409
+
+
+def test_job_report_returns_a_real_pdf(client, settings, tmp_path):
+    # Exercises the real route -> JobReportData -> fosas_core.report.
+    # render_job_report -> real typst.compile chain end to end, same
+    # pattern as the polar/GCI/combined report route tests above.
+    # core/tests/test_report.py already proves render_job_report itself
+    # handles the various field edge cases (None glide ratio, etc.), so
+    # this only needs to prove the route wiring.
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    _create_finished_job(app, settings.work_root, "job1", status="done")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+
+    response = client.get("/jobs/job1/report", headers=headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,6 +50,7 @@ _TEMPLATE_DIR = Path(__file__).parent / "report_templates"
 _POLAR_TEMPLATE_PATH = _TEMPLATE_DIR / "polar_report.typ"
 _GCI_TEMPLATE_PATH = _TEMPLATE_DIR / "gci_report.typ"
 _COMBINED_TEMPLATE_PATH = _TEMPLATE_DIR / "combined_report.typ"
+_JOB_TEMPLATE_PATH = _TEMPLATE_DIR / "job_report.typ"
 
 
 class ReportError(Exception):
@@ -346,3 +348,183 @@ def render_combined_report(data: CombinedReportData) -> bytes:
     }
     files = {"polar_chart.png": polar_chart_png, "gci_chart.png": gci_chart_png}
     return _compile_report(_COMBINED_TEMPLATE_PATH, payload, files)
+
+
+# --- Einzelauftrags-Bericht (Phase 3, Punkt 11 der Technische-Mechanik- --
+# --- Visualisierung, siehe docs/ARCHITECTURE.md) ------------------------
+
+
+@dataclass(frozen=True)
+class JobReportSurfacePoint:
+    x: float
+    z: float
+    cp: float
+
+
+@dataclass(frozen=True)
+class JobReportData:
+    """Mirrors what the browser's single-job result panel already shows
+    (fosas_engine.models.CaseResultOut), not fosas_core.pipeline.CaseResult
+    directly, same decoupling as the other report dataclasses in this
+    module. Deliberately starts the "Rechenweg" from dynamic_pressure/
+    reference_area/reference_length rather than re-deriving them from
+    density/velocity, same reasoning as the browser's own calculation-
+    steps section: those raw inputs are not part of this data either.
+    """
+
+    step_filename: str
+    generated_at: datetime
+    aoa_deg: float
+    cl: float
+    cd: float
+    converged: bool
+    convergence_message: str
+    mean_y_plus: float
+    max_y_plus: float
+    mean_wall_shear_stress: float
+    max_wall_shear_stress: float
+    dynamic_pressure: float
+    reynolds_number: float
+    reference_area: float
+    lift: float
+    drag: float
+    resultant: float
+    glide_ratio: float | None
+    resultant_angle_deg: float
+    reference_length: float
+    moment_origin: tuple[float, float, float]
+    cmx: float
+    cmy: float
+    cmz: float
+    mx: float
+    my: float
+    mz: float
+    surface_points: tuple[JobReportSurfacePoint, ...]
+
+    def __post_init__(self):
+        if len(self.surface_points) == 0:
+            raise ValueError("surface_points must not be empty")
+
+
+def _render_job_cp_chart_png(data: JobReportData) -> bytes:
+    fig, ax = plt.subplots(figsize=(6, 3.2))
+    upper = [p for p in data.surface_points if p.z >= 0]
+    lower = [p for p in data.surface_points if p.z < 0]
+    if upper:
+        ax.scatter([p.x for p in upper], [p.cp for p in upper], s=4, color="tab:blue", label="Oberseite")
+    if lower:
+        ax.scatter([p.x for p in lower], [p.cp for p in lower], s=4, color="tab:orange", label="Unterseite")
+    ax.invert_yaxis()  # standard airfoil cp convention, same as the browser's cp chart
+    ax.axhline(0, color="#888888", linewidth=0.8)
+    ax.set_xlabel("x (Sehnenrichtung)")
+    ax.set_ylabel("cp")
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+    _disable_y_offset_notation(ax)
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150)
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def _render_job_fbd_chart_png(data: JobReportData) -> bytes:
+    # Same geometry/scaling logic as the browser's drawFreeBodyDiagram
+    # (clients/web/app.js): body cross-section as a point scatter (every
+    # point collapses onto the same outline, constant span cross-
+    # section, ADR-0007), D/L/R arrows anchored at the moment reference
+    # point, built from the same wind-aligned orthonormal basis, length
+    # normalized so the largest force gets a fixed visual size.
+    fig, ax = plt.subplots(figsize=(6, 4.5))
+    xs = [p.x for p in data.surface_points]
+    zs = [p.z for p in data.surface_points]
+    ax.scatter(xs, zs, s=3, color="#888888", alpha=0.6)
+
+    origin_x, origin_z = data.moment_origin[0], data.moment_origin[2]
+    ax.plot(origin_x, origin_z, "o", color="black", markersize=5, zorder=5)
+
+    aoa_rad = math.radians(data.aoa_deg)
+    drag_dir = (math.cos(aoa_rad), math.sin(aoa_rad))
+    lift_dir = (-math.sin(aoa_rad), math.cos(aoa_rad))
+    max_mag = max(abs(data.lift), abs(data.drag), data.resultant, 1e-12)
+    body_span = max(max(xs) - min(xs), max(zs) - min(zs), 1e-6)
+    arrow_scale = body_span * 0.6 / max_mag
+
+    def draw_arrow(dir_vec: tuple[float, float], signed_mag: float, color: str, label: str) -> None:
+        mag = abs(signed_mag)
+        if mag < 1e-12:
+            return
+        sign = -1.0 if signed_mag < 0 else 1.0
+        dx = dir_vec[0] * sign * mag * arrow_scale
+        dz = dir_vec[1] * sign * mag * arrow_scale
+        ax.annotate(
+            "", xy=(origin_x + dx, origin_z + dz), xytext=(origin_x, origin_z),
+            arrowprops={"arrowstyle": "->", "color": color, "linewidth": 2},
+        )
+        ax.text(origin_x + dx * 1.05, origin_z + dz * 1.05, label, color=color, fontsize=8)
+
+    draw_arrow(drag_dir, data.drag, "tab:orange", f"D = {data.drag:.3g} N")
+    draw_arrow(lift_dir, data.lift, "tab:blue", f"L = {data.lift:.3g} N")
+    resultant_vec = (
+        drag_dir[0] * data.drag + lift_dir[0] * data.lift,
+        drag_dir[1] * data.drag + lift_dir[1] * data.lift,
+    )
+    resultant_norm = math.hypot(*resultant_vec) or 1.0
+    draw_arrow(
+        (resultant_vec[0] / resultant_norm, resultant_vec[1] / resultant_norm),
+        data.resultant, "black", f"R = {data.resultant:.3g} N",
+    )
+
+    ax.set_aspect("equal")
+    ax.set_xlabel("x (m)")
+    ax.set_ylabel("z (m)")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150)
+    plt.close(fig)
+    return buf.getvalue()
+
+
+def render_job_report(data: JobReportData) -> bytes:
+    """Renders a one-job PDF report mirroring the browser's single-job
+    result panel: cl/cd, convergence, dynamic pressure/Reynolds number,
+    the force system (L/D/R/glide ratio/angle), the moment system
+    (Mx/My/Mz with their coefficients and reference point), a
+    free-body-diagram chart, and a cp chart, plus the same "Rechenweg"
+    substituted-formula text the browser shows. Raises ReportError if
+    the Typst compiler itself fails.
+    """
+    cp_chart_png = _render_job_cp_chart_png(data)
+    fbd_chart_png = _render_job_fbd_chart_png(data)
+    payload = {
+        "step_filename": data.step_filename,
+        "generated_at": _format_timestamp(data.generated_at),
+        "aoa_deg": data.aoa_deg,
+        "cl": data.cl,
+        "cd": data.cd,
+        "converged": data.converged,
+        "convergence_message": data.convergence_message,
+        "mean_y_plus": data.mean_y_plus,
+        "max_y_plus": data.max_y_plus,
+        "mean_wall_shear_stress": data.mean_wall_shear_stress,
+        "max_wall_shear_stress": data.max_wall_shear_stress,
+        "dynamic_pressure": data.dynamic_pressure,
+        "reynolds_number": data.reynolds_number,
+        "reference_area": data.reference_area,
+        "lift": data.lift,
+        "drag": data.drag,
+        "resultant": data.resultant,
+        "glide_ratio": data.glide_ratio,
+        "resultant_angle_deg": data.resultant_angle_deg,
+        "reference_length": data.reference_length,
+        "moment_origin": list(data.moment_origin),
+        "cmx": data.cmx,
+        "cmy": data.cmy,
+        "cmz": data.cmz,
+        "mx": data.mx,
+        "my": data.my,
+        "mz": data.mz,
+    }
+    files = {"cp_chart.png": cp_chart_png, "fbd_chart.png": fbd_chart_png}
+    return _compile_report(_JOB_TEMPLATE_PATH, payload, files)

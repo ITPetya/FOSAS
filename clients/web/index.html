@@ -458,7 +458,10 @@
   </div>
 
   <div class="panel" id="result-panel" hidden>
-    <h2 style="margin-top:0;font-size:1.1rem;">Ergebnis</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h2 style="margin:0;font-size:1.1rem;">Ergebnis</h2>
+      <button type="button" class="job-action-btn" id="job-report-btn">Bericht (PDF)</button>
+    </div>
     <div id="convergence-badge" data-info="convergence"></div>
     <div class="metrics">
       <div class="metric"><div class="value" id="cl-value">-</div><div class="label" data-info="cl">CL</div></div>

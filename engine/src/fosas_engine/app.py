@@ -28,11 +28,14 @@ from fosas_core.report import (
     GciReportData,
     GciReportLevel,
     GciReportMetric,
+    JobReportData,
+    JobReportSurfacePoint,
     PolarReportData,
     PolarReportPoint,
     ReportError,
     render_combined_report,
     render_gci_report,
+    render_job_report,
     render_polar_report,
 )
 
@@ -172,6 +175,68 @@ def create_app(settings: Settings) -> FastAPI:
         if job is None:
             raise HTTPException(status_code=404, detail="No such job")
         return JobOut.from_job(job)
+
+    @app.get("/jobs/{job_id}/report", dependencies=[Depends(require_token)])
+    def get_job_report(job_id: str):
+        # Phase 3, point 11 of the technical-mechanics requirement
+        # (docs/ARCHITECTURE.md): the single-job counterpart of the
+        # polar/GCI/combined reports above, mirroring the browser's own
+        # result panel on paper. Built straight from job.result
+        # (fosas_core.pipeline.CaseResult), not JobOut, since this stays
+        # inside the engine process and does not need the Pydantic
+        # round-trip the HTTP response layer uses.
+        job = app.state.jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="No such job")
+        if job.result is None:
+            raise HTTPException(status_code=409, detail="Job has no result yet (not done or failed)")
+
+        surface = job.result.surface
+        xs = surface.column("x")
+        zs = surface.column("z")
+        cps = surface.column("Pressure_Coefficient")
+        report_data = JobReportData(
+            step_filename=job.step_filename,
+            generated_at=datetime.now(timezone.utc),
+            aoa_deg=job.result.aoa_deg,
+            cl=job.result.cl,
+            cd=job.result.cd,
+            converged=job.result.convergence.converged,
+            convergence_message=job.result.convergence.message,
+            mean_y_plus=job.result.mean_y_plus,
+            max_y_plus=job.result.max_y_plus,
+            mean_wall_shear_stress=job.result.mean_wall_shear_stress,
+            max_wall_shear_stress=job.result.max_wall_shear_stress,
+            dynamic_pressure=job.result.dynamic_pressure,
+            reynolds_number=job.result.reynolds_number,
+            reference_area=job.result.forces.reference_area,
+            lift=job.result.forces.lift,
+            drag=job.result.forces.drag,
+            resultant=job.result.forces.resultant,
+            glide_ratio=job.result.forces.glide_ratio,
+            resultant_angle_deg=job.result.forces.resultant_angle_deg,
+            reference_length=job.result.moments.reference_length,
+            moment_origin=job.result.moments.moment_origin,
+            cmx=job.result.moments.cmx,
+            cmy=job.result.moments.cmy,
+            cmz=job.result.moments.cmz,
+            mx=job.result.moments.mx,
+            my=job.result.moments.my,
+            mz=job.result.moments.mz,
+            surface_points=tuple(
+                JobReportSurfacePoint(x=xs[i], z=zs[i], cp=cps[i]) for i in range(surface.num_points)
+            ),
+        )
+        try:
+            pdf_bytes = render_job_report(report_data)
+        except ReportError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="job_report_{job_id}.pdf"'},
+        )
 
     @app.post("/jobs/{job_id}/resume", response_model=JobOut, dependencies=[Depends(require_token)])
     def resume_job(job_id: str):
