@@ -384,6 +384,23 @@ const INFO_TEXT = {
     noch nicht. Die Zahlenwerte stehen in der Legende unter der
     3D-Ansicht, nicht direkt am Pfeil.</p>
   `,
+  free_body_diagram: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Freikoerperbild</h4>
+    <p>Dieselbe Darstellung wie im Freikoerperbild der Technischen
+    Mechanik: der Koerper-Querschnitt (Sehnenschnitt, X nach rechts, Z
+    nach oben) mit den eingezeichneten Luftkraeften D, L und R. Die
+    Pfeile setzen am Momenten-Bezugspunkt an und sind zueinander
+    massstabsgetreu (nicht zum Koerper), genau wie die entsprechende
+    Ebene in der 3D-Ansicht oben, hier nur als reine 2D-Seitenansicht
+    ohne Drehen/Zoomen.</p>
+    <p><span class="tag annahme">Noch nicht umgesetzt</span> Gewichtskraft
+    und ein Befestigungspunkt mit berechneten Lagerreaktionen (die
+    "optionalen" Teile dieser Anforderung) fehlen noch: dafuer wird eine
+    Masse/Schwerpunktlage und eine Lagerposition benoetigt, die FOSAS
+    aktuell nicht erfasst. Dieses Bild zeigt bisher ausschliesslich die
+    Luftkraefte.</p>
+  `,
   viewer3d: `
     <span class="tag gesichert">Gesichert</span>
     <h4>3D-Ansicht</h4>
@@ -544,6 +561,116 @@ function drawCpChart(surface) {
   label.setAttribute("font-size", "11");
   label.textContent = "x (Sehnenrichtung)  |  cp-Achse invertiert (Sog nach oben)";
   svg.appendChild(label);
+}
+
+// Classic 2D free-body diagram (technical-mechanics "Freikoerperbild"):
+// the body's own cross-section (every surface point projected onto the
+// X-Z plane; since the body has a constant cross-section along the
+// span, see ADR-0007, every point collapses onto the same outline, no
+// need to filter by y first) plus the D/L/R force arrows, same
+// direction/scaling logic as the 3D "Kraftpfeile" layer but drawn with
+// a single uniform scale on both axes so the (physically perpendicular)
+// angle between D and L is not visually distorted.
+function drawFreeBodyDiagram(result) {
+  const svg = document.getElementById("fbd-chart");
+  svg.innerHTML = "";
+  const surface = result.surface;
+  if (!surface || surface.length === 0) return;
+
+  const xs = surface.map((p) => p.x);
+  const zs = surface.map((p) => p.z);
+  const xMin = arrayMin(xs), xMax = arrayMax(xs);
+  const zMin = arrayMin(zs), zMax = arrayMax(zs);
+  const padX = 50, padY = 30, W = 600, H = 320;
+  const spanX = (xMax - xMin) || 1, spanZ = (zMax - zMin) || 1;
+  const scale = Math.min((W - 2 * padX) / spanX, (H - 2 * padY) / spanZ);
+  const centerX = (xMin + xMax) / 2, centerZ = (zMin + zMax) / 2;
+
+  function sx(x) { return W / 2 + (x - centerX) * scale; }
+  function sy(z) { return H / 2 - (z - centerZ) * scale; } // SVG y grows downward, flip
+
+  const ns = "http://www.w3.org/2000/svg";
+  for (const p of surface) {
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", sx(p.x));
+    c.setAttribute("cy", sy(p.z));
+    c.setAttribute("r", 1.6);
+    c.setAttribute("fill", "#9aa3af");
+    c.setAttribute("opacity", "0.6");
+    svg.appendChild(c);
+  }
+
+  const originX = result.moments.moment_origin[0], originZ = result.moments.moment_origin[2];
+  const originPx = { x: sx(originX), y: sy(originZ) };
+
+  const originDot = document.createElementNS(ns, "circle");
+  originDot.setAttribute("cx", originPx.x);
+  originDot.setAttribute("cy", originPx.y);
+  originDot.setAttribute("r", 3.5);
+  originDot.setAttribute("fill", "#eeeeee");
+  svg.appendChild(originDot);
+
+  const aoaRad = (result.aoa_deg * Math.PI) / 180;
+  const dragDir = { x: Math.cos(aoaRad), z: Math.sin(aoaRad) };
+  const liftDir = { x: -Math.sin(aoaRad), z: Math.cos(aoaRad) };
+  const lift = result.forces.lift, drag = result.forces.drag, resultant = result.forces.resultant;
+  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, 1e-12);
+  // Fixed pixel length for the largest force arrow, independent of the
+  // drawing's own px-per-metre scale: a force arrow is a separate,
+  // schematic quantity, not something drawn to the same physical scale
+  // as the body outline (see INFO_TEXT.free_body_diagram).
+  const maxArrowPx = Math.min(W, H) * 0.3;
+
+  function drawArrow(dirBody, signedMag, color, label) {
+    const mag = Math.abs(signedMag);
+    if (mag < 1e-12) return;
+    const sign = signedMag < 0 ? -1 : 1;
+    const lengthPx = (mag / maxMag) * maxArrowPx;
+    const dx = dirBody.x * sign, dz = dirBody.z * sign;
+    const normLen = Math.hypot(dx, dz) || 1;
+    // Flip z for pixels (same sy() convention: +z body is "up", up is
+    // smaller SVG y).
+    const endX = originPx.x + (dx / normLen) * lengthPx;
+    const endY = originPx.y - (dz / normLen) * lengthPx;
+
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", originPx.x); line.setAttribute("y1", originPx.y);
+    line.setAttribute("x2", endX); line.setAttribute("y2", endY);
+    line.setAttribute("stroke", color);
+    line.setAttribute("stroke-width", "2.2");
+    svg.appendChild(line);
+
+    // Simple arrowhead: two short lines back from the tip.
+    const angle = Math.atan2(endY - originPx.y, endX - originPx.x);
+    const headLen = 9;
+    for (const headAngleOffset of [2.5, -2.5]) {
+      const ha = angle + headAngleOffset;
+      const headLine = document.createElementNS(ns, "line");
+      headLine.setAttribute("x1", endX); headLine.setAttribute("y1", endY);
+      headLine.setAttribute("x2", endX - headLen * Math.cos(ha));
+      headLine.setAttribute("y2", endY - headLen * Math.sin(ha));
+      headLine.setAttribute("stroke", color);
+      headLine.setAttribute("stroke-width", "2.2");
+      svg.appendChild(headLine);
+    }
+
+    const text = document.createElementNS(ns, "text");
+    text.setAttribute("x", endX + 4);
+    text.setAttribute("y", endY);
+    text.setAttribute("fill", color);
+    text.setAttribute("font-size", "11");
+    text.textContent = label;
+    svg.appendChild(text);
+  }
+
+  drawArrow(dragDir, drag, "#e0a72f", "D = " + drag.toPrecision(3) + " N");
+  drawArrow(liftDir, lift, "#4f8cff", "L = " + lift.toPrecision(3) + " N");
+  const resVec = { x: dragDir.x * drag + liftDir.x * lift, z: dragDir.z * drag + liftDir.z * lift };
+  drawArrow(resVec, resultant, "#eeeeee", "R = " + resultant.toPrecision(3) + " N");
+
+  document.getElementById("fbd-legend").textContent =
+    "Grauer Punkt: Momenten-Bezugspunkt (Pfeile setzen dort an, nicht am tatsaechlichen Druckpunkt). " +
+    "Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse.";
 }
 
 // Generic small line-chart-in-SVG helper, used for the Polaren-/GCI-
@@ -946,6 +1073,7 @@ function renderResult(result, jobId) {
   document.getElementById("convergence-msg").textContent = conv.message;
 
   renderSurface3D(result);
+  drawFreeBodyDiagram(result);
   drawCpChart(result.surface);
 }
 

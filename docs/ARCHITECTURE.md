@@ -348,8 +348,24 @@ angenommen.
    nicht nur die bereits vorliegenden punktweisen Werte. Eigener,
    groesserer Schritt.
 7. Freikoerperbild-Modus (2D-Schnittansicht, optional Gewichtskraft und
-   Befestigungspunkt mit Lagerreaktionen) -> eigene neue Ansicht, setzt
-   Punkt 4/5 voraus, eigener spaeterer Schritt.
+   Befestigungspunkt mit Lagerreaktionen) -> **Pflichtteil umgesetzt
+   (2026-10-06):** neue 2D-SVG-Ansicht (`drawFreeBodyDiagram`) direkt
+   unter der 3D-Ansicht, zeigt den echten Koerper-Querschnitt
+   (Oberflaechenpunkte auf die X-Z-Ebene projiziert, bei konstantem
+   Querschnitt entlang der Spannweite faellt jeder Punkt auf dieselbe
+   Kontur, siehe ADR-0007) mit denselben D/L/R-Kraftpfeilen wie in der
+   3D-Ansicht, hier mit echter Beschriftung direkt am Pfeil (in 2D ohne
+   Sprite-Text einfacher als in 3D). Einheitlicher Massstab auf beiden
+   Achsen, damit der rechte Winkel zwischen D und L nicht optisch
+   verzerrt wird. Rein geometrisch gegen echte Lauf-Daten nachgerechnet
+   (keine nicht-endlichen projizierten Punkte, Pfeilenden endlich).
+   **Bewusst nicht umgesetzt (die zwei "optionalen" Teile der
+   Anforderung):** Gewichtskraft und Befestigungspunkt mit
+   Lagerreaktionen. Dafuer fehlen FOSAS aktuell zwei echte neue Eingaben
+   (Masse bzw. Schwerpunktlage, Lagerposition), die nicht einfach
+   plausibel geraten werden sollten (CLAUDE.md: keine stillen Annahmen
+   bei Unterspezifikation). Eigener, spaeterer Schritt, sobald eine
+   Entscheidung zur Schwerpunktlage getroffen ist.
 8. Rechenweg (F = c*q*A, M = cm*q*A*l mit eingesetzten Zahlen) ->
    **Ergebnis-Panel-Teil umgesetzt (2026-10-06):** aufklappbarer
    "Rechenweg"-Block zeigt L, D, Mx, My, Mz jeweils als Formel mit den
