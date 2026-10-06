@@ -261,6 +261,16 @@ const INFO_TEXT = {
     Resultierenden zur Anstroemrichtung ergibt sich aus
     atan2(L, D).</p>
   `,
+  resultant_angle: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Winkel der Resultierenden</h4>
+    <p>Winkel zwischen der Resultierenden R und der Anstroemrichtung
+    (= Widerstandsrichtung), berechnet per atan2(L, D). 0 Grad hiesse:
+    die gesamte Kraft zeigt genau in Widerstandsrichtung, kein Auftrieb.
+    90 Grad hiesse: reiner Auftrieb, kein Widerstand. Ueblich fuer ein
+    Fluegelprofil im normalen Betriebsbereich ist ein Wert nahe 90 Grad
+    (viel Auftrieb, wenig Widerstand im Vergleich).</p>
+  `,
   glide_ratio: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Gleitzahl L/D</h4>
@@ -667,9 +677,15 @@ function renderResult(result, jobId) {
   document.getElementById("yplus-value").textContent = result.mean_y_plus.toFixed(2);
   document.getElementById("q-value").textContent = result.dynamic_pressure.toFixed(1);
   document.getElementById("re-value").textContent = result.reynolds_number.toExponential(2);
-  document.getElementById("lift-value").textContent = result.forces.lift.toFixed(2);
-  document.getElementById("drag-value").textContent = result.forces.drag.toFixed(2);
-  document.getElementById("resultant-value").textContent = result.forces.resultant.toFixed(2);
+  // toPrecision(3), not toFixed(2): forces span orders of magnitude
+  // between a small validation geometry (micro-Newton range) and a
+  // real part (hundreds to thousands of Newtons). toFixed(2) would
+  // round a tiny but real force down to a misleading "0.00" instead of
+  // showing it.
+  document.getElementById("lift-value").textContent = result.forces.lift.toPrecision(3);
+  document.getElementById("drag-value").textContent = result.forces.drag.toPrecision(3);
+  document.getElementById("resultant-value").textContent = result.forces.resultant.toPrecision(3);
+  document.getElementById("resultant-angle-value").textContent = result.forces.resultant_angle_deg.toFixed(1) + "°";
   document.getElementById("glide-ratio-value").textContent =
     result.forces.glide_ratio == null ? "-" : result.forces.glide_ratio.toFixed(2);
 

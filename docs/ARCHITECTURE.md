@@ -223,6 +223,23 @@ berechnet darueber vermutlich schon Momentenbeiwerte in seiner eigenen
 davon aber bisher nur die Kraftbeiwerte aus. Die meisten Punkte unten
 haengen an dieser einen Luecke.
 
+Wichtige Randbedingung, die beim Aufbau der Kraftpfeile (Punkt 4)
+zusaetzlich gegengeprueft wurde: `solver.py`s SU2-Konfiguration setzt
+nirgends einen expliziten `AOA`/`AOS`-Parameter, die gedrehte
+Anstroemrichtung kommt ausschliesslich ueber `INC_VELOCITY_INIT= (vx,
+vy, vz)` (siehe `aoa_to_velocity_components`). **Gesichert per echtem
+Test (2026-10-05):** SU2 meldet CL/CD trotzdem korrekt in Windachsen,
+nicht in festen globalen Achsen, bezogen auf diesen Geschwindigkeitsvektor
+selbst, nicht auf einen separaten Winkel-Parameter. Am Zylinder-Testfall
+bei AoA=0 und AoA=5 Grad bleibt cd praktisch gleich (5.559 vs. 5.565, wie
+bei einem rotationssymmetrischen Querschnitt physikalisch zu erwarten)
+und cl bleibt nahe null bei beiden Winkeln; waere CL/CD stattdessen ein
+ungedrehter globaler Achsenwert, muesste bei 5 Grad ein deutlicher
+Querkomponenten-Leck von CD nach CL auftreten (ueberschlagen rund 0.48,
+beobachtet aber nur -0.009). Damit ist die Grundlage fuer Punkt 4
+(L = CL*q*A, D = CD*q*A in echten Windachsen) bestaetigt, nicht nur
+angenommen.
+
 1. Koordinatensysteme (Windachsen/Koerperachsen, alpha/beta als
    Winkelbogen, Vorzeichenkonvention) -> 3D-Viewer (`index.html`/
    `viewer.html`), neue Layer-Ebene. Alpha existiert schon als Eingabe;
