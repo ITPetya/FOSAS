@@ -86,6 +86,7 @@ def _fake_case_result(work_dir):
         ),
         moments=MomentSystem(
             reference_length=0.6, moment_origin=(0.3, 0.6, 0.0),
+            cmx=0.001, cmy=-0.08, cmz=0.0002,
             mx=0.1, my=-12.5, mz=0.02,
         ),
         mesh_path=work_dir / "mesh.su2",

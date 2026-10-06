@@ -48,6 +48,9 @@ class ForceSystemOut(BaseModel):
 class MomentSystemOut(BaseModel):
     reference_length: float
     moment_origin: tuple[float, float, float]
+    cmx: float
+    cmy: float
+    cmz: float
     mx: float
     my: float
     mz: float
@@ -146,6 +149,9 @@ class JobOut(BaseModel):
                 moments=MomentSystemOut(
                     reference_length=job.result.moments.reference_length,
                     moment_origin=job.result.moments.moment_origin,
+                    cmx=job.result.moments.cmx,
+                    cmy=job.result.moments.cmy,
+                    cmz=job.result.moments.cmz,
                     mx=job.result.moments.mx,
                     my=job.result.moments.my,
                     mz=job.result.moments.mz,

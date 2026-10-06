@@ -323,6 +323,16 @@ const INFO_TEXT = {
     Spannweite physikalisch meist klein, ein von null abweichender Wert
     ist hier oft Netzaufloesungs-Rauschen, keine reale Kraftwirkung.</p>
   `,
+  calculation_steps: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Rechenweg</h4>
+    <p>Dieselben Formeln, die die Kacheln oben bereits anwenden, hier
+    noch einmal einzeln mit den tatsaechlichen Zahlen dieser Rechnung
+    aufgeschrieben: Kraft = Beiwert * Staudruck * Flaeche, Moment =
+    Momentenbeiwert * Staudruck * Flaeche * Bezugslaenge. Staudruck q,
+    Bezugsflaeche A und Bezugslaenge l sind dieselben Werte wie in den
+    Kacheln oben, hier nur wiederverwendet statt neu berechnet.</p>
+  `,
   wall_shear_stress: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Wandschubspannung tau</h4>
@@ -723,6 +733,30 @@ function renderSurface3D(surface) {
 
 let currentResultJobId = null;
 
+function renderCalculationSteps(result) {
+  const q = result.dynamic_pressure;
+  const A = result.forces.reference_area;
+  const l = result.moments.reference_length;
+  const fmt = (x) => x.toPrecision(3);
+  const lines = [
+    "Staudruck q = " + fmt(q) + " Pa, Bezugsflaeche A = " + fmt(A) +
+      " m^2, Bezugslaenge l = " + fmt(l) + " m (siehe Kacheln oben).",
+    "",
+    "L = CL * q * A = " + fmt(result.cl) + " * " + fmt(q) + " * " + fmt(A) +
+      " = " + fmt(result.forces.lift) + " N",
+    "D = CD * q * A = " + fmt(result.cd) + " * " + fmt(q) + " * " + fmt(A) +
+      " = " + fmt(result.forces.drag) + " N",
+    "",
+    "Mx = CMx * q * A * l = " + fmt(result.moments.cmx) + " * " + fmt(q) + " * " +
+      fmt(A) + " * " + fmt(l) + " = " + fmt(result.moments.mx) + " Nm",
+    "My = CMy * q * A * l = " + fmt(result.moments.cmy) + " * " + fmt(q) + " * " +
+      fmt(A) + " * " + fmt(l) + " = " + fmt(result.moments.my) + " Nm",
+    "Mz = CMz * q * A * l = " + fmt(result.moments.cmz) + " * " + fmt(q) + " * " +
+      fmt(A) + " * " + fmt(l) + " = " + fmt(result.moments.mz) + " Nm",
+  ];
+  document.getElementById("calculation-steps-text").textContent = lines.join("\n");
+}
+
 function renderResult(result, jobId) {
   currentResultJobId = jobId;
   document.getElementById("fullscreen-link").href = "/viewer?job=" + jobId;
@@ -754,6 +788,7 @@ function renderResult(result, jobId) {
     "Momenten-Bezugspunkt (aktuell fest, noch nicht waehlbar): x=" + origin[0].toPrecision(3) +
     " m, y=" + origin[1].toPrecision(3) + " m, z=" + origin[2].toPrecision(3) +
     " m (Mitte der Sehne/Spannweite).";
+  renderCalculationSteps(result);
 
   const badge = document.getElementById("convergence-badge");
   const conv = result.convergence;

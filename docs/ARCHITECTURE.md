@@ -324,9 +324,17 @@ angenommen.
    Befestigungspunkt mit Lagerreaktionen) -> eigene neue Ansicht, setzt
    Punkt 4/5 voraus, eigener spaeterer Schritt.
 8. Rechenweg (F = c*q*A, M = cm*q*A*l mit eingesetzten Zahlen) ->
-   Ergebnis-Panel und Bericht (`fosas_core.report` + Typst-Vorlagen),
-   sobald 2-5 vorhanden sind, reine Darstellung bereits berechneter
-   Werte.
+   **Ergebnis-Panel-Teil umgesetzt (2026-10-06):** aufklappbarer
+   "Rechenweg"-Block zeigt L, D, Mx, My, Mz jeweils als Formel mit den
+   tatsaechlichen Zahlen dieser Rechnung (Startpunkt bewusst bei q/A/l,
+   nicht bei rho/v, da letztere aktuell nicht separat ueber die API
+   verfuegbar sind). Dafuer musste `fosas_core.forces.MomentSystem`
+   die rohen cmx/cmy/cmz-Beiwerte zusaetzlich zu den skalierten Nm-
+   Werten mitfuehren (sonst haette die UI den Beiwert durch Ruecktteilen
+   rekonstruieren muessen, ein Physik-Schritt im Client, was die eigene
+   Vorgabe "alle Werte in der Logikschicht" verletzt haette).
+   Noch offen: Uebernahme in den PDF-Bericht (`fosas_core.report` +
+   Typst-Vorlagen), das ist Punkt 11.
 9. Plausibilitaets-Referenzwerte (Kugel, Platte, Pkw, Profil) ->
    eigene kleine Konstantentabelle. Achtung: braucht belegbare Quellen,
    siehe CLAUDE.md-Regel "keine erfundenen Literaturwerte" -- vor

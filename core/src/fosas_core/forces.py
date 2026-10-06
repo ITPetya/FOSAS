@@ -51,6 +51,14 @@ class ForceSystem:
 class MomentSystem:
     reference_length: float
     moment_origin: tuple[float, float, float]
+    # Raw coefficients kept alongside the scaled values (not just
+    # derivable by dividing mx/my/mz back out) so a "show your work"
+    # display (M = cm * q * A * L) can show the actual coefficient that
+    # was substituted, not a value reconstructed by inverting the scale
+    # factor.
+    cmx: float
+    cmy: float
+    cmz: float
     mx: float
     my: float
     mz: float
@@ -75,6 +83,9 @@ def compute_moment_system(
     return MomentSystem(
         reference_length=reference_length,
         moment_origin=moment_origin,
+        cmx=cmx,
+        cmy=cmy,
+        cmz=cmz,
         mx=cmx * scale,
         my=cmy * scale,
         mz=cmz * scale,
