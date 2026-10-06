@@ -42,6 +42,14 @@ class ForceSystemOut(BaseModel):
     resultant_angle_deg: float
 
 
+class MomentSystemOut(BaseModel):
+    reference_length: float
+    moment_origin: tuple[float, float, float]
+    mx: float
+    my: float
+    mz: float
+
+
 class CaseResultOut(BaseModel):
     chord: float
     span: float
@@ -56,6 +64,7 @@ class CaseResultOut(BaseModel):
     dynamic_pressure: float
     reynolds_number: float
     forces: ForceSystemOut
+    moments: MomentSystemOut
     surface: list[SurfacePointOut]
 
 
@@ -120,6 +129,13 @@ class JobOut(BaseModel):
                     resultant=job.result.forces.resultant,
                     glide_ratio=job.result.forces.glide_ratio,
                     resultant_angle_deg=job.result.forces.resultant_angle_deg,
+                ),
+                moments=MomentSystemOut(
+                    reference_length=job.result.moments.reference_length,
+                    moment_origin=job.result.moments.moment_origin,
+                    mx=job.result.moments.mx,
+                    my=job.result.moments.my,
+                    mz=job.result.moments.mz,
                 ),
                 surface=surface_out,
             )

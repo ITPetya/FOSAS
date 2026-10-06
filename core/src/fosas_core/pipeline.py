@@ -28,7 +28,7 @@ from pathlib import Path
 from build123d import Plane
 
 from .boundary_layer import dynamic_pressure, first_cell_height, reynolds_number
-from .forces import ForceSystem, compute_force_system
+from .forces import ForceSystem, MomentSystem, compute_force_system, compute_moment_system
 from .geometry import GeometryError, import_step
 from .meshing import (
     BoundaryLayerMeshParams,
@@ -140,6 +140,7 @@ class CaseResult:
     dynamic_pressure: float
     reynolds_number: float
     forces: ForceSystem
+    moments: MomentSystem
     mesh_path: Path
     solve_dir: Path
 
@@ -293,6 +294,7 @@ def run_case(
     # periodic restart file; picking it up here means a retry continues
     # from there instead of losing that work and starting at iteration 0.
     previous_restart = solve_dir / "restart_flow.dat"
+    moment_origin = (chord / 2, mid_y, 0.0)
     solver_params = SolverParams(
         mesh_su2_path=mesh_path,
         freestream=FreestreamConditions(
@@ -301,7 +303,7 @@ def run_case(
             temperature=params.temperature,
             dynamic_viscosity=params.dynamic_viscosity,
         ),
-        reference=ReferenceValues(length=chord, area=chord * span, moment_origin=(chord / 2, mid_y, 0.0)),
+        reference=ReferenceValues(length=chord, area=chord * span, moment_origin=moment_origin),
         max_iterations=params.max_iterations,
         time_discretization=params.time_discretization,
         restart_solution_path=previous_restart if previous_restart.exists() else None,
@@ -347,6 +349,15 @@ def run_case(
         dynamic_pressure=q,
         reynolds_number=reynolds_number(params.density, params.velocity, chord, params.dynamic_viscosity),
         forces=compute_force_system(cl=final_cl, cd=final_cd, dynamic_pressure=q, reference_area=chord * span),
+        moments=compute_moment_system(
+            cmx=result.final("CMx"),
+            cmy=result.final("CMy"),
+            cmz=result.final("CMz"),
+            dynamic_pressure=q,
+            reference_area=chord * span,
+            reference_length=chord,
+            moment_origin=moment_origin,
+        ),
         mesh_path=mesh_path,
         solve_dir=solve_dir,
     )

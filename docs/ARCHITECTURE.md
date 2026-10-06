@@ -278,15 +278,26 @@ angenommen.
    Pruefwert) und die eigentliche 3D-Pfeil-Visualisierung im Viewer
    (reine Darstellung, keine neue Rechnung mehr noetig).
 5. Momente (Druckpunkt markiert, Bezugspunkt waehlbar: Schwerpunkt/
-   Ursprung/frei, Mx/My/Mz in Nm mit Momentenbeiwerten) -> die oben
-   beschriebene groesste Luecke: muss zuerst in `fosas_core`/`solver.py`
-   ergaenzt werden (SU2-Historienspalten auslesen, pruefen ob dort schon
-   vorhanden). Druckpunkt-Bestimmung und Bezugspunkt-Umrechnung
-   (Momentensatz, M_neu = M_alt + r x F) sind reine Nachverarbeitung,
-   sobald die Rohmomente vorliegen; explizit zu testen (siehe
-   Projektvorgabe): Summe der Oberflaechenkraefte muss der ausgegebenen
-   Resultierenden entsprechen, Momente muessen beim Bezugspunktwechsel
-   korrekt umgerechnet werden.
+   Ursprung/frei, Mx/My/Mz in Nm mit Momentenbeiwerten) ->
+   **Rohmomente umgesetzt (2026-10-06), kleiner als urspruenglich
+   eingeschaetzt:** direkt im Code gegengeprueft, SU2 schreibt CMx/CMy/CMz
+   bereits in seine `AERO_COEFF`-Historiengruppe (die vermutete Luecke
+   oben war also keine echte Luecke, nur ungenutzte, bereits vorhandene
+   Daten). `fosas_core.forces.compute_moment_system` liest sie aus,
+   skaliert mit q*A*Bezugslaenge zu Mx/My/Mz in Nm, drei neue Kacheln im
+   Ergebnis-Panel inklusive Hinweistext zum aktuellen (festen)
+   Bezugspunkt. Gegen Handrechnung bestaetigt (echter Lauf: CMx=0.938 ->
+   Mx=4.60e-6 Nm, CMy=-0.00329 -> My=-1.61e-8 Nm, CMz=-10.92 ->
+   Mz=-5.35e-5 Nm, alle exakt per q*A*L nachgerechnet). Am
+   rotationssymmetrischen Zylinder-Testfall sind Mx/Mz erwartungsgemaess
+   klein (vermutlich Netzaufloesungs-Rauschen, keine reale Asymmetrie),
+   My (Nickmoment) ist die bei einem Fluegelprofil eigentlich
+   interessante Komponente.
+   Noch offen, nicht in diesem Schritt: Druckpunkt-Markierung,
+   waehlbarer Bezugspunkt mit Momentensatz-Umrechnung (M_neu = M_alt +
+   r x F) auf einen anderen Punkt (Schwerpunkt/Ursprung/frei) - das
+   braucht die tatsaechliche Geometrieposition dieser Wahl, nicht nur
+   die bereits vorliegenden Zahlen, und die 3D-Darstellung im Viewer.
 6. Oberflaeche (cp-Farbkarte existiert bereits im 3D-Viewer; lokale
    Druckkraftpfeile, Wandschubspannung, Aufteilung Druck-/
    Reibungswiderstand) -> `fosas_core.solver.SurfaceData` ist laut

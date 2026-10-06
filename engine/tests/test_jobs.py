@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from fosas_core.forces import ForceSystem
+from fosas_core.forces import ForceSystem, MomentSystem
 from fosas_core.pipeline import CaseParams, CaseResult
 from fosas_core.quality import ConvergenceAssessment
 from fosas_core.solver import IterationHistory, SurfaceData
@@ -36,6 +36,10 @@ def _fake_result(work_dir: Path) -> CaseResult:
         forces=ForceSystem(
             reference_area=0.72, lift=334.8, drag=20.8, resultant=335.4,
             glide_ratio=16.1, resultant_angle_deg=86.4,
+        ),
+        moments=MomentSystem(
+            reference_length=0.6, moment_origin=(0.3, 0.6, 0.0),
+            mx=0.1, my=-12.5, mz=0.02,
         ),
         mesh_path=work_dir / "mesh.su2",
         solve_dir=work_dir / "solve",

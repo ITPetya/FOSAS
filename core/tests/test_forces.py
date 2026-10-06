@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from fosas_core.forces import compute_force_system
+from fosas_core.forces import compute_force_system, compute_moment_system
 
 
 def test_lift_and_drag_from_coefficients():
@@ -37,3 +37,25 @@ def test_rejects_non_positive_reference_area():
 def test_rejects_negative_dynamic_pressure():
     with pytest.raises(ValueError):
         compute_force_system(cl=1.0, cd=0.1, dynamic_pressure=-1.0, reference_area=1.0)
+
+
+def test_moment_system_scales_coefficients_by_q_a_l():
+    # cmy=0.5, q=100 Pa, A=2 m^2, L=0.5 m -> My = 0.5*100*2*0.5 = 50 Nm
+    result = compute_moment_system(
+        cmx=0.0, cmy=0.5, cmz=-0.2,
+        dynamic_pressure=100.0, reference_area=2.0, reference_length=0.5,
+        moment_origin=(0.25, 1.0, 0.0),
+    )
+    assert result.mx == pytest.approx(0.0)
+    assert result.my == pytest.approx(50.0)
+    assert result.mz == pytest.approx(-20.0)
+    assert result.moment_origin == (0.25, 1.0, 0.0)
+
+
+def test_moment_system_rejects_non_positive_reference_length():
+    with pytest.raises(ValueError):
+        compute_moment_system(
+            cmx=0.0, cmy=0.0, cmz=0.0,
+            dynamic_pressure=10.0, reference_area=1.0, reference_length=0.0,
+            moment_origin=(0.0, 0.0, 0.0),
+        )

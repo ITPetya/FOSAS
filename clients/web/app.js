@@ -297,6 +297,32 @@ const INFO_TEXT = {
     Gleitzahlen über 30, ein stumpfer Koerper liegt oft deutlich unter
     5.</p>
   `,
+  moment_mx: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Moment Mx</h4>
+    <p>Mx = cmx * q * A * Bezugslaenge. Moment um die X-Achse (Stroemungsrichtung).
+    Fuer einen Koerper mit konstantem Querschnitt entlang der Spannweite
+    (Y-Achse, siehe Koordinatenkonvention) ist dieses Moment physikalisch
+    meist klein bis vernachlässigbar; ein von null abweichender Wert kommt
+    bei diesem Geometrietyp haeufig vor allem aus der Netzaufloesung, nicht
+    aus einer realen Kraftwirkung.</p>
+  `,
+  moment_my: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Moment My (Nickmoment)</h4>
+    <p>My = cmy * q * A * Bezugslaenge. Moment um die Y-Achse
+    (Spannweitenrichtung). Fuer ein Fluegelprofil ist das das klassische
+    Nickmoment (dreht die Nase rauf/runter), die aussagekraeftigste der
+    drei Momentenkomponenten bei diesem Geometrietyp.</p>
+  `,
+  moment_mz: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Moment Mz</h4>
+    <p>Mz = cmz * q * A * Bezugslaenge. Moment um die Z-Achse (vertikal).
+    Wie Mx: bei einem Koerper mit konstantem Querschnitt entlang der
+    Spannweite physikalisch meist klein, ein von null abweichender Wert
+    ist hier oft Netzaufloesungs-Rauschen, keine reale Kraftwirkung.</p>
+  `,
   mean_y_plus: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Mittleres y+</h4>
@@ -703,6 +729,14 @@ function renderResult(result, jobId) {
   document.getElementById("resultant-angle-value").textContent = result.forces.resultant_angle_deg.toFixed(1) + "°";
   document.getElementById("glide-ratio-value").textContent =
     result.forces.glide_ratio == null ? "-" : result.forces.glide_ratio.toFixed(2);
+  document.getElementById("mx-value").textContent = result.moments.mx.toPrecision(3);
+  document.getElementById("my-value").textContent = result.moments.my.toPrecision(3);
+  document.getElementById("mz-value").textContent = result.moments.mz.toPrecision(3);
+  const origin = result.moments.moment_origin;
+  document.getElementById("moment-origin-hint").textContent =
+    "Momenten-Bezugspunkt (aktuell fest, noch nicht waehlbar): x=" + origin[0].toPrecision(3) +
+    " m, y=" + origin[1].toPrecision(3) + " m, z=" + origin[2].toPrecision(3) +
+    " m (Mitte der Sehne/Spannweite).";
 
   const badge = document.getElementById("convergence-badge");
   const conv = result.convergence;

@@ -1,18 +1,28 @@
-"""Aerodynamic force decomposition in wind axes.
+"""Aerodynamic force and moment decomposition in mechanical-engineering units.
 
 CL and CD, as read from the solver (see pipeline.run_case), are already
 wind-axis coefficients: lift perpendicular to the freestream, drag
 parallel to it, independent of angle of attack (SU2 computes them that
-way directly). This module turns those two dimensionless coefficients
-plus the already-known dynamic pressure and reference area into actual
-forces in Newtons, the standard mechanical-engineering form F = c * q * A
-(see docs/ARCHITECTURE.md, "Technische-Mechanik-Visualisierung").
+way directly, verified against this project's own cylinder test case,
+see docs/ARCHITECTURE.md, "Technische-Mechanik-Visualisierung"). This
+module turns those plus the already-known dynamic pressure and reference
+area/length into actual forces (Newtons) and moments (Newton-metres), the
+standard mechanical-engineering form F = c * q * A and M = cm * q * A * L.
 
-Deliberately narrow first slice: only the resultant force system (lift,
-drag, resultant magnitude, glide ratio, resultant angle), not yet the
-full body-axis/moment system (Mx/My/Mz, moment reference point), which
-needs data fosas_core does not read from the solver yet, see the same
-ARCHITECTURE.md section for what is still missing.
+CMx/CMy/CMz already come out of SU2's own AERO_COEFF history group
+(confirmed by reading the actual history CSV columns, see
+ARCHITECTURE.md), about the fixed reference point `solver.ReferenceValues
+.moment_origin` (currently always mid-chord/mid-span/Z=0, not yet
+user-selectable). Moment-reference-point transfer (the Schwerpunkt/
+Ursprung/frei choice from the original requirement) is not implemented
+here: it needs the actual geometry position of that choice, which is a
+UI/pipeline concern, not something this purely numeric module can do on
+its own.
+
+Deliberately narrow: only the resultant force system and the raw moment
+system about the solver's existing fixed reference point, not yet
+center-of-pressure markers or body-axis (Fx/Fy/Fz, needs a sideslip
+angle this project does not model yet) decomposition.
 """
 
 from __future__ import annotations
@@ -35,6 +45,40 @@ class ForceSystem:
     # degrees. atan2, not atan(lift/drag): stays correct (and finite)
     # even if drag is zero or either component is negative.
     resultant_angle_deg: float
+
+
+@dataclass(frozen=True)
+class MomentSystem:
+    reference_length: float
+    moment_origin: tuple[float, float, float]
+    mx: float
+    my: float
+    mz: float
+
+
+def compute_moment_system(
+    cmx: float,
+    cmy: float,
+    cmz: float,
+    dynamic_pressure: float,
+    reference_area: float,
+    reference_length: float,
+    moment_origin: tuple[float, float, float],
+) -> MomentSystem:
+    if dynamic_pressure < 0:
+        raise ValueError("dynamic_pressure must not be negative (Pa)")
+    if reference_area <= 0:
+        raise ValueError("reference_area must be positive (m^2)")
+    if reference_length <= 0:
+        raise ValueError("reference_length must be positive (m)")
+    scale = dynamic_pressure * reference_area * reference_length
+    return MomentSystem(
+        reference_length=reference_length,
+        moment_origin=moment_origin,
+        mx=cmx * scale,
+        my=cmy * scale,
+        mz=cmz * scale,
+    )
 
 
 def compute_force_system(cl: float, cd: float, dynamic_pressure: float, reference_area: float) -> ForceSystem:
