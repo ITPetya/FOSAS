@@ -227,6 +227,51 @@ const INFO_TEXT = {
     gleich Durchmesser ist, nicht allgemein. Aktuell automatisch aus der
     Bounding-Box der Geometrie abgeleitet, noch nicht frei waehlbar.</p>
   `,
+  frontal_area: `
+    <span class="tag annahme">Annahme/Naeherung</span>
+    <h4>Stirnflaeche (Naeherung)</h4>
+    <p>Projizierte Flaeche quer zur Stroemung, so wie klassische
+    Widerstandsbeiwert-Literatur (Kugel, Platte, Pkw, ...) sie
+    normalerweise verwendet - anders als die Bezugsflaeche oben
+    (Grundrissflaeche), siehe deren Tooltip.</p>
+    <p>Hier bewusst einfach genaehert als Spannweite * groesste
+    Bauteildicke (aus der Bounding-Box), NICHT die exakte projizierte
+    Silhouette der echten 3D-Form. Rotiert auch nicht mit dem
+    Anstellwinkel (immer die Naeherung bei AoA=0). Fuer einen Zylinder
+    ist das exakt, fuer ein gewoelbtes Profil oder ein Fahrzeug nur eine
+    grobe Naeherung.</p>
+  `,
+  cl_frontal: `
+    <span class="tag annahme">Annahme/Naeherung</span>
+    <h4>cl, bezogen auf Stirnflaeche</h4>
+    <p>Derselbe Auftrieb wie beim oben gezeigten cl, nur durch die
+    Stirnflaeche (statt der Grundrissflaeche) geteilt: cl_Stirn = cl *
+    Grundrissflaeche / Stirnflaeche. Die physikalische Kraft aendert
+    sich dadurch nicht, nur die Kennzahl. Fehlt ("-"), wenn die
+    Stirnflaeche nicht sinnvoll bestimmbar ist (z. B. bei einer extrem
+    duennen Platte).</p>
+  `,
+  cd_frontal: `
+    <span class="tag annahme">Annahme/Naeherung</span>
+    <h4>cd, bezogen auf Stirnflaeche</h4>
+    <p>Wie cl (Stirnflaeche), nur fuer den Widerstand: cd_Stirn = cd *
+    Grundrissflaeche / Stirnflaeche. Das ist der Wert, der mit den
+    klassischen Literaturwerten unten vergleichbar ist (die beziehen
+    sich fast immer auf die Stirnflaeche), nicht das cd oben.</p>
+  `,
+  plausibility_reference: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Plausibilitaets-Referenzwerte</h4>
+    <p>Bekannte cd-Werte fuer einfache Formen, bezogen auf die
+    Stirnflaeche (siehe cd-Stirnflaeche oben, nicht das cd-Kachel ganz
+    oben). Dient nur der groben Einordnung ("liegt mein Ergebnis in
+    einer plausiblen Groessenordnung"), nicht dem exakten Vergleich:
+    weder dieses Bauteil noch die Referenzformen sind identisch mit den
+    Testbedingungen der jeweiligen Quelle.</p>
+    <p>Die Kugel-Werte haengen stark von der Reynolds-Zahl ab ("Drag
+    Crisis"), siehe die Reynolds-Zahl-Kachel oben fuer den Wert dieses
+    Laufs.</p>
+  `,
   dynamic_pressure: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Staudruck q</h4>
@@ -1061,6 +1106,13 @@ function renderResult(result, jobId) {
   document.getElementById("tau-mean-value").textContent = result.mean_wall_shear_stress.toPrecision(3);
   document.getElementById("tau-max-value").textContent = result.max_wall_shear_stress.toPrecision(3);
   document.getElementById("area-value").textContent = result.forces.reference_area.toPrecision(3);
+  document.getElementById("frontal-area-value").textContent = result.frontal_area.toPrecision(3);
+  document.getElementById("cl-frontal-value").textContent =
+    result.cl_frontal == null ? "-" : result.cl_frontal.toPrecision(3);
+  document.getElementById("cd-frontal-value").textContent =
+    result.cd_frontal == null ? "-" : result.cd_frontal.toPrecision(3);
+  document.getElementById("ref-this-run-value").textContent =
+    result.cd_frontal == null ? "nicht verfuegbar" : result.cd_frontal.toPrecision(3);
   document.getElementById("q-value").textContent = result.dynamic_pressure.toFixed(1);
   document.getElementById("re-value").textContent = result.reynolds_number.toExponential(2);
   // toPrecision(3), not toFixed(2): forces span orders of magnitude

@@ -92,6 +92,30 @@ def compute_moment_system(
     )
 
 
+_MIN_FRONTAL_AREA = 1e-9  # m^2
+
+
+def rescale_coefficient_to_frontal_area(
+    coefficient: float, planform_area: float, frontal_area: float
+) -> float | None:
+    """Converts a coefficient computed against FOSAS's usual planform
+    reference area (chord * span) to the projected-frontal-area
+    convention almost all sphere/plate/car drag-coefficient literature
+    uses instead (point 3/9 of the technical-mechanics visualization
+    requirement, see docs/ARCHITECTURE.md). The underlying physical
+    force is unaffected by this choice of area (F = c_a * q * A_a =
+    c_b * q * A_b for the same F), so this is pure rescaling, not a new
+    solver run: c_frontal = c_planform * planform_area / frontal_area.
+
+    Returns None for a near-zero frontal area (a true flat plate, no
+    meaningful thickness): the frontal-area coefficient would otherwise
+    blow up to +/-infinity, not a meaningful "very large" number.
+    """
+    if frontal_area <= _MIN_FRONTAL_AREA:
+        return None
+    return coefficient * planform_area / frontal_area
+
+
 def compute_force_system(cl: float, cd: float, dynamic_pressure: float, reference_area: float) -> ForceSystem:
     if dynamic_pressure < 0:
         raise ValueError("dynamic_pressure must not be negative (Pa)")

@@ -21,6 +21,9 @@ def _fake_result(work_dir: Path) -> CaseResult:
         aoa_deg=5.0,
         cl=1.29,
         cd=0.08,
+        frontal_area=0.06,
+        cl_frontal=12.9,
+        cd_frontal=0.8,
         convergence=ConvergenceAssessment(
             converged=False,
             final_residual=-3.5,

@@ -28,7 +28,13 @@ from pathlib import Path
 from build123d import Plane
 
 from .boundary_layer import dynamic_pressure, first_cell_height, reynolds_number
-from .forces import ForceSystem, MomentSystem, compute_force_system, compute_moment_system
+from .forces import (
+    ForceSystem,
+    MomentSystem,
+    compute_force_system,
+    compute_moment_system,
+    rescale_coefficient_to_frontal_area,
+)
 from .geometry import GeometryError, import_step
 from .meshing import (
     BoundaryLayerMeshParams,
@@ -135,6 +141,14 @@ class CaseResult:
     aoa_deg: float
     cl: float
     cd: float
+    # Alternative coefficients on the projected-frontal-area convention
+    # (point 3, docs/ARCHITECTURE.md), None for a near-zero-thickness
+    # body where that area is undefined; see where frontal_area is
+    # actually computed for the exact caveat (bounding-box
+    # approximation, not an exact silhouette, does not rotate with AoA).
+    frontal_area: float
+    cl_frontal: float | None
+    cd_frontal: float | None
     convergence: ConvergenceAssessment
     history: IterationHistory
     surface: SurfaceData
@@ -345,6 +359,26 @@ def run_case(
     final_cd = result.final("CD")
     q = dynamic_pressure(params.density, params.velocity)
 
+    # Alternative reference area (point 3 of the technical-mechanics
+    # visualization requirement, see docs/ARCHITECTURE.md): the
+    # projected frontal area (looking along +X, i.e. at AoA=0), needed
+    # to compare against the classic sphere/plate/car drag-coefficient
+    # literature, which almost always uses frontal area, not the
+    # planform area (chord * span) FOSAS otherwise uses throughout.
+    # Deliberately a bounding-box approximation (span * thickness), not
+    # an exact projected silhouette of the real 3D shape, and does not
+    # rotate with AoA (always the AoA=0 projection) - computing the true
+    # silhouette area would need a real geometric projection of the
+    # solid, a bigger task than this derived-quantity rescaling. The
+    # underlying lift/drag forces are unaffected by this choice of area,
+    # only the dimensionless coefficient changes (F = c_a * q * A_a =
+    # c_b * q * A_b for the same F), so no new solver run is needed, just
+    # arithmetic on the already-computed cl/cd.
+    frontal_area = span * thickness
+    planform_area = chord * span
+    cl_frontal = rescale_coefficient_to_frontal_area(final_cl, planform_area, frontal_area)
+    cd_frontal = rescale_coefficient_to_frontal_area(final_cd, planform_area, frontal_area)
+
     cf_x = result.surface.column("Skin_Friction_Coefficient_x")
     cf_y = result.surface.column("Skin_Friction_Coefficient_y")
     cf_z = result.surface.column("Skin_Friction_Coefficient_z")
@@ -363,6 +397,9 @@ def run_case(
         aoa_deg=params.aoa_deg,
         cl=final_cl,
         cd=final_cd,
+        frontal_area=frontal_area,
+        cl_frontal=cl_frontal,
+        cd_frontal=cd_frontal,
         convergence=convergence,
         history=result.history,
         surface=result.surface,
@@ -372,13 +409,13 @@ def run_case(
         max_wall_shear_stress=max_wall_shear_stress,
         dynamic_pressure=q,
         reynolds_number=reynolds_number(params.density, params.velocity, chord, params.dynamic_viscosity),
-        forces=compute_force_system(cl=final_cl, cd=final_cd, dynamic_pressure=q, reference_area=chord * span),
+        forces=compute_force_system(cl=final_cl, cd=final_cd, dynamic_pressure=q, reference_area=planform_area),
         moments=compute_moment_system(
             cmx=result.final("CMx"),
             cmy=result.final("CMy"),
             cmz=result.final("CMz"),
             dynamic_pressure=q,
-            reference_area=chord * span,
+            reference_area=planform_area,
             reference_length=chord,
             moment_origin=moment_origin,
         ),

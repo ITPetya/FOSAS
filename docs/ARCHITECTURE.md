@@ -269,19 +269,22 @@ angenommen.
    selbst (im 3D-Viewer) fehlt noch, reine Darstellung, kein
    Berechnungsaufwand mehr.
 3. Bezugsflaeche (projizierte Stirnflaeche/Draufsicht, farbig,
-   waehlbar) und Bezugslaenge fuer Momentenbeiwerte -> **Anzeige-Teil
-   umgesetzt (2026-10-06):** Bezugsflaeche (Grundrissflaeche = Sehnenlaenge
-   * Spannweite) als eigene Kachel im Ergebnis-Panel, mit explizitem
-   Hinweis, dass das NICHT allgemein dieselbe Flaeche ist wie eine
-   projizierte Stirnflaeche (nur beim Zylinder-Testfall zufaellig
-   gleich, weil dort Sehnenlaenge = Durchmesser). Weiterhin offen: die
-   Flaeche ist noch fest aus der Geometrie-Bounding-Box abgeleitet,
-   waehlbar machen (eigene Stirnflaechen-Option) heisst ein neues
-   `CaseParams`-Feld plus farbige Darstellung als Ebene im 3D-Viewer.
-   **Wurde am 2026-10-06 wichtiger:** Punkt 9 (Plausibilitaets-
-   Referenzwerte) braucht genau diese waehlbare Stirnflaeche, um
-   ueberhaupt sinnvoll vergleichbar zu sein (siehe dort), ist also kein
-   rein kosmetischer Ausbau mehr.
+   waehlbar) und Bezugslaenge fuer Momentenbeiwerte -> **Beide
+   Flaechen jetzt verfuegbar (2026-10-06), ohne neuen Solver-Lauf:**
+   Grundrissflaeche (Sehnenlaenge * Spannweite) UND eine Stirnflaechen-
+   Naeherung (Spannweite * groesste Bauteildicke aus der Bounding-Box,
+   `fosas_core.forces.rescale_coefficient_to_frontal_area`) jetzt beide
+   als eigene Kacheln sichtbar, mit cl/cd zusaetzlich auf beide Flaechen
+   umgerechnet (dieselbe Kraft, zwei Konventionen: F = c_a \* q \* A_a =
+   c_b \* q \* A_b, reine Umrechnung, kein zweiter Solver-Lauf noetig).
+   Explizit als Annahme/Naeherung gekennzeichnet (nicht Gesichert): die
+   Stirnflaeche ist eine Bounding-Box-Naeherung, keine exakte
+   projizierte Silhouette, und rotiert nicht mit dem Anstellwinkel.
+   None statt eines Wertes bei nahezu null Dicke (echte duenne Platte),
+   nicht eine stillschweigend riesige/unendliche Zahl.
+   Noch offen: eine *eigene*, vom Nutzer frei gewaehlte/eingegebene
+   Stirnflaeche (statt der automatischen Naeherung) und die farbige
+   Darstellung als Ebene im 3D-Viewer.
 4. Kraftpfeile (R massstaeblich in N, Zerlegung in D/L/S oder
    Fx/Fy/Fz, Winkel der Resultierenden, Gleitzahl L/D, Beschriftung mit
    Kraft und Beiwert) -> **Zahlenteil umgesetzt (2026-10-05):**
@@ -407,10 +410,16 @@ angenommen.
    * Spannweite, siehe Punkt 3). Beim Zylinder-Testfall stimmt das
    zahlenmaessig zufaellig ueberein, bei einem echten Fluegelprofil oder
    Fahrzeug waere ein direkter Vergleich mit den obigen Werten
-   irrefuehrend, nicht nur ungenau. Punkt 9 wird daher erst nach Punkt 3
-   (waehlbare Stirnflaeche) umgesetzt, damit der Vergleich tatsaechlich
-   auf derselben Bezugsflaeche beruht. Die obigen Werte/Quellen bleiben
-   hier festgehalten, damit die Recherche nicht verloren geht.
+   irrefuehrend, nicht nur ungenau.
+
+   **Umgesetzt (2026-10-06), nachdem Punkt 3 die Stirnflaechen-
+   Naeherung lieferte:** neue Tabelle im Ergebnis-Panel, vergleicht
+   cd_Stirnflaeche dieses Laufs direkt gegen die obigen Werte (gleiche
+   Flaechenkonvention jetzt auf beiden Seiten). Explizit als grobe
+   Einordnungshilfe gekennzeichnet, nicht als exakter Vergleich: weder
+   Geometrie noch Testbedingungen sind identisch mit der jeweiligen
+   Quelle, und die eigene Stirnflaeche ist selbst nur eine Bounding-Box-
+   Naeherung (siehe Punkt 3).
 10. Tooltips mit Technische-Mechanik-Analogie -> `INFO_TEXT`-Objekt in
     `app.js`, exakt das in Schritt 1 bereits verwendete Muster
     (Gesichert/Annahme-Kennzeichnung je Begriff); fuer neue Begriffe (R,

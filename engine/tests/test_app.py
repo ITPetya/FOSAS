@@ -63,6 +63,9 @@ def _fake_case_result(work_dir):
         aoa_deg=5.0,
         cl=1.29,
         cd=0.08,
+        frontal_area=0.06,
+        cl_frontal=12.9,
+        cd_frontal=0.8,
         convergence=ConvergenceAssessment(
             converged=False, final_residual=-3.5, residual_threshold=-8.0,
             is_plateaued=True, message="did not converge",

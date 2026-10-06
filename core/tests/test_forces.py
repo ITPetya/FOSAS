@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from fosas_core.forces import compute_force_system, compute_moment_system
+from fosas_core.forces import compute_force_system, compute_moment_system, rescale_coefficient_to_frontal_area
 
 
 def test_lift_and_drag_from_coefficients():
@@ -59,3 +59,27 @@ def test_moment_system_rejects_non_positive_reference_length():
             dynamic_pressure=10.0, reference_area=1.0, reference_length=0.0,
             moment_origin=(0.0, 0.0, 0.0),
         )
+
+
+def test_rescale_coefficient_to_frontal_area_same_force_same_coefficient_times_area():
+    # The underlying force F = c_planform * q * A_planform must equal
+    # c_frontal * q * A_frontal for the same F: check that identity
+    # directly, not just the rescaling formula in isolation.
+    cd_planform, planform_area, frontal_area = 0.02, 0.6, 0.05
+    cd_frontal = rescale_coefficient_to_frontal_area(cd_planform, planform_area, frontal_area)
+    assert cd_frontal == pytest.approx(cd_planform * planform_area / frontal_area)
+    q = 100.0
+    assert cd_planform * q * planform_area == pytest.approx(cd_frontal * q * frontal_area)
+
+
+def test_rescale_coefficient_to_frontal_area_returns_none_for_near_zero_area():
+    # A true flat plate (no meaningful thickness): frontal-area
+    # coefficient would blow up to +/-infinity, must be None, not a
+    # silently huge or infinite number.
+    assert rescale_coefficient_to_frontal_area(1.0, planform_area=1.0, frontal_area=0.0) is None
+    assert rescale_coefficient_to_frontal_area(1.0, planform_area=1.0, frontal_area=1e-12) is None
+
+
+def test_rescale_coefficient_to_frontal_area_handles_negative_coefficient():
+    result = rescale_coefficient_to_frontal_area(-0.5, planform_area=2.0, frontal_area=1.0)
+    assert result == pytest.approx(-1.0)

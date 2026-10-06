@@ -470,6 +470,9 @@
       <div class="metric"><div class="value" id="tau-mean-value">-</div><div class="label" data-info="wall_shear_stress">mittlere Wandschubspannung (Pa)</div></div>
       <div class="metric"><div class="value" id="tau-max-value">-</div><div class="label" data-info="wall_shear_stress">max. Wandschubspannung (Pa)</div></div>
       <div class="metric"><div class="value" id="area-value">-</div><div class="label" data-info="reference_area">Bezugsflaeche A (m^2)</div></div>
+      <div class="metric"><div class="value" id="frontal-area-value">-</div><div class="label" data-info="frontal_area">Stirnflaeche (m^2, Naeherung)</div></div>
+      <div class="metric"><div class="value" id="cl-frontal-value">-</div><div class="label" data-info="cl_frontal">cl (Stirnflaeche)</div></div>
+      <div class="metric"><div class="value" id="cd-frontal-value">-</div><div class="label" data-info="cd_frontal">cd (Stirnflaeche)</div></div>
       <div class="metric"><div class="value" id="q-value">-</div><div class="label" data-info="dynamic_pressure">Staudruck q (Pa)</div></div>
       <div class="metric"><div class="value" id="re-value">-</div><div class="label" data-info="reynolds_number">Reynolds-Zahl Re</div></div>
       <div class="metric"><div class="value" id="lift-value">-</div><div class="label" data-info="lift_force">Auftrieb L (N)</div></div>
@@ -487,6 +490,19 @@
     <details id="calculation-steps">
       <summary data-info="calculation_steps">Rechenweg (F = c * q * A, M = cm * q * A * l)</summary>
       <pre id="calculation-steps-text" style="white-space:pre-wrap;font-family:inherit;font-size:0.85rem;color:var(--muted);margin:8px 0 0;"></pre>
+    </details>
+
+    <details id="plausibility-reference">
+      <summary data-info="plausibility_reference">Plausibilitaets-Referenzwerte (cd auf Stirnflaeche)</summary>
+      <table class="study-detail-table" style="margin-top:8px;">
+        <tr><th>Form</th><th>cd</th><th>Quelle</th></tr>
+        <tr><td>Dieser Lauf</td><td id="ref-this-run-value">-</td><td>-</td></tr>
+        <tr><td>Kugel, unterkritisch (Re &lt; ca. 2-3e5)</td><td>0,47-0,5</td><td>NASA Glenn / Wikipedia "Drag crisis"</td></tr>
+        <tr><td>Kugel, ueberkritisch (Re &gt; ca. 3e5)</td><td>0,1-0,2</td><td>dito</td></tr>
+        <tr><td>Platte quer zur Stroemung</td><td>1,28</td><td>NASA Glenn, "Shape Effects on Drag"</td></tr>
+        <tr><td>Stromlinienkoerper/Geschoss</td><td>0,295</td><td>dito</td></tr>
+        <tr><td>Pkw (moderner Durchschnitt)</td><td>0,25-0,35</td><td>Wikipedia "Automobile drag coefficient"</td></tr>
+      </table>
     </details>
 
     <div style="display:flex;align-items:center;justify-content:space-between;">

@@ -65,6 +65,9 @@ class CaseResultOut(BaseModel):
     aoa_deg: float
     cl: float
     cd: float
+    frontal_area: float
+    cl_frontal: float | None
+    cd_frontal: float | None
     convergence: ConvergenceOut
     mean_y_plus: float
     max_y_plus: float
@@ -125,6 +128,9 @@ class JobOut(BaseModel):
                 element_count=job.result.element_count,
                 markers=list(job.result.markers),
                 aoa_deg=job.result.aoa_deg,
+                frontal_area=job.result.frontal_area,
+                cl_frontal=job.result.cl_frontal,
+                cd_frontal=job.result.cd_frontal,
                 cl=job.result.cl,
                 cd=job.result.cd,
                 convergence=ConvergenceOut(
