@@ -34,19 +34,34 @@
   .tool-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 
   #sidebar {
-    position: fixed; top: 52px; right: 0; bottom: 0; width: 280px; z-index: 15;
+    position: fixed; top: 52px; right: 0; bottom: 0; width: 320px; z-index: 15;
     background: rgba(23,26,33,0.9); border-left: 1px solid var(--border);
     backdrop-filter: blur(6px); padding: 16px; overflow-y: auto; font-size: 0.85rem;
   }
-  #sidebar h2 { font-size: 0.9rem; margin: 0 0 10px; }
+  #sidebar h2 { font-size: 0.9rem; margin: 18px 0 10px; }
+  #sidebar h2:first-child { margin-top: 0; }
   #sidebar h3 { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 16px 0 6px; }
-  #sidebar .row { display: flex; justify-content: space-between; padding: 3px 0; }
+  #sidebar .row { display: flex; justify-content: space-between; padding: 3px 0; gap: 8px; }
   #sidebar .row .k { color: var(--muted); }
   .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
   .badge.ok { background: var(--ok); color: #06240f; }
   .badge.warn { background: var(--warn); color: #2a1d00; }
   .badge.bad { background: var(--bad); color: #2a0000; }
   .badge.muted { background: var(--border); color: var(--muted); }
+
+  #jobs-list-mini .job-row-mini {
+    display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px;
+    border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+  }
+  #jobs-list-mini .job-row-mini:hover { background: rgba(255,255,255,0.05); }
+  #jobs-list-mini .job-row-mini.current { background: rgba(79,140,255,0.15); border: 1px solid var(--accent); }
+  #jobs-list-mini .job-row-mini .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  select.sidebar-select {
+    width: 100%; margin-bottom: 6px; background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 0.8rem;
+  }
+  button.tool-btn.full-width { width: 100%; margin-top: 4px; }
 
   #probe {
     position: fixed; z-index: 30; pointer-events: none;
@@ -55,14 +70,14 @@
   }
   #probe .k { color: var(--muted); margin-right: 6px; }
 
-  #chart-overlay {
-    position: fixed; left: 24px; bottom: 24px; width: min(520px, calc(100vw - 320px));
+  #chart-overlay, #fbd-overlay {
+    position: fixed; left: 24px; bottom: 24px; width: min(520px, calc(100vw - 360px));
     z-index: 18; background: rgba(20,23,30,0.5); backdrop-filter: blur(14px);
     border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px;
     box-shadow: 0 12px 32px rgba(0,0,0,0.4);
   }
-  #chart-overlay h3 { margin: 0 0 8px; font-size: 0.85rem; }
-  #chart-overlay svg { width: 100%; height: auto; background: rgba(13,15,19,0.4); border-radius: 8px; }
+  #chart-overlay h3, #fbd-overlay h3 { margin: 0 0 8px; font-size: 0.85rem; }
+  #chart-overlay svg, #fbd-overlay svg { width: 100%; height: auto; background: rgba(13,15,19,0.4); border-radius: 8px; }
 
   #status-message {
     position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -81,7 +96,8 @@
   <button type="button" class="tool-btn" id="tool-color-cp">Farbe: cp</button>
   <button type="button" class="tool-btn" id="tool-color-yplus">Farbe: y+</button>
   <button type="button" class="tool-btn" id="tool-axes">Achsen</button>
-  <button type="button" class="tool-btn" id="tool-chart">Diagramm</button>
+  <button type="button" class="tool-btn" id="tool-chart">cp-Diagramm</button>
+  <button type="button" class="tool-btn" id="tool-fbd">Freikoerperbild</button>
   <button type="button" class="tool-btn" id="tool-reset">Ansicht zuruecksetzen</button>
 </div>
 
@@ -91,10 +107,25 @@
   <h3>cp-Verteilung (Sehnenschnitt)</h3>
   <svg id="cp-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
 </div>
+<div id="fbd-overlay" hidden>
+  <h3>Freikoerperbild (D/L/R am Momenten-Bezugspunkt)</h3>
+  <svg id="fbd-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
+  <p class="hint">Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse.</p>
+</div>
 
 <div id="sidebar">
+  <h2>Auftraege</h2>
+  <div id="jobs-list-mini">Laedt ...</div>
+
   <h2>Auftrag</h2>
   <div id="job-info">Laedt ...</div>
+  <button type="button" class="tool-btn full-width" id="job-report-btn-viewer" hidden>Bericht (PDF)</button>
+
+  <h2>Vergleichsbericht</h2>
+  <p class="hint" style="margin:0 0 6px;">Polare und GCI-Netzstudie derselben Geometrie, keine automatische Zuordnung.</p>
+  <select class="sidebar-select" id="viewer-polar-select"></select>
+  <select class="sidebar-select" id="viewer-gci-select"></select>
+  <button type="button" class="tool-btn full-width" id="viewer-combined-report-btn">Vergleichsbericht (PDF)</button>
 </div>
 
 <div id="status-message" hidden></div>
@@ -134,44 +165,147 @@ function statusBadgeHtml(status) {
   return '<span class="badge ' + cls + '">' + text + '</span>';
 }
 
-function renderSidebar(job) {
-  const el = document.getElementById("job-info");
-  const p = job.params;
-  let html = "";
-  html += '<div class="row"><span class="k">Datei</span><span>' + escapeHtml(job.step_filename) + '</span></div>';
-  html += '<div class="row"><span class="k">Status</span>' + statusBadgeHtml(job.status) + '</div>';
-  html += '<h3>Eingaben</h3>';
-  html += '<div class="row"><span class="k">Geschwindigkeit</span><span>' + p.velocity + ' m/s</span></div>';
-  html += '<div class="row"><span class="k">Anstellwinkel</span><span>' + p.aoa_deg + ' deg</span></div>';
-  html += '<div class="row"><span class="k">Zeitintegration</span><span>' + p.time_discretization + '</span></div>';
-  html += '<div class="row"><span class="k">Max. Iterationen</span><span>' + p.max_iterations + '</span></div>';
-  if (job.result) {
-    const r = job.result;
-    html += '<h3>Ergebnis</h3>';
-    html += '<div class="row"><span class="k">CL</span><span>' + r.cl.toFixed(4) + '</span></div>';
-    html += '<div class="row"><span class="k">CD</span><span>' + r.cd.toFixed(4) + '</span></div>';
-    html += '<div class="row"><span class="k">mittleres y+</span><span>' + r.mean_y_plus.toFixed(2) + '</span></div>';
-    html += '<div class="row"><span class="k">Knoten</span><span>' + r.node_count + '</span></div>';
-    html += '<div class="row"><span class="k">Konvergenz</span>' +
-      (r.convergence.converged ? '<span class="badge ok">konvergiert</span>' : '<span class="badge warn">nicht konvergiert</span>') +
-      '</div>';
-    html += '<p class="hint">' + escapeHtml(r.convergence.message) + '</p>';
-  }
-  if (job.progress) {
-    html += '<h3>Fortschritt</h3>';
-    html += '<div class="row"><span class="k">Phase</span><span>' + job.progress.phase + '</span></div>';
-    if (job.progress.percent != null) {
-      html += '<div class="row"><span class="k">Prozent</span><span>' + job.progress.percent.toFixed(1) + '%</span></div>';
-    }
-  }
-  el.innerHTML = html;
-  document.getElementById("job-title").textContent = job.step_filename + " (" + job.status + ")";
-}
-
 function escapeHtml(s) {
   const d = document.createElement("div");
   d.textContent = s;
   return d.innerHTML;
+}
+
+function row(label, value) {
+  return '<div class="row"><span class="k">' + label + '</span><span>' + value + '</span></div>';
+}
+
+function renderSidebar(job) {
+  const el = document.getElementById("job-info");
+  const p = job.params;
+  let html = "";
+  html += row("Datei", escapeHtml(job.step_filename));
+  html += '<div class="row"><span class="k">Status</span>' + statusBadgeHtml(job.status) + '</div>';
+  html += '<h3>Eingaben</h3>';
+  html += row("Geschwindigkeit", p.velocity + " m/s");
+  html += row("Anstellwinkel", p.aoa_deg + " deg");
+  html += row("Zeitintegration", p.time_discretization);
+  html += row("Max. Iterationen", p.max_iterations);
+  if (job.result) {
+    const r = job.result;
+    html += '<h3>Kraftbeiwerte</h3>';
+    html += row("CL", r.cl.toFixed(4));
+    html += row("CD", r.cd.toFixed(4));
+    html += row("Konvergenz",
+      r.convergence.converged ? '<span class="badge ok">konvergiert</span>' : '<span class="badge warn">nicht konvergiert</span>');
+    html += '<p class="hint">' + escapeHtml(r.convergence.message) + '</p>';
+
+    html += '<h3>Anstroemung</h3>';
+    html += row("Staudruck q", r.dynamic_pressure.toFixed(2) + " Pa");
+    html += row("Reynolds-Zahl", r.reynolds_number.toExponential(2));
+
+    html += '<h3>Kraeftesystem (Windachsen)</h3>';
+    html += row("Auftrieb L", r.forces.lift.toPrecision(3) + " N");
+    html += row("Widerstand D", r.forces.drag.toPrecision(3) + " N");
+    html += row("Resultierende R", r.forces.resultant.toPrecision(3) + " N");
+    html += row("Winkel R", r.forces.resultant_angle_deg.toFixed(1) + "&deg;");
+    html += row("Gleitzahl L/D", r.forces.glide_ratio == null ? "-" : r.forces.glide_ratio.toFixed(2));
+
+    html += '<h3>Momente</h3>';
+    html += row("Mx", r.moments.mx.toPrecision(3) + " Nm");
+    html += row("My", r.moments.my.toPrecision(3) + " Nm");
+    html += row("Mz", r.moments.mz.toPrecision(3) + " Nm");
+    html += '<p class="hint">Bezugspunkt (fest): x=' + r.moments.moment_origin[0].toPrecision(3) +
+      " m, y=" + r.moments.moment_origin[1].toPrecision(3) + " m, z=" + r.moments.moment_origin[2].toPrecision(3) + " m</p>";
+
+    html += '<h3>Flaechen und Oberflaeche</h3>';
+    html += row("Bezugsflaeche A", r.forces.reference_area.toPrecision(3) + " m&sup2;");
+    html += row("Stirnflaeche (Naeherung)", r.frontal_area.toPrecision(3) + " m&sup2;");
+    html += row("cd (Stirnflaeche)", r.cd_frontal == null ? "-" : r.cd_frontal.toPrecision(3));
+    html += row("Wandschubspannung (Mittel/Max)",
+      r.mean_wall_shear_stress.toPrecision(3) + " / " + r.max_wall_shear_stress.toPrecision(3) + " Pa");
+    html += row("y+ (Mittel/Max)", r.mean_y_plus.toFixed(2) + " / " + r.max_y_plus.toFixed(2));
+    html += row("Knoten", r.node_count);
+  }
+  if (job.progress) {
+    html += '<h3>Fortschritt</h3>';
+    html += row("Phase", job.progress.phase);
+    if (job.progress.percent != null) {
+      html += row("Prozent", job.progress.percent.toFixed(1) + "%");
+    }
+  }
+  el.innerHTML = html;
+  document.getElementById("job-title").textContent = job.step_filename + " (" + job.status + ")";
+
+  const reportBtn = document.getElementById("job-report-btn-viewer");
+  reportBtn.hidden = !job.result;
+}
+
+function navigateToJob(jobId) {
+  window.location.href = "?job=" + jobId;
+}
+
+async function loadJobsListMini(currentJobId) {
+  const el = document.getElementById("jobs-list-mini");
+  try {
+    const res = await fetch("/jobs", { headers: authHeaders() });
+    if (!res.ok) { el.textContent = "Konnte Liste nicht laden."; return; }
+    const jobs = await res.json();
+    if (jobs.length === 0) { el.textContent = "Noch keine Auftraege."; return; }
+    jobs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    el.innerHTML = "";
+    for (const job of jobs) {
+      const div = document.createElement("div");
+      div.className = "job-row-mini" + (job.id === currentJobId ? " current" : "");
+      const fn = document.createElement("span");
+      fn.className = "fn";
+      fn.textContent = job.step_filename;
+      div.appendChild(fn);
+      div.appendChild(document.createTextNode(""));
+      div.title = job.step_filename + " (" + job.status + ")";
+      div.addEventListener("click", () => navigateToJob(job.id));
+      el.appendChild(div);
+    }
+  } catch (err) {
+    el.textContent = "Konnte Liste nicht laden.";
+  }
+}
+
+function populateSelect(selectId, studies) {
+  const select = document.getElementById(selectId);
+  select.innerHTML = "";
+  for (const study of studies) {
+    const option = document.createElement("option");
+    option.value = study.id;
+    option.textContent = study.step_filename + " (" + study.id.slice(0, 8) + ")";
+    select.appendChild(option);
+  }
+}
+
+async function loadReportSelects() {
+  try {
+    const [polarRes, gciRes] = await Promise.all([
+      fetch("/polar-studies", { headers: authHeaders() }),
+      fetch("/gci-studies", { headers: authHeaders() }),
+    ]);
+    if (polarRes.ok) populateSelect("viewer-polar-select", await polarRes.json());
+    if (gciRes.ok) populateSelect("viewer-gci-select", await gciRes.json());
+  } catch (err) {
+    // Non-critical for the 3D view itself; leave the selects empty.
+  }
+}
+
+async function downloadPdf(url, filename) {
+  try {
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) { alert("Bericht konnte nicht erzeugt werden (" + res.status + ")."); return; }
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    alert("Bericht konnte nicht geladen werden.");
+  }
 }
 
 function drawCpChart(surface) {
@@ -193,14 +327,104 @@ function drawCpChart(surface) {
   }
 }
 
+// Same geometry/scaling logic as clients/web/app.js's drawFreeBodyDiagram
+// (index.html's result panel) - duplicated rather than shared, same as
+// the cp chart above already was: this page has its own standalone
+// script, see docs/ARCHITECTURE.md on why (kept deliberately simple,
+// no build step/module system to share code between the two pages).
+function drawFbdChart(result) {
+  const svg = document.getElementById("fbd-chart");
+  svg.innerHTML = "";
+  const surface = result.surface;
+  if (!surface || surface.length === 0) return;
+
+  const xs = surface.map((p) => p.x);
+  const zs = surface.map((p) => p.z);
+  const xMin = arrayMin(xs), xMax = arrayMax(xs);
+  const zMin = arrayMin(zs), zMax = arrayMax(zs);
+  const padX = 50, padY = 30, W = 600, H = 320;
+  const spanX = (xMax - xMin) || 1, spanZ = (zMax - zMin) || 1;
+  const scale = Math.min((W - 2 * padX) / spanX, (H - 2 * padY) / spanZ);
+  const centerX = (xMin + xMax) / 2, centerZ = (zMin + zMax) / 2;
+  const sx = (x) => W / 2 + (x - centerX) * scale;
+  const sy = (z) => H / 2 - (z - centerZ) * scale;
+
+  const ns = "http://www.w3.org/2000/svg";
+  for (const p of surface) {
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", sx(p.x)); c.setAttribute("cy", sy(p.z)); c.setAttribute("r", 1.6);
+    c.setAttribute("fill", "#9aa3af"); c.setAttribute("opacity", "0.6");
+    svg.appendChild(c);
+  }
+
+  const originX = result.moments.moment_origin[0], originZ = result.moments.moment_origin[2];
+  const originPx = { x: sx(originX), y: sy(originZ) };
+  const originDot = document.createElementNS(ns, "circle");
+  originDot.setAttribute("cx", originPx.x); originDot.setAttribute("cy", originPx.y);
+  originDot.setAttribute("r", 3.5); originDot.setAttribute("fill", "#eeeeee");
+  svg.appendChild(originDot);
+
+  const aoaRad = (result.aoa_deg * Math.PI) / 180;
+  const dragDir = { x: Math.cos(aoaRad), z: Math.sin(aoaRad) };
+  const liftDir = { x: -Math.sin(aoaRad), z: Math.cos(aoaRad) };
+  const lift = result.forces.lift, drag = result.forces.drag, resultant = result.forces.resultant;
+  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, 1e-12);
+  const maxArrowPx = Math.min(W, H) * 0.3;
+
+  function drawArrow(dirBody, signedMag, color, label) {
+    const mag = Math.abs(signedMag);
+    if (mag < 1e-12) return;
+    const sign = signedMag < 0 ? -1 : 1;
+    const lengthPx = (mag / maxMag) * maxArrowPx;
+    const dx = dirBody.x * sign, dz = dirBody.z * sign;
+    const normLen = Math.hypot(dx, dz) || 1;
+    const endX = originPx.x + (dx / normLen) * lengthPx;
+    const endY = originPx.y - (dz / normLen) * lengthPx;
+
+    const line = document.createElementNS(ns, "line");
+    line.setAttribute("x1", originPx.x); line.setAttribute("y1", originPx.y);
+    line.setAttribute("x2", endX); line.setAttribute("y2", endY);
+    line.setAttribute("stroke", color); line.setAttribute("stroke-width", "2.2");
+    svg.appendChild(line);
+
+    const angle = Math.atan2(endY - originPx.y, endX - originPx.x);
+    const headLen = 9;
+    for (const headAngleOffset of [2.5, -2.5]) {
+      const ha = angle + headAngleOffset;
+      const headLine = document.createElementNS(ns, "line");
+      headLine.setAttribute("x1", endX); headLine.setAttribute("y1", endY);
+      headLine.setAttribute("x2", endX - headLen * Math.cos(ha));
+      headLine.setAttribute("y2", endY - headLen * Math.sin(ha));
+      headLine.setAttribute("stroke", color); headLine.setAttribute("stroke-width", "2.2");
+      svg.appendChild(headLine);
+    }
+
+    const text = document.createElementNS(ns, "text");
+    text.setAttribute("x", endX + 4); text.setAttribute("y", endY);
+    text.setAttribute("fill", color); text.setAttribute("font-size", "11");
+    text.textContent = label;
+    svg.appendChild(text);
+  }
+
+  drawArrow(dragDir, drag, "#e0a72f", "D = " + drag.toPrecision(3) + " N");
+  drawArrow(liftDir, lift, "#4f8cff", "L = " + lift.toPrecision(3) + " N");
+  const resVec = { x: dragDir.x * drag + liftDir.x * lift, z: dragDir.z * drag + liftDir.z * lift };
+  drawArrow(resVec, resultant, "#eeeeee", "R = " + resultant.toPrecision(3) + " N");
+}
+
 async function main() {
   const jobId = getJobIdFromUrl();
   const statusMsg = document.getElementById("status-message");
+  loadReportSelects();
+
   if (!jobId) {
     statusMsg.hidden = false;
-    statusMsg.textContent = "Kein Auftrag angegeben. Diese Ansicht wird ueber den (i)-Link bei einem fertigen Auftrag geoeffnet.";
+    statusMsg.textContent = "Kein Auftrag angegeben. Diese Ansicht wird ueber den (i)-Link bei einem fertigen Auftrag geoeffnet, oder einen Auftrag links in der Liste waehlen.";
+    loadJobsListMini(null);
     return;
   }
+
+  loadJobsListMini(jobId);
 
   const res = await fetch("/jobs/" + jobId, { headers: authHeaders() });
   if (!res.ok) {
@@ -211,6 +435,10 @@ async function main() {
   const job = await res.json();
   renderSidebar(job);
 
+  document.getElementById("job-report-btn-viewer").addEventListener("click", () => {
+    downloadPdf("/jobs/" + jobId + "/report", "job_report_" + jobId + ".pdf");
+  });
+
   if (job.status !== "done" || !job.result) {
     statusMsg.hidden = false;
     statusMsg.textContent = job.status === "failed"
@@ -220,8 +448,16 @@ async function main() {
   }
 
   drawCpChart(job.result.surface);
+  drawFbdChart(job.result);
   setupViewer(job.result.surface);
 }
+
+document.getElementById("viewer-combined-report-btn").addEventListener("click", () => {
+  const polarId = document.getElementById("viewer-polar-select").value;
+  const gciId = document.getElementById("viewer-gci-select").value;
+  if (!polarId || !gciId) { alert("Bitte eine Polarstudie und eine GCI-Netzstudie auswaehlen."); return; }
+  downloadPdf("/reports/combined?polar_study_id=" + polarId + "&gci_study_id=" + gciId, "combined_report.pdf");
+});
 
 function setupViewer(surface) {
   const container = document.getElementById("canvas-wrap");
@@ -361,6 +597,12 @@ function setupViewer(surface) {
 
   document.getElementById("tool-chart").addEventListener("click", (e) => {
     const overlay = document.getElementById("chart-overlay");
+    overlay.hidden = !overlay.hidden;
+    e.target.className = "tool-btn" + (!overlay.hidden ? " active" : "");
+  });
+
+  document.getElementById("tool-fbd").addEventListener("click", (e) => {
+    const overlay = document.getElementById("fbd-overlay");
     overlay.hidden = !overlay.hidden;
     e.target.className = "tool-btn" + (!overlay.hidden ? " active" : "");
   });

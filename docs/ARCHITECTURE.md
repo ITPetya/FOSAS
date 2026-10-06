@@ -256,10 +256,12 @@ angenommen.
    Browser-Test (siehe eigene Einschraenkung weiter unten im
    Dokument).
    Beta (Schiebewinkel) bleibt wie beschrieben unmodelliert, dafuer
-   also bewusst kein Winkelbogen. **Nicht umgesetzt:** dieselbe Ebene in
-   `viewer.html` (eigenstaendiges Skript, nicht `app.js`, siehe Schritt
-   1 dieser Phase) - dort fehlt die neue Ebene noch komplett, nur die
-   Hauptseite hat sie.
+   also bewusst kein Winkelbogen. **Weiterhin nicht umgesetzt:** die
+   3D-Windachsen-Pfeil/Winkelbogen-Ebene selbst in `viewer.html` (siehe
+   RISKS.md R21 fuer dessen umfassenderen, am 2026-10-06 behobenen
+   Ausbau - der bringt Text-/2D-Anzeige fuer Kraefte/Momente und ein
+   2D-Freikoerperbild auch in `viewer.html`, aber nicht diese
+   3D-Koordinatenebene im three.js-Canvas selbst).
 2. Anstroemung (Pfeil mit v, rho, Staudruck q, Reynolds-Zahl) ->
    Ergebnis-Metadaten (Ergebnis-Panel + Bericht). **Umgesetzt
    (2026-10-05):** q und Re werden in `fosas_core.boundary_layer`
@@ -309,8 +311,8 @@ angenommen.
    Noch offen: die D/L/S- bzw. Fx/Fy/Fz-Zerlegung in Koerperachsen
    (braucht Beta/Schiebewinkel, siehe Punkt 1, das symmetrische
    Testprofil liefert dafuer bisher keinen sinnvollen Pruefwert) und
-   dieselbe Ebene in `viewer.html` (wie bei Punkt 1, nur die Hauptseite
-   hat sie bisher).
+   die 3D-Pfeile selbst in `viewer.html` (das 2D-Freikoerperbild mit
+   denselben Pfeilen gibt es dort inzwischen, siehe RISKS.md R21).
 5. Momente (Druckpunkt markiert, Bezugspunkt waehlbar: Schwerpunkt/
    Ursprung/frei, Mx/My/Mz in Nm mit Momentenbeiwerten) ->
    **Rohmomente umgesetzt (2026-10-06), kleiner als urspruenglich

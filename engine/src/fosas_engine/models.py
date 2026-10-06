@@ -17,6 +17,34 @@ from fosas_engine.polar_studies import PolarStudy
 from fosas_engine.progress import compute_progress
 
 
+class CaseParamsOut(BaseModel):
+    """Mirrors fosas_core.pipeline.CaseParams. Added so a client can
+    still see a job's own input configuration after submission (e.g.
+    clients/web/viewer.html's sidebar) without having to separately
+    remember it client-side - previously not exposed at all, which
+    silently broke that exact page (it assumed this field already
+    existed and crashed on the missing field before rendering anything,
+    see docs/RISKS.md).
+    """
+
+    velocity: float
+    aoa_deg: float
+    density: float
+    dynamic_viscosity: float
+    temperature: float
+    target_y_plus: float
+    growth_ratio: float
+    bl_thickness_factor: float
+    span_layers: int
+    n_profile_points: int
+    max_iterations: int
+    mpi_ranks: int
+    residual_threshold: float
+    time_discretization: str
+    background_size_min_factor: float
+    background_size_max_factor: float
+
+
 class ConvergenceOut(BaseModel):
     converged: bool
     final_residual: float
@@ -96,6 +124,7 @@ class JobOut(BaseModel):
     finished_at: datetime | None = None
     archived: bool = False
     step_filename: str
+    params: CaseParamsOut
     stage: str | None = None
     error: str | None = None
     result: CaseResultOut | None = None
@@ -103,6 +132,24 @@ class JobOut(BaseModel):
 
     @classmethod
     def from_job(cls, job: Job) -> "JobOut":
+        params_out = CaseParamsOut(
+            velocity=job.params.velocity,
+            aoa_deg=job.params.aoa_deg,
+            density=job.params.density,
+            dynamic_viscosity=job.params.dynamic_viscosity,
+            temperature=job.params.temperature,
+            target_y_plus=job.params.target_y_plus,
+            growth_ratio=job.params.growth_ratio,
+            bl_thickness_factor=job.params.bl_thickness_factor,
+            span_layers=job.params.span_layers,
+            n_profile_points=job.params.n_profile_points,
+            max_iterations=job.params.max_iterations,
+            mpi_ranks=job.params.mpi_ranks,
+            residual_threshold=job.params.residual_threshold,
+            time_discretization=job.params.time_discretization,
+            background_size_min_factor=job.params.background_size_min_factor,
+            background_size_max_factor=job.params.background_size_max_factor,
+        )
         result_out = None
         if job.result is not None:
             surface = job.result.surface
@@ -186,6 +233,7 @@ class JobOut(BaseModel):
             finished_at=job.finished_at,
             archived=job.archived,
             step_filename=job.step_filename,
+            params=params_out,
             stage=job.stage,
             error=job.error,
             result=result_out,

@@ -1362,3 +1362,46 @@ Schwellwert waere selbst eine Form von Schoenrechnen, siehe CLAUDE.md.
 Spaeter denkbare Ergaenzung, nicht umgesetzt: die GCI-Ausgabe koennte
 zusaetzlich auf eine Mindestgroesse des Nenners relativ zur
 Aufloesungsaenderung hinweisen, ohne das Ergebnis selbst zu veraendern.
+
+## R21: viewer.html zeigte ueberhaupt keine Daten an (echter Absturz, vom Projektinhaber gemeldet)
+
+Beleg (Gesichert, direkt im Code gefunden und per echtem Lauf
+nachgestellt, 2026-10-06): `clients/web/viewer.html`s `renderSidebar`
+griff auf `job.params.velocity`/`.aoa_deg`/`.time_discretization`/
+`.max_iterations` zu, aber `fosas_engine.models.JobOut` (die tatsaechliche
+API-Antwort von `GET /jobs/{id}`) hatte nie ein `params`-Feld. Der
+Zugriff auf `undefined.velocity` liess `renderSidebar` sofort mit einer
+TypeError abbrechen, noch bevor irgendeine Status- oder 3D-Anzeige
+gerendert wurde: die gesamte Seite blieb leer, exakt wie vom
+Projektinhaber beschrieben ("da werden keine Daten angezeigt").
+
+Ursache, eine Ebene tiefer: `viewer.html` ist bewusst ein eigenstaendiges
+Skript (siehe docs/ARCHITECTURE.md, kein Build-Schritt/Modulsystem, das
+sich ein Skript mit `clients/web/app.js` teilen liesse). Diese Seite
+wurde seit ihrer Erstellung nie in einem echten Browser gegen die echte,
+laufende Engine getestet (eigene, wiederholt benannte Einschraenkung
+dieser Sitzung: kein Browser verfuegbar, nur SSH/curl/Node-Simulation),
+und die Phase-3-Schritt-1-Planung hatte `viewer.html` explizit
+unangetastet gelassen. Ein Feld, das beim Schreiben der Seite erwartet,
+aber nie tatsaechlich von der API geliefert wurde, blieb dadurch
+monatelang unentdeckt.
+
+Behoben (2026-10-06): `JobOut` bekam ein echtes `params`-Feld
+(`CaseParamsOut`, spiegelt `fosas_core.pipeline.CaseParams` vollstaendig,
+nicht nur `aoa_deg` wie zuvor punktuell fuer die 3D-Pfeile ergaenzt).
+`viewer.html` zugleich erheblich erweitert (Auftragsliste, vollstaendige
+Kraft-/Momentenanzeige, Freikoerperbild-Diagramm, Einzel- und
+Vergleichsbericht-Knoepfe) und gegen eine echte Rechnung sowohl per
+curl als auch per Node-Simulation der reinen Rendering-Funktionen
+(mit einem minimalen DOM-Stub, da kein echter Browser verfuegbar ist)
+geprueft: kein "undefined"/NaN im erzeugten HTML.
+
+Einordnung: Dies ist der erste real aufgetretene Fall der Gefahr, die
+mit zwei unabhaengigen Clients (`index.html`+`app.js` und `viewer.html`)
+immer besteht: Felder/Verhalten koennen stillschweigend auseinanderlaufen,
+wenn nur eine Seite tatsaechlich getestet wird. Keine Architekturaenderung
+vorgenommen (die beiden Seiten bleiben eigenstaendige Skripte, siehe
+Begruendung oben), aber als bekannte, wiederkehrende Fehlerquelle
+hier festgehalten: jede zukuenftige API-Feldaenderung sollte explizit
+gegen BEIDE Clients gegengeprueft werden, nicht nur gegen den gerade
+bearbeiteten.

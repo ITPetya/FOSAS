@@ -71,10 +71,12 @@
   .badge.ok { background: var(--ok); color: #06240f; }
   .badge.warn { background: var(--warn); color: #2a1d00; }
   .badge.bad { background: var(--bad); color: #2a0000; }
-  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0 16px; }
   .metric { background: #0d0f13; border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
   .metric .value { font-size: 1.3rem; font-weight: 600; }
   .metric .label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .metrics-group-title { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 18px 0 2px; }
+  .metrics-group-title:first-of-type { margin-top: 10px; }
   .msg { font-size: 0.9rem; margin-top: 8px; line-height: 1.4; }
   svg { width: 100%; height: auto; background: #0d0f13; border: 1px solid var(--border); border-radius: 8px; }
   .legend { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
@@ -463,28 +465,50 @@
       <button type="button" class="job-action-btn" id="job-report-btn">Bericht (PDF)</button>
     </div>
     <div id="convergence-badge" data-info="convergence"></div>
+
+    <h4 class="metrics-group-title">Kraftbeiwerte</h4>
     <div class="metrics">
       <div class="metric"><div class="value" id="cl-value">-</div><div class="label" data-info="cl">CL</div></div>
       <div class="metric"><div class="value" id="cd-value">-</div><div class="label" data-info="cd">CD</div></div>
-      <div class="metric"><div class="value" id="yplus-value">-</div><div class="label" data-info="mean_y_plus">mittleres y+</div></div>
-      <div class="metric"><div class="value" id="tau-mean-value">-</div><div class="label" data-info="wall_shear_stress">mittlere Wandschubspannung (Pa)</div></div>
-      <div class="metric"><div class="value" id="tau-max-value">-</div><div class="label" data-info="wall_shear_stress">max. Wandschubspannung (Pa)</div></div>
+    </div>
+
+    <h4 class="metrics-group-title">Anstroemung</h4>
+    <div class="metrics">
+      <div class="metric"><div class="value" id="q-value">-</div><div class="label" data-info="dynamic_pressure">Staudruck q (Pa)</div></div>
+      <div class="metric"><div class="value" id="re-value">-</div><div class="label" data-info="reynolds_number">Reynolds-Zahl Re</div></div>
+    </div>
+
+    <h4 class="metrics-group-title">Flaechen (fuer Beiwerte, zwei Konventionen)</h4>
+    <div class="metrics">
       <div class="metric"><div class="value" id="area-value">-</div><div class="label" data-info="reference_area">Bezugsflaeche A (m^2)</div></div>
       <div class="metric"><div class="value" id="frontal-area-value">-</div><div class="label" data-info="frontal_area">Stirnflaeche (m^2, Naeherung)</div></div>
       <div class="metric"><div class="value" id="cl-frontal-value">-</div><div class="label" data-info="cl_frontal">cl (Stirnflaeche)</div></div>
       <div class="metric"><div class="value" id="cd-frontal-value">-</div><div class="label" data-info="cd_frontal">cd (Stirnflaeche)</div></div>
-      <div class="metric"><div class="value" id="q-value">-</div><div class="label" data-info="dynamic_pressure">Staudruck q (Pa)</div></div>
-      <div class="metric"><div class="value" id="re-value">-</div><div class="label" data-info="reynolds_number">Reynolds-Zahl Re</div></div>
+    </div>
+
+    <h4 class="metrics-group-title">Kraeftesystem (Windachsen)</h4>
+    <div class="metrics">
       <div class="metric"><div class="value" id="lift-value">-</div><div class="label" data-info="lift_force">Auftrieb L (N)</div></div>
       <div class="metric"><div class="value" id="drag-value">-</div><div class="label" data-info="drag_force">Widerstand D (N)</div></div>
       <div class="metric"><div class="value" id="resultant-value">-</div><div class="label" data-info="resultant_force">Resultierende R (N)</div></div>
       <div class="metric"><div class="value" id="resultant-angle-value">-</div><div class="label" data-info="resultant_angle">Winkel R zur Anstroemung</div></div>
       <div class="metric"><div class="value" id="glide-ratio-value">-</div><div class="label" data-info="glide_ratio">Gleitzahl L/D</div></div>
+    </div>
+
+    <h4 class="metrics-group-title">Momente</h4>
+    <div class="metrics">
       <div class="metric"><div class="value" id="mx-value">-</div><div class="label" data-info="moment_mx">Moment Mx (Nm)</div></div>
       <div class="metric"><div class="value" id="my-value">-</div><div class="label" data-info="moment_my">Moment My (Nm)</div></div>
       <div class="metric"><div class="value" id="mz-value">-</div><div class="label" data-info="moment_mz">Moment Mz (Nm)</div></div>
     </div>
     <p class="hint" id="moment-origin-hint" style="margin:4px 0 0;"></p>
+
+    <h4 class="metrics-group-title">Oberflaeche</h4>
+    <div class="metrics">
+      <div class="metric"><div class="value" id="yplus-value">-</div><div class="label" data-info="mean_y_plus">mittleres y+</div></div>
+      <div class="metric"><div class="value" id="tau-mean-value">-</div><div class="label" data-info="wall_shear_stress">mittlere Wandschubspannung (Pa)</div></div>
+      <div class="metric"><div class="value" id="tau-max-value">-</div><div class="label" data-info="wall_shear_stress">max. Wandschubspannung (Pa)</div></div>
+    </div>
     <p class="msg" id="convergence-msg"></p>
 
     <details id="calculation-steps">
