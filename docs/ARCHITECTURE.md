@@ -241,12 +241,25 @@ beobachtet aber nur -0.009). Damit ist die Grundlage fuer Punkt 4
 angenommen.
 
 1. Koordinatensysteme (Windachsen/Koerperachsen, alpha/beta als
-   Winkelbogen, Vorzeichenkonvention) -> 3D-Viewer (`index.html`/
-   `viewer.html`), neue Layer-Ebene. Alpha existiert schon als Eingabe;
-   Beta (Schiebewinkel) ist nicht modelliert, `aoa_to_velocity_components`
-   dreht nur in der X-Z-Ebene. Braucht zuerst eine Core-Erweiterung
-   (Drehung zusaetzlich in der X-Y-Ebene), bevor es visualisiert werden
-   kann.
+   Winkelbogen, Vorzeichenkonvention) -> **Alpha-Teil umgesetzt
+   (2026-10-06):** neue einblendbare Ebene "Koerper-/Windachsen, Winkel
+   α" im 3D-Viewer der Hauptseite (`index.html`/`app.js`, nicht
+   `viewer.html`, siehe unten): Koerperachsen-Dreibein (bestehender
+   `AxesHelper`, jetzt als eigene Ebene), ein Pfeil in echter
+   Windrichtung (aus `aoa_deg`, dafuer neu in `CaseResult`/API
+   verfuegbar gemacht, vorher nur Eingabe, nirgends im Ergebnis
+   echoed), ein Winkelbogen, der tatsaechlich um `aoa_deg` schwenkt
+   (nicht nur dekorativ fest). Vorzeichenkonvention direkt im Tooltip
+   dokumentiert (positives alpha dreht von X zu Z, siehe
+   `aoa_to_velocity_components`). Rein geometrisch gegen die reale
+   Orthogonalitaet/Vektorsumme der Windachsen-Basis nachgerechnet, kein
+   Browser-Test (siehe eigene Einschraenkung weiter unten im
+   Dokument).
+   Beta (Schiebewinkel) bleibt wie beschrieben unmodelliert, dafuer
+   also bewusst kein Winkelbogen. **Nicht umgesetzt:** dieselbe Ebene in
+   `viewer.html` (eigenstaendiges Skript, nicht `app.js`, siehe Schritt
+   1 dieser Phase) - dort fehlt die neue Ebene noch komplett, nur die
+   Hauptseite hat sie.
 2. Anstroemung (Pfeil mit v, rho, Staudruck q, Reynolds-Zahl) ->
    Ergebnis-Metadaten (Ergebnis-Panel + Bericht). **Umgesetzt
    (2026-10-05):** q und Re werden in `fosas_core.boundary_layer`
@@ -272,11 +285,25 @@ angenommen.
    (atan2-basierter Winkel, robust auch bei D=0 oder negativem L),
    Gleitzahl L/D, alle vier als neue Kacheln im Ergebnis-Panel,
    End-to-End gegen Handrechnung bestaetigt (inkl. negativem L bei
-   negativem AoA). Noch offen: die D/L/S- bzw. Fx/Fy/Fz-Zerlegung in
-   Koerperachsen (braucht Beta/Schiebewinkel, siehe Punkt 1, das
-   symmetrische Testprofil liefert dafuer bisher keinen sinnvollen
-   Pruefwert) und die eigentliche 3D-Pfeil-Visualisierung im Viewer
-   (reine Darstellung, keine neue Rechnung mehr noetig).
+   negativem AoA). **3D-Pfeile ebenfalls umgesetzt (2026-10-06):** neue
+   einblendbare Ebene "Kraftpfeile" zeigt D (orange, entlang der
+   Windachse), L (blau, senkrecht dazu) und R (weiss, Vektorsumme) als
+   `THREE.ArrowHelper`, Laenge zueinander massstabsgetreu (laengster
+   der drei = feste visuelle Laenge, sonst waeren Kraefte im
+   Mikronewton-Bereich unsichtbar), Beschriftung mit Kraft und Beiwert
+   als Text-Legende unter der 3D-Ansicht (bewusst keine
+   3D-Sprite-Beschriftung direkt am Pfeil, siehe Begruendung im
+   zugehoerigen Tooltip: neue Rendering-Infrastruktur nur dafuer waere
+   unverhaeltnismaessig). Die Richtungs-/Laengen-Mathematik direkt gegen
+   echte Kraftwerte dieser Sitzung nachgerechnet (Orthogonalitaet von
+   D-/L-Richtung, Resultierende per Vektorsumme exakt reproduziert).
+   Pfeile setzen am Momenten-Bezugspunkt an, nicht am tatsaechlichen
+   Druckpunkt (den gibt es noch nicht, siehe Punkt 5).
+   Noch offen: die D/L/S- bzw. Fx/Fy/Fz-Zerlegung in Koerperachsen
+   (braucht Beta/Schiebewinkel, siehe Punkt 1, das symmetrische
+   Testprofil liefert dafuer bisher keinen sinnvollen Pruefwert) und
+   dieselbe Ebene in `viewer.html` (wie bei Punkt 1, nur die Hauptseite
+   hat sie bisher).
 5. Momente (Druckpunkt markiert, Bezugspunkt waehlbar: Schwerpunkt/
    Ursprung/frei, Mx/My/Mz in Nm mit Momentenbeiwerten) ->
    **Rohmomente umgesetzt (2026-10-06), kleiner als urspruenglich

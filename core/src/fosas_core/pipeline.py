@@ -126,6 +126,13 @@ class CaseResult:
     node_count: int
     element_count: int
     markers: tuple[str, ...]
+    # Echoed straight from the input, not a solver output: needed so a
+    # client can draw the wind-axis direction relative to the body axes
+    # (see docs/ARCHITECTURE.md "Technische-Mechanik-Visualisierung",
+    # point 1) without having to separately remember the job's own
+    # input params, which the API does not otherwise expose after
+    # submission.
+    aoa_deg: float
     cl: float
     cd: float
     convergence: ConvergenceAssessment
@@ -353,6 +360,7 @@ def run_case(
         node_count=mesh_info.node_count,
         element_count=mesh_info.element_count,
         markers=mesh_info.markers,
+        aoa_deg=params.aoa_deg,
         cl=final_cl,
         cd=final_cd,
         convergence=convergence,

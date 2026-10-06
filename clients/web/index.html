@@ -490,6 +490,16 @@
       <h3 style="font-size:0.95rem;margin:0;" data-info="viewer3d">3D-Ansicht (cp auf der Oberflaeche)</h3>
       <a id="fullscreen-link" href="#" target="_blank" rel="noopener" class="archive-toggle-btn" style="text-decoration:none;">Vollbild &#8599;</a>
     </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0;font-size:0.85rem;color:var(--muted);">
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+        <input type="checkbox" id="layer-toggle-coord" checked>
+        <span data-info="viewer_layer_coord">Ebene: Koerper-/Windachsen, Winkel α</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+        <input type="checkbox" id="layer-toggle-forces" checked>
+        <span data-info="viewer_layer_forces">Ebene: Kraftpfeile (L, D, R)</span>
+      </label>
+    </div>
     <div id="viewer3d-wrap">
       <div id="viewer3d"></div>
       <p class="viewer3d-note" id="viewer3d-note" hidden></p>
@@ -500,6 +510,7 @@
       <span id="cp-max-label"></span>
     </div>
     <p class="hint">Ziehen zum Drehen, Scrollen zum Zoomen. Jeder Punkt ist ein echter Netzknoten der Oberflaeche, keine geglaettete Flaeche.</p>
+    <p class="hint" id="viewer3d-overlay-legend" style="margin-top:2px;"></p>
 
     <h3 style="font-size:0.95rem;" data-info="cp_chart">cp-Verteilung (Sehnenschnitt)</h3>
     <svg id="cp-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>

@@ -60,6 +60,7 @@ def _fake_case_result(work_dir):
         node_count=1234,
         element_count=5678,
         markers=("airfoil", "farfield"),
+        aoa_deg=5.0,
         cl=1.29,
         cd=0.08,
         convergence=ConvergenceAssessment(

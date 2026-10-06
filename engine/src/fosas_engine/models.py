@@ -62,6 +62,7 @@ class CaseResultOut(BaseModel):
     node_count: int
     element_count: int
     markers: list[str]
+    aoa_deg: float
     cl: float
     cd: float
     convergence: ConvergenceOut
@@ -123,6 +124,7 @@ class JobOut(BaseModel):
                 node_count=job.result.node_count,
                 element_count=job.result.element_count,
                 markers=list(job.result.markers),
+                aoa_deg=job.result.aoa_deg,
                 cl=job.result.cl,
                 cd=job.result.cd,
                 convergence=ConvergenceOut(

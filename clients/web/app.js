@@ -356,6 +356,34 @@ const INFO_TEXT = {
     Oberflaeche. Liegt er deutlich ueber dem Zielwert, war die erste
     Netzzelle an manchen Stellen groeber als beabsichtigt.</p>
   `,
+  viewer_layer_coord: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Koerper- und Windachsen</h4>
+    <p>Koerperachsen (X rot = stromab, Y gruen = Spannweite, Z blau =
+    vertikal, siehe docs/ARCHITECTURE.md) sind fest mit dem Bauteil
+    verbunden. Die weisse Windachse zeigt die tatsaechliche
+    Anstroemrichtung; der Bogen dazwischen ist der Anstellwinkel alpha.
+    Positives alpha dreht die Anstroemrichtung von der X-Achse zur
+    Z-Achse (siehe aoa_to_velocity_components in fosas_core.pipeline).</p>
+    <p><span class="tag annahme">Annahme</span> Ein Schiebewinkel beta
+    (seitliche Anstroemung) wird von FOSAS aktuell nicht modelliert
+    (nur Drehung in der X-Z-Ebene), daher gibt es dafuer noch keinen
+    Winkelbogen.</p>
+  `,
+  viewer_layer_forces: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Kraftpfeile</h4>
+    <p>D (orange) entlang der Windachse, L (blau) senkrecht dazu, R
+    (weiss) als deren Vektorsumme. Richtung und Laenge sind
+    massstabsgetreu zueinander (laengster Pfeil = der jeweils groesste
+    der drei Werte), aber NICHT massstabsgetreu zur Bauteilgroesse
+    selbst, sonst waeren die Pfeile bei kleinen Kraeften unsichtbar.</p>
+    <p><span class="tag annahme">Annahme/Vereinfachung</span> Die Pfeile
+    setzen am Momenten-Bezugspunkt an (siehe Momente oben), nicht am
+    tatsaechlichen Druckpunkt; eine eigene Druckpunkt-Markierung gibt es
+    noch nicht. Die Zahlenwerte stehen in der Legende unter der
+    3D-Ansicht, nicht direkt am Pfeil.</p>
+  `,
   viewer3d: `
     <span class="tag gesichert">Gesichert</span>
     <h4>3D-Ansicht</h4>
@@ -636,7 +664,20 @@ function disposeViewer3D() {
   viewer3dState = null;
 }
 
-function renderSurface3D(surface) {
+// Body-axes vector (x, y, z) -> three.js scene-space direction: three.js
+// treats Y as "up", this project's own convention is Z vertical, so swap
+// Y/Z. Directions only (no translation/scaling), see bodyPointToScene for
+// positions.
+function bodyDirToScene(x, y, z) {
+  return new THREE.Vector3(x, z, y);
+}
+
+function bodyPointToScene(x, y, z, cx, cy, cz, extent) {
+  return new THREE.Vector3((x - cx) / extent, (z - cz) / extent, (y - cy) / extent);
+}
+
+function renderSurface3D(result) {
+  const surface = result.surface;
   const container = document.getElementById("viewer3d");
   const note = document.getElementById("viewer3d-note");
   const colorbarRow = document.getElementById("colorbar-row");
@@ -673,9 +714,10 @@ function renderSurface3D(surface) {
     // docs/ARCHITECTURE.md); three.js treats Y as "up" by convention,
     // so swap Y/Z here purely for a sensible default camera orientation,
     // this does not change any underlying data.
-    positions[i * 3 + 0] = (p.x - cx) / extent;
-    positions[i * 3 + 1] = (p.z - cz) / extent;
-    positions[i * 3 + 2] = (p.y - cy) / extent;
+    const scenePos = bodyPointToScene(p.x, p.y, p.z, cx, cy, cz, extent);
+    positions[i * 3 + 0] = scenePos.x;
+    positions[i * 3 + 1] = scenePos.y;
+    positions[i * 3 + 2] = scenePos.z;
     const [r, g, b] = cpToColor(p.cp, cpMin, cpMax);
     colors[i * 3 + 0] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
   });
@@ -688,7 +730,28 @@ function renderSurface3D(surface) {
 
   const scene = new THREE.Scene();
   scene.add(points);
-  scene.add(new THREE.AxesHelper(0.7));
+
+  const coordLayer = buildCoordLayer(result.aoa_deg);
+  scene.add(coordLayer);
+
+  const momentOriginScene = bodyPointToScene(
+    result.moments.moment_origin[0], result.moments.moment_origin[1], result.moments.moment_origin[2],
+    cx, cy, cz, extent,
+  );
+  const forcesLayer = buildForcesLayer(result, momentOriginScene);
+  scene.add(forcesLayer);
+
+  // Exact colors THREE.AxesHelper itself renders (pure red/green/blue
+  // vertex colors), not just a similar-looking tone, so the legend text
+  // and the 3D lines are unambiguously the same color to the eye.
+  document.getElementById("viewer3d-overlay-legend").innerHTML =
+    "Achsen: <span style=\"color:#ff3333\">X</span> stromab, " +
+    "<span style=\"color:#33ff33\">Y</span> Spannweite, " +
+    "<span style=\"color:#3366ff\">Z</span> vertikal, " +
+    "<span style=\"color:#eeeeee\">weiss</span> Windachse (α=" + result.aoa_deg.toFixed(1) + "°) &middot; " +
+    "Kraftpfeile: <span style=\"color:#e0a72f\">D</span>=" + result.forces.drag.toPrecision(3) + " N, " +
+    "<span style=\"color:#4f8cff\">L</span>=" + result.forces.lift.toPrecision(3) + " N, " +
+    "<span style=\"color:#eeeeee\">R</span>=" + result.forces.resultant.toPrecision(3) + " N";
 
   const width = container.clientWidth, height = container.clientHeight;
   const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 100);
@@ -728,8 +791,92 @@ function renderSurface3D(surface) {
   }
   animate();
 
-  viewer3dState = { renderer, controls, container, onResize, get frameHandle() { return frameHandle; } };
+  coordLayer.visible = document.getElementById("layer-toggle-coord").checked;
+  forcesLayer.visible = document.getElementById("layer-toggle-forces").checked;
+
+  viewer3dState = {
+    renderer, controls, container, onResize, coordLayer, forcesLayer,
+    get frameHandle() { return frameHandle; },
+  };
 }
+
+// Simple colored-line coordinate triad (body axes) plus the wind-axis
+// direction arrow and an angle arc for alpha, all anchored at the scene
+// origin (the body's own bounding-box center, same point the old
+// AxesHelper used). No sideslip angle arc: beta is not modelled by
+// fosas_core yet, see INFO_TEXT.viewer_layer_coord.
+function buildCoordLayer(aoaDeg) {
+  const group = new THREE.Group();
+  group.add(new THREE.AxesHelper(0.7));
+
+  const aoaRad = (aoaDeg * Math.PI) / 180;
+  const windDirBody = { x: Math.cos(aoaRad), y: 0, z: Math.sin(aoaRad) };
+  const windDirScene = bodyDirToScene(windDirBody.x, windDirBody.y, windDirBody.z).normalize();
+  const windArrow = new THREE.ArrowHelper(windDirScene, new THREE.Vector3(0, 0, 0), 0.9, 0xeeeeee, 0.12, 0.06);
+  group.add(windArrow);
+
+  // Angle arc between the body +X axis and the wind direction, swept
+  // through the actual aoa_deg (not just a fixed decorative arc), same
+  // X-Z body plane since there is no sideslip.
+  const arcRadius = 0.35;
+  const arcSteps = 24;
+  const arcPoints = [];
+  for (let i = 0; i <= arcSteps; i++) {
+    const t = (aoaRad * i) / arcSteps;
+    arcPoints.push(bodyDirToScene(Math.cos(t) * arcRadius, 0, Math.sin(t) * arcRadius));
+  }
+  const arcGeometry = new THREE.BufferGeometry().setFromPoints(arcPoints);
+  const arcLine = new THREE.Line(arcGeometry, new THREE.LineBasicMaterial({ color: 0xeeeeee }));
+  group.add(arcLine);
+
+  return group;
+}
+
+// Force arrows (D along the wind direction, L perpendicular to it, R as
+// their vector sum), anchored at the moment reference point (not the
+// true center of pressure, see INFO_TEXT.viewer_layer_forces), scaled so
+// the largest of the three has a fixed visual length regardless of the
+// forces' actual physical magnitude (otherwise a small validation case's
+// micro-Newton forces would render as invisible, zero-length arrows).
+function buildForcesLayer(result, originScene) {
+  const group = new THREE.Group();
+  const aoaRad = (result.aoa_deg * Math.PI) / 180;
+  const dragDirBody = { x: Math.cos(aoaRad), y: 0, z: Math.sin(aoaRad) };
+  // +90 degrees from the drag/wind direction in the body X-Z plane; at
+  // alpha=0 this is body +Z ("up"), matching the usual lift convention.
+  const liftDirBody = { x: -Math.sin(aoaRad), y: 0, z: Math.cos(aoaRad) };
+
+  const lift = result.forces.lift, drag = result.forces.drag, resultant = result.forces.resultant;
+  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, 1e-12);
+  const visualScale = 0.9 / maxMag;
+
+  function addArrow(dirBody, signedMagnitude, color) {
+    const mag = Math.abs(signedMagnitude);
+    if (mag < 1e-12) return; // zero-length ArrowHelper direction is undefined, skip instead
+    const sign = signedMagnitude < 0 ? -1 : 1;
+    const dirScene = bodyDirToScene(dirBody.x * sign, dirBody.y * sign, dirBody.z * sign).normalize();
+    group.add(new THREE.ArrowHelper(dirScene, originScene, mag * visualScale, color, 0.1, 0.05));
+  }
+
+  addArrow(dragDirBody, drag, 0xe0a72f);
+  addArrow(liftDirBody, lift, 0x4f8cff);
+
+  const resultantVecBody = {
+    x: dragDirBody.x * drag + liftDirBody.x * lift,
+    y: 0,
+    z: dragDirBody.z * drag + liftDirBody.z * lift,
+  };
+  addArrow(resultantVecBody, resultant, 0xeeeeee);
+
+  return group;
+}
+
+document.getElementById("layer-toggle-coord").addEventListener("change", (e) => {
+  if (viewer3dState && viewer3dState.coordLayer) viewer3dState.coordLayer.visible = e.target.checked;
+});
+document.getElementById("layer-toggle-forces").addEventListener("change", (e) => {
+  if (viewer3dState && viewer3dState.forcesLayer) viewer3dState.forcesLayer.visible = e.target.checked;
+});
 
 let currentResultJobId = null;
 
@@ -798,7 +945,7 @@ function renderResult(result, jobId) {
   badge.innerHTML = '<span class="badge ' + cls + '">' + text + '</span>';
   document.getElementById("convergence-msg").textContent = conv.message;
 
-  renderSurface3D(result.surface);
+  renderSurface3D(result);
   drawCpChart(result.surface);
 }
 
