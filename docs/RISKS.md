@@ -993,7 +993,50 @@ dieses Risiko spaeter doch noch geloest werden (eigener Fortschritt,
 SU2-Update, Antwort zum verwandten Issue #533), wird das hier
 nachgetragen.
 
-## R11: Reales Kundenmodell (Auto-Heckspoiler) ist kein Solid, echte Luecke
+Update (Gesichert, drei eigene, gezielte Diagnoseversuche, 2026-10-07/12,
+auf Wunsch des Projektinhabers fortgesetzt): Die offizielle
+SU2-Validierungsvorlage fuer genau diesen Fall
+(`su2code/Tutorials`, `incompressible_flow/Inc_Turbulent_NACA0012`,
+strukturiertes 897x257-C-Netz, eigene Konfiguration) wurde direkt
+heruntergeladen und mit demselben lokalen SU2-Build durchgerechnet
+(800 Iterationen, 3 MPI-Raenge):
+
+(A) Offizielles Netz + offizielle Konfiguration: rms[P] faellt
+durchgehend weiter (von -4,3 auf -5,90 nach 800 Iterationen, "No" laut
+SU2s eigenem Konvergenzkriterium, aber klar kein Plateau). CL/CD zeigen
+einen Grenzzyklus statt eines stabilen Werts (CL pendelt zwischen 0,83
+und 1,27 um die Referenz 1,091; CD pendelt durch einen Bereich, der die
+Referenz 0,0123 einschliesst). Qualitativ grundverschieden von unserem
+eigenen, falschen, stabilen Plateau.
+
+(B) Unser eigenes Netz (gleicher Testfall, 611520 Elemente, 3D-Extrusion)
++ die vier auffaelligsten Abweichungen der offiziellen Konfiguration
+uebernommen (CFL 1,0 auf 25,0; Vorkonditionierer JACOBI auf ILU;
+Toleranz 1E-6 auf 1E-10; Flusslimiter VENKATAKRISHNAN auf keinen): divergiert
+sofort (CL/CD wachsen binnen 3 Iterationen auf die Groessenordnung 10^13,
+SU2 bricht selbst mit "has diverged" ab). Unser Netz vertraegt die fuer
+das offizielle, saubere Netz passende, aggressive Numerik nicht.
+
+(C) Dieselbe eigene Vernetzung, aber nur Vorkonditionierer+Toleranz
+geaendert (ILU, 1E-10), CFL und Flusslimiter wie gewohnt belassen: kein
+Absturz, aber erneut ein Plateau, diesmal sogar bei rms[P]=-2,88 (schlechter
+als das bisher dokumentierte -3,4) mit CD~0,24 (schlechter als die
+bisher dokumentierten 0,13-0,156). Eine reine Konfigurationsaenderung
+macht es hier also nicht besser, sondern schlechter.
+
+Einordnung: Das grenzt die Ursache weiter ein, als es vorher moeglich
+war. Reine Solver-Konfiguration (Vorkonditionierer, Toleranz, CFL,
+Limiter) ist als alleinige Ursache jetzt unwahrscheinlicher: identische
+Konfiguration verhaelt sich auf dem offiziellen Netz grundlegend anders
+(kontinuierlicher Fortschritt) als auf unserem (Absturz oder schlechteres
+Plateau). Das verbleibende, mit aktueller Werkzeugausstattung noch nicht
+direkt widerlegte Hauptverdaechtige bleibt damit die eigene Vernetzung
+selbst (unstrukturierte Extrusion, siehe Zellqualitaetsbefund weiter
+oben), nicht die Solver-Parametrisierung. Naechster sinnvoller, aber
+deutlich groesserer Schritt: den alternativen `extrudeBoundaryLayer`-
+Vernetzungsweg (siehe ADR-0007, bisher nur per Python-API demonstriert,
+nie fuer einen echten Loeserlauf verwendet) tatsaechlich implementieren
+und denselben Vergleich wiederholen.
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
 `Test_Spoiler.step`, STEP-Datei von Open CASCADE 7.7 erzeugt, automotive
