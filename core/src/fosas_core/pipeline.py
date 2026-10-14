@@ -36,6 +36,7 @@ from .forces import (
     rescale_coefficient_to_frontal_area,
 )
 from .geometry import GeometryError, import_step
+from .materials import MATERIAL_DENSITIES_KG_M3, STANDARD_GRAVITY
 from .meshing import (
     BoundaryLayerMeshParams,
     ConstantSectionMeshParams,
@@ -138,6 +139,14 @@ class CaseParams:
     # fixed, as the GCI method requires.
     background_size_min_factor: float = 0.01
     background_size_max_factor: float = 0.5
+    # Optional material for a weight-force estimate (point 7,
+    # docs/ARCHITECTURE.md): None means "no material selected", so no
+    # mass/weight is computed at all (not a silent zero). See
+    # materials.MATERIAL_DENSITIES_KG_M3 for the key -> density mapping
+    # and its Annahme/Richtwert caveat. Project owner's decision,
+    # 2026-10-14: mass comes from a material dropdown + density lookup,
+    # not a directly-entered mass value.
+    material: str | None = None
 
     def __post_init__(self):
         if self.velocity <= 0:
@@ -146,6 +155,11 @@ class CaseParams:
             raise ValueError("max_iterations must be positive")
         if self.n_profile_points < 3:
             raise ValueError("n_profile_points must be at least 3")
+        if self.material is not None and self.material not in MATERIAL_DENSITIES_KG_M3:
+            raise ValueError(
+                f"Unknown material '{self.material}'. Available: "
+                f"{sorted(MATERIAL_DENSITIES_KG_M3)}"
+            )
 
 
 @dataclass(frozen=True)
@@ -216,6 +230,22 @@ class CaseResult:
     # based chord/2 point the force/moment system is reported about,
     # unrelated to mass distribution).
     center_of_mass: tuple[float, float, float]
+    # Volume is always computed (pure geometry, Gesichert); material/
+    # density/mass/weight are all None together when no material was
+    # selected (params.material is None) - not a silent zero, see
+    # materials.py and CaseParams.material. weight = mass * g
+    # (materials.STANDARD_GRAVITY), the force of gravity on the part,
+    # acting in -Z (down, FOSAS's vertical axis convention) at
+    # center_of_mass above - NOT part of the aerodynamic ForceSystem
+    # (that stays wind-axes L/D/S; gravity does not rotate with AoA).
+    volume: float
+    material: str | None
+    # Named material_density, not density, to avoid confusion with
+    # CaseParams.density (the freestream air density, a completely
+    # different quantity).
+    material_density: float | None
+    mass: float | None
+    weight: float | None
     mesh_path: Path
     solve_dir: Path
 
@@ -331,8 +361,9 @@ def run_case(
     # "Technische-Mechanik-Visualisierung"; project owner's decision,
     # 2026-10-14: "der Schwerpunkt soll wenn dann berechnet werden aus
     # der STEP"). CenterOf.MASS is OCCT's volume centroid under an
-    # ASSUMED HOMOGENEOUS material (no density/material data exists in
-    # a bare STEP file or anywhere else in FOSAS yet) - explicitly an
+    # ASSUMED HOMOGENEOUS material - a uniform density cancels out of a
+    # centroid calculation, so even once a material/density is selected
+    # (see below) this point does not change; it is explicitly an
     # Annahme, not the true mass centroid of a real, non-uniform part,
     # see the caveat surfaced alongside this value in the UI/report.
     # Confirmed by direct test against both a symmetric cylinder (exact
@@ -347,6 +378,19 @@ def run_case(
         center_of_mass_native.Y * _MM_TO_M,
         center_of_mass_native.Z * _MM_TO_M,
     )
+
+    # Optional weight-force estimate (point 7, docs/ARCHITECTURE.md;
+    # project owner's decision, 2026-10-14: mass comes from a material
+    # dropdown + density lookup, not a directly-entered mass value).
+    # volume is always computed (pure geometry); mass/weight stay None
+    # together when no material was selected, never a silent zero.
+    # compute_volume() confirmed by direct test to return native build123d
+    # units (mm^3, same as every other raw geometry read here), so the
+    # same _MM_TO_M conversion applies, cubed.
+    volume = geometry.shape.compute_volume() * _MM_TO_M**3
+    density = MATERIAL_DENSITIES_KG_M3[params.material] if params.material is not None else None
+    mass = density * volume if density is not None else None
+    weight = mass * STANDARD_GRAVITY if mass is not None else None
 
     y1 = first_cell_height(
         density=params.density,
@@ -519,6 +563,11 @@ def run_case(
             moment_origin=moment_origin,
         ),
         center_of_mass=center_of_mass,
+        volume=volume,
+        material=params.material,
+        material_density=density,
+        mass=mass,
+        weight=weight,
         mesh_path=mesh_path,
         solve_dir=solve_dir,
     )

@@ -256,6 +256,11 @@ def _job_data(**overrides):
         my=-1.6e-8,
         mz=-5.35e-5,
         center_of_mass=(0.0042, -0.01, 0.0001),
+        volume=1.5e-6,
+        material="aluminium",
+        material_density=2700.0,
+        mass=4.05e-3,
+        weight=0.0397,
         surface_points=_job_surface_points(),
     )
     defaults.update(overrides)

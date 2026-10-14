@@ -93,6 +93,25 @@ z=#fmt_num(data.center_of_mass.at(2), digits: 4) m
   Kraftwirkung (siehe docs/ARCHITECTURE.md).
 ]
 
+== Masse / Gewichtskraft (optional)
+
+#table(
+  columns: 4,
+  fill: table_fill,
+  [*Volumen (m^3)*], [*Material*], [*Masse (kg)*], [*Gewichtskraft G (N)*],
+  fmt_num(data.volume, digits: 6),
+  if data.material == none { "-" } else { data.material },
+  fmt_num(data.mass, digits: 6), fmt_num(data.weight, digits: 4),
+)
+
+#if data.weight != none [
+  *Hinweis:* Masse = Volumen \* Dichte des gewaehlten Materials
+  (#fmt_num(data.material_density, digits: 1) kg/m^3, Richtwert, siehe
+  fosas_core.materials). G = Masse \* g (g = 9.80665 m/s^2) wirkt
+  senkrecht nach unten am geometrischen Schwerpunkt oben, unabhaengig
+  vom Anstell-/Schiebewinkel.
+]
+
 == Rechenweg
 
 Dieselben Formeln wie oben, hier mit den tatsaechlichen Zahlen dieser
@@ -107,17 +126,22 @@ Rechnung aufgeschrieben (F = c \* q \* A, M = cm \* q \* A \* l):
   Mx = CMx \* q \* A \* l = #fmt_num(data.cmx) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) \* #fmt_num(data.reference_length, digits: 4) = #fmt_num(data.mx, digits: 6) Nm \
   My = CMy \* q \* A \* l = #fmt_num(data.cmy) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) \* #fmt_num(data.reference_length, digits: 4) = #fmt_num(data.my, digits: 6) Nm \
   Mz = CMz \* q \* A \* l = #fmt_num(data.cmz) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) \* #fmt_num(data.reference_length, digits: 4) = #fmt_num(data.mz, digits: 6) Nm
+  #if data.weight != none [
+    \
+    G = Masse \* g = #fmt_num(data.mass, digits: 6) \* 9.80665 = #fmt_num(data.weight, digits: 4) N
+  ]
 ]
 
 == Freikoerperbild
 
 #image("/fbd_chart.png", width: 90%)
 
-Grauer Punkt: Momenten-Bezugspunkt. Pfeillaenge nur relativ zueinander
-massstabsgetreu, nicht zur Koerpergroesse. Diese Zeichnung zeigt nur die
-X-Z-Ebene (Sehne/Hochachse); eine Seitenkraft (Querrichtung) ist darin
-nicht darstellbar, siehe Hinweistext im Bild selbst, falls ungleich
-null.
+Grauer Punkt: Momenten-Bezugspunkt. #if data.weight != none [Gruener
+Punkt: geometrischer Schwerpunkt (Gewichtskraft G setzt dort an). ]
+Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur
+Koerpergroesse. Diese Zeichnung zeigt nur die X-Z-Ebene (Sehne/
+Hochachse); eine Seitenkraft (Querrichtung) ist darin nicht
+darstellbar, siehe Hinweistext im Bild selbst, falls ungleich null.
 
 == Oberflaeche
 

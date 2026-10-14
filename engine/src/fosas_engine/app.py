@@ -138,6 +138,9 @@ def create_app(settings: Settings) -> FastAPI:
         mpi_ranks: int = Form(1),
         time_discretization: str = Form("EULER_IMPLICIT"),
         residual_threshold: float = Form(-8.0),
+        material: str | None = Form(
+            None, description="Optional material for a weight-force estimate, see fosas_core.materials"
+        ),
     ):
         try:
             params = CaseParams(
@@ -156,6 +159,7 @@ def create_app(settings: Settings) -> FastAPI:
                 mpi_ranks=mpi_ranks,
                 time_discretization=time_discretization,
                 residual_threshold=residual_threshold,
+                material=material or None,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -233,6 +237,11 @@ def create_app(settings: Settings) -> FastAPI:
             my=job.result.moments.my,
             mz=job.result.moments.mz,
             center_of_mass=job.result.center_of_mass,
+            volume=job.result.volume,
+            material=job.result.material,
+            material_density=job.result.material_density,
+            mass=job.result.mass,
+            weight=job.result.weight,
             surface_points=tuple(
                 JobReportSurfacePoint(x=xs[i], z=zs[i], cp=cps[i]) for i in range(surface.num_points)
             ),
@@ -305,6 +314,9 @@ def create_app(settings: Settings) -> FastAPI:
         mpi_ranks: int = Form(1),
         time_discretization: str = Form("EULER_IMPLICIT"),
         residual_threshold: float = Form(-8.0),
+        material: str | None = Form(
+            None, description="Optional material for a weight-force estimate, see fosas_core.materials"
+        ),
     ):
         # Every AoA value becomes its own, fully independent Job (see
         # docs/DECISIONS.md ADR-0017): a polar sweep deliberately reuses
@@ -335,6 +347,7 @@ def create_app(settings: Settings) -> FastAPI:
                     mpi_ranks=mpi_ranks,
                     time_discretization=time_discretization,
                     residual_threshold=residual_threshold,
+                    material=material or None,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -437,6 +450,9 @@ def create_app(settings: Settings) -> FastAPI:
         mpi_ranks: int = Form(1),
         time_discretization: str = Form("EULER_IMPLICIT"),
         residual_threshold: float = Form(-8.0),
+        material: str | None = Form(
+            None, description="Optional material for a weight-force estimate, see fosas_core.materials"
+        ),
     ):
         # Exactly 3 resolutions (fine/medium/coarse, see
         # docs/DECISIONS.md ADR-0017): only background_size_min_factor/
@@ -475,6 +491,7 @@ def create_app(settings: Settings) -> FastAPI:
                     residual_threshold=residual_threshold,
                     background_size_min_factor=base_min_factor / scale,
                     background_size_max_factor=base_max_factor / scale,
+                    material=material or None,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc

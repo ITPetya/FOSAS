@@ -289,6 +289,23 @@
           </div>
           <div><label data-info="residual_threshold">Konvergenzziel (Restfehler)</label><input type="number" id="polar-residual_threshold" value="-8" step="any"></div>
         </div>
+        <div class="row">
+          <div>
+            <label data-info="material">Material (optional, fuer Gewichtskraft)</label>
+            <select id="polar-material">
+              <option value="">(kein Material, keine Gewichtskraft)</option>
+              <option value="aluminium">Aluminium</option>
+              <option value="stahl">Stahl</option>
+              <option value="titan">Titan</option>
+              <option value="cfk">CFK (Kohlefaser-Verbund)</option>
+              <option value="gfk">GFK (Glasfaser-Verbund)</option>
+              <option value="abs">ABS (Kunststoff)</option>
+              <option value="pla">PLA (Kunststoff, 3D-Druck)</option>
+              <option value="balsaholz">Balsaholz</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
         <p class="hint">Dieselben erweiterten Einstellungen wie bei einer Einzelrechnung, gelten hier fuer alle Anstellwinkel der Liste gleich.</p>
       </details>
 
@@ -373,6 +390,23 @@
           </div>
           <div><label data-info="residual_threshold">Konvergenzziel (Restfehler)</label><input type="number" id="gci-residual_threshold" value="-8" step="any"></div>
         </div>
+        <div class="row">
+          <div>
+            <label data-info="material">Material (optional, fuer Gewichtskraft)</label>
+            <select id="gci-material">
+              <option value="">(kein Material, keine Gewichtskraft)</option>
+              <option value="aluminium">Aluminium</option>
+              <option value="stahl">Stahl</option>
+              <option value="titan">Titan</option>
+              <option value="cfk">CFK (Kohlefaser-Verbund)</option>
+              <option value="gfk">GFK (Glasfaser-Verbund)</option>
+              <option value="abs">ABS (Kunststoff)</option>
+              <option value="pla">PLA (Kunststoff, 3D-Druck)</option>
+              <option value="balsaholz">Balsaholz</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
         <p class="hint">Dieselben erweiterten Einstellungen wie bei einer Einzelrechnung, gelten hier fuer alle drei Netzaufloesungen gleich.</p>
       </details>
 
@@ -453,6 +487,23 @@
           </div>
           <div><label data-info="residual_threshold">Konvergenzziel (Restfehler)</label><input type="number" id="residual_threshold" value="-8" step="any"></div>
         </div>
+        <div class="row">
+          <div>
+            <label data-info="material">Material (optional, fuer Gewichtskraft)</label>
+            <select id="material">
+              <option value="">(kein Material, keine Gewichtskraft)</option>
+              <option value="aluminium">Aluminium</option>
+              <option value="stahl">Stahl</option>
+              <option value="titan">Titan</option>
+              <option value="cfk">CFK (Kohlefaser-Verbund)</option>
+              <option value="gfk">GFK (Glasfaser-Verbund)</option>
+              <option value="abs">ABS (Kunststoff)</option>
+              <option value="pla">PLA (Kunststoff, 3D-Druck)</option>
+              <option value="balsaholz">Balsaholz</option>
+            </select>
+          </div>
+          <div></div>
+        </div>
         <p class="hint">Voreinstellungen passen fuer einen kleinen Testfall. Bei eigenen Geometrien Sehnenlaenge/Reynolds-Zahl im Kopf behalten, siehe docs/RISKS.md R10 zur bekannten Konvergenzfrage.</p>
       </details>
 
@@ -521,6 +572,14 @@
     </div>
     <p class="hint" id="moment-origin-hint" style="margin:4px 0 0;"></p>
     <p class="hint" id="center-of-mass-hint" data-info="center_of_mass" style="margin:4px 0 0;"></p>
+
+    <h4 class="metrics-group-title">Masse / Gewichtskraft (optional)</h4>
+    <div class="metrics">
+      <div class="metric"><div class="value" id="volume-value">-</div><div class="label" data-info="volume">Volumen (m^3)</div></div>
+      <div class="metric"><div class="value" id="material-value">-</div><div class="label" data-info="material">Material</div></div>
+      <div class="metric"><div class="value" id="mass-value">-</div><div class="label" data-info="mass">Masse (kg)</div></div>
+      <div class="metric"><div class="value" id="weight-value">-</div><div class="label" data-info="weight">Gewichtskraft G (N)</div></div>
+    </div>
 
     <h4 class="metrics-group-title">Oberflaeche</h4>
     <div class="metrics">

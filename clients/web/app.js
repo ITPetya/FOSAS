@@ -1,5 +1,18 @@
 const TOKEN = "__FOSAS_TOKEN__";
 
+// Must match fosas_core.materials.MATERIAL_DENSITIES_KG_M3's keys and
+// the <option> labels in index.html's material dropdowns.
+const MATERIAL_LABELS = {
+  aluminium: "Aluminium",
+  stahl: "Stahl",
+  titan: "Titan",
+  cfk: "CFK (Kohlefaser-Verbund)",
+  gfk: "GFK (Glasfaser-Verbund)",
+  abs: "ABS (Kunststoff)",
+  pla: "PLA (Kunststoff, 3D-Druck)",
+  balsaholz: "Balsaholz",
+};
+
 // Explanatory text for the (i) info buttons. Written for someone with
 // no aerodynamics/CFD background, per the user's explicit request to
 // learn while using the tool. Each entry is tagged Gesichert (settled
@@ -398,16 +411,60 @@ const INFO_TEXT = {
     Projektinhaber entschieden, falls/wenn eine Schwerpunktanzeige
     kommt.</p>
     <p><span class="tag annahme">Annahme</span> Nimmt ueberall gleiche
-    (homogene) Dichte an, da FOSAS aktuell keine Material-/Dichtedaten
-    hat. Bei einem Bauteil mit ungleichmaessiger Materialverteilung
-    (z. B. eingebauten Komponenten aus anderem Material) ist das NICHT
-    der tatsaechliche Massenschwerpunkt. Dieser Punkt ist nicht
-    dasselbe wie der Momenten-Bezugspunkt oben (der bleibt die feste
-    Sehnen-/Spannweitenmitte, unabhaengig von der Massenverteilung).</p>
-    <p>Fuer eine Gewichtskraft (G = m * g) und Lagerreaktionen fehlt
-    FOSAS weiterhin eine echte Masse/Dichte sowie ein Lager-/
-    Befestigungspunkt - beides noch offene Entscheidungen, nicht Teil
-    dieser Anzeige.</p>
+    (homogene) Dichte an - eine gleichmaessige Dichte kuerzt sich aus
+    der Schwerpunktformel heraus, aendert sich also NICHT durch die
+    Material-Auswahl unten. Bei einem Bauteil mit ungleichmaessiger
+    Materialverteilung (z. B. eingebauten Komponenten aus anderem
+    Material) ist das NICHT der tatsaechliche Massenschwerpunkt. Dieser
+    Punkt ist nicht dasselbe wie der Momenten-Bezugspunkt oben (der
+    bleibt die feste Sehnen-/Spannweitenmitte, unabhaengig von der
+    Massenverteilung).</p>
+    <p>Fuer Lagerreaktionen fehlt FOSAS weiterhin ein Lager-/
+    Befestigungspunkt (geplant: Anklicken im 3D-Viewer, noch nicht
+    umgesetzt) - nicht Teil dieser Anzeige.</p>
+  `,
+  material: `
+    <span class="tag annahme">Annahme (Richtwert)</span>
+    <h4>Material</h4>
+    <p>Optionale Auswahl fuer eine Gewichtskraftabschaetzung: FOSAS
+    multipliziert das Bauteilvolumen (aus der STEP-Geometrie) mit einer
+    typischen Dichte fuer das gewaehlte Material (siehe
+    fosas_core.materials fuer die Werte und Quellen). Keine Auswahl
+    (Standard) heisst: kein Material, keine Masse/Gewichtskraft
+    berechnet.</p>
+    <p>Die Dichtewerte sind Richtwerte fuer eine typische Legierung/
+    Zusammensetzung, nicht fuer die exakte Materialcharge des eigenen
+    Bauteils (z. B. "Aluminium" deckt viele verschiedene Legierungen
+    mit leicht unterschiedlicher Dichte ab). FOSAS geht ausserdem von
+    einem durchgehend homogenen Material aus (kein Hohlraum, keine
+    eingebauten Teile aus anderem Material).</p>
+  `,
+  volume: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Volumen</h4>
+    <p>Das Volumen der STEP-Geometrie, direkt aus der Geometrie berechnet
+    (keine Annahme, reine Geometrie). Grundlage fuer die
+    Massenabschaetzung unten, wird aber immer angezeigt, auch ohne
+    Material-Auswahl.</p>
+  `,
+  mass: `
+    <span class="tag annahme">Annahme (aus Materialauswahl)</span>
+    <h4>Masse</h4>
+    <p>Masse = Volumen * Dichte des gewaehlten Materials. Nur berechnet,
+    wenn oben ein Material ausgewaehlt ist, sonst "-" (keine stille
+    Null). Erbt die Annahmen von Volumen (reine Geometrie, Gesichert)
+    und Material (Dichte-Richtwert, Annahme).</p>
+  `,
+  weight: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Gewichtskraft G</h4>
+    <p>G = Masse * g (Standardschwerebeschleunigung g = 9,80665 m/s^2,
+    SI-Definition). Wirkt senkrecht nach unten (-Z) am geometrischen
+    Schwerpunkt oben, unabhaengig vom Anstell-/Schiebewinkel (anders als
+    die aerodynamischen Kraefte L/D/S, die sich mit der Anstroemung
+    mitdrehen). Nur berechnet, wenn ein Material ausgewaehlt ist (die
+    Formel selbst ist Gesichert, die zugrunde liegende Masse erbt aber
+    die Annahme aus der Materialauswahl).</p>
   `,
   calculation_steps: `
     <span class="tag gesichert">Gesichert</span>
@@ -595,7 +652,7 @@ function paramFields() {
     "velocity", "aoa_deg", "sideslip_deg", "density", "dynamic_viscosity", "temperature",
     "target_y_plus", "growth_ratio", "bl_thickness_factor", "span_layers",
     "n_profile_points", "max_iterations", "mpi_ranks", "time_discretization",
-    "residual_threshold",
+    "residual_threshold", "material",
   ];
 }
 
@@ -610,6 +667,7 @@ function advancedParamFieldNames() {
     "density", "dynamic_viscosity", "temperature", "target_y_plus",
     "growth_ratio", "bl_thickness_factor", "span_layers", "n_profile_points",
     "max_iterations", "mpi_ranks", "time_discretization", "residual_threshold",
+    "material",
   ];
 }
 
@@ -721,14 +779,21 @@ function drawFreeBodyDiagram(result) {
   const dragDir = { x: Math.cos(aoaRad), z: Math.sin(aoaRad) };
   const liftDir = { x: -Math.sin(aoaRad), z: Math.cos(aoaRad) };
   const lift = result.forces.lift, drag = result.forces.drag, resultant = result.forces.resultant;
-  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, 1e-12);
+  const weight = result.weight; // null when no material was selected
+  // Weight is folded into the same scale as D/L/R (see buildForcesLayer
+  // for the same reasoning in 3D): a real part's weight and its
+  // aerodynamic forces at a modest test velocity can differ by orders
+  // of magnitude, and showing that honestly beats a second, silently
+  // incomparable scale.
+  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, Math.abs(weight || 0), 1e-12);
   // Fixed pixel length for the largest force arrow, independent of the
   // drawing's own px-per-metre scale: a force arrow is a separate,
   // schematic quantity, not something drawn to the same physical scale
   // as the body outline (see INFO_TEXT.free_body_diagram).
   const maxArrowPx = Math.min(W, H) * 0.3;
 
-  function drawArrow(dirBody, signedMag, color, label) {
+  function drawArrow(dirBody, signedMag, color, label, origin) {
+    origin = origin || originPx;
     const mag = Math.abs(signedMag);
     if (mag < 1e-12) return;
     const sign = signedMag < 0 ? -1 : 1;
@@ -737,11 +802,11 @@ function drawFreeBodyDiagram(result) {
     const normLen = Math.hypot(dx, dz) || 1;
     // Flip z for pixels (same sy() convention: +z body is "up", up is
     // smaller SVG y).
-    const endX = originPx.x + (dx / normLen) * lengthPx;
-    const endY = originPx.y - (dz / normLen) * lengthPx;
+    const endX = origin.x + (dx / normLen) * lengthPx;
+    const endY = origin.y - (dz / normLen) * lengthPx;
 
     const line = document.createElementNS(ns, "line");
-    line.setAttribute("x1", originPx.x); line.setAttribute("y1", originPx.y);
+    line.setAttribute("x1", origin.x); line.setAttribute("y1", origin.y);
     line.setAttribute("x2", endX); line.setAttribute("y2", endY);
     line.setAttribute("stroke", color);
     line.setAttribute("stroke-width", "2.2");
@@ -783,9 +848,25 @@ function drawFreeBodyDiagram(result) {
   const resVec = { x: dragDir.x * drag + liftDir.x * lift, z: dragDir.z * drag + liftDir.z * lift };
   drawArrow(resVec, resultantInPlane, "#eeeeee", "R(D,L) = " + resultantInPlane.toPrecision(3) + " N");
 
+  if (weight != null) {
+    // Gravity IS representable in this X-Z-plane view (unlike the side
+    // force below), it acts straight down at the center of mass, not
+    // at the moment reference point.
+    const comX = result.center_of_mass[0], comZ = result.center_of_mass[2];
+    const comPx = { x: sx(comX), y: sy(comZ) };
+    const comDot = document.createElementNS(ns, "circle");
+    comDot.setAttribute("cx", comPx.x);
+    comDot.setAttribute("cy", comPx.y);
+    comDot.setAttribute("r", 3.5);
+    comDot.setAttribute("fill", "#33cc33");
+    svg.appendChild(comDot);
+    drawArrow({ x: 0, z: -1 }, weight, "#996633", "G = " + weight.toPrecision(3) + " N", comPx);
+  }
+
   let legend =
     "Grauer Punkt: Momenten-Bezugspunkt (Pfeile setzen dort an, nicht am tatsaechlichen Druckpunkt). " +
-    "Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse.";
+    "Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse." +
+    (weight == null ? "" : " Gruener Punkt: geometrischer Schwerpunkt (Gewichtskraft G setzt dort an).");
   if (Math.abs(side) > 1e-9) {
     legend +=
       " Achtung: Dieses Bild zeigt nur die X-Z-Ebene (Sehne/Hochachse). Die Seitenkraft S = " +
@@ -989,16 +1070,14 @@ function renderSurface3D(result) {
     result.moments.moment_origin[0], result.moments.moment_origin[1], result.moments.moment_origin[2],
     cx, cy, cz, extent,
   );
-  const forcesLayer = buildForcesLayer(result, momentOriginScene);
-  scene.add(forcesLayer);
-
   // Small sphere marker for the geometric center of mass (point 7,
   // docs/ARCHITECTURE.md): part of the coordinate/reference layer, not
-  // the forces layer, since it is a geometry-derived reference point,
-  // not a force. Deliberately not its own toggle layer: a single static
-  // point marker does not add the visual clutter a dedicated on/off
-  // switch would be worth, unlike the arrow/arc-heavy coord and forces
-  // layers.
+  // the forces layer, since it is itself a geometry-derived reference
+  // point, not a force (the weight-force arrow anchored here, built
+  // below, lives in the forces layer same as the aerodynamic arrows).
+  // Deliberately not its own toggle layer: a single static point marker
+  // does not add the visual clutter a dedicated on/off switch would be
+  // worth, unlike the arrow/arc-heavy coord and forces layers.
   const comScene = bodyPointToScene(
     result.center_of_mass[0], result.center_of_mass[1], result.center_of_mass[2],
     cx, cy, cz, extent,
@@ -1009,6 +1088,9 @@ function renderSurface3D(result) {
   );
   comMarker.position.copy(comScene);
   coordLayer.add(comMarker);
+
+  const forcesLayer = buildForcesLayer(result, momentOriginScene, comScene);
+  scene.add(forcesLayer);
 
   // Exact colors THREE.AxesHelper itself renders (pure red/green/blue
   // vertex colors), not just a similar-looking tone, so the legend text
@@ -1022,8 +1104,10 @@ function renderSurface3D(result) {
     "Kraftpfeile: <span style=\"color:#e0a72f\">D</span>=" + result.forces.drag.toPrecision(3) + " N, " +
     "<span style=\"color:#4f8cff\">L</span>=" + result.forces.lift.toPrecision(3) + " N, " +
     "<span style=\"color:#cc66ff\">S</span>=" + result.forces.side.toPrecision(3) + " N, " +
-    "<span style=\"color:#eeeeee\">R</span>=" + result.forces.resultant.toPrecision(3) + " N &middot; " +
-    "<span style=\"color:#33cc33\">●</span> Geometrischer Schwerpunkt (Annahme: homogenes Material)";
+    "<span style=\"color:#eeeeee\">R</span>=" + result.forces.resultant.toPrecision(3) + " N" +
+    (result.weight == null ? "" :
+      ", <span style=\"color:#996633\">G</span>=" + result.weight.toPrecision(3) + " N") +
+    " &middot; <span style=\"color:#33cc33\">●</span> Geometrischer Schwerpunkt (Annahme: homogenes Material)";
 
   const width = container.clientWidth, height = container.clientHeight;
   const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 100);
@@ -1131,16 +1215,24 @@ function buildCoordLayer(aoaDeg, sideslipDeg) {
 // Force arrows (D along the wind direction, L perpendicular to it in the
 // X-Z plane, S perpendicular to both/the side-force direction, R as
 // their vector sum), anchored at the moment reference point (not the
-// true center of pressure, see INFO_TEXT.viewer_layer_forces), scaled so
-// the largest of the four has a fixed visual length regardless of the
-// forces' actual physical magnitude (otherwise a small validation case's
+// true center of pressure, see INFO_TEXT.viewer_layer_forces). Plus,
+// only when a material was selected (result.weight != null), a weight
+// arrow G anchored at the geometric center of mass instead (gravity
+// acts there, not at the aerodynamic moment reference point) - folded
+// into the SAME visual scale as D/L/S/R rather than its own, since a
+// real part's weight and its aerodynamic forces at a modest test
+// velocity can differ by orders of magnitude; showing that real
+// disparity (one arrow much longer than the others) is more honest
+// than silently normalizing it away with a second, incomparable scale.
+// All arrows scaled so the largest has a fixed visual length regardless
+// of actual physical magnitude (otherwise a small validation case's
 // micro-Newton forces would render as invisible, zero-length arrows).
 // D/L/S directions are the same orthonormal wind-axes basis as
 // buildCoordLayer's wind arrow (verified via dot products: D.L = D.S =
 // L.S = 0, each unit length); at sideslip_deg=0 this reduces exactly to
 // the previous drag/lift-only basis (S direction becomes body +Y, but S
 // itself is then always 0 so no arrow is drawn).
-function buildForcesLayer(result, originScene) {
+function buildForcesLayer(result, originScene, comScene) {
   const group = new THREE.Group();
   const aoaRad = (result.aoa_deg * Math.PI) / 180;
   const betaRad = (result.sideslip_deg * Math.PI) / 180;
@@ -1152,27 +1244,36 @@ function buildForcesLayer(result, originScene) {
 
   const lift = result.forces.lift, drag = result.forces.drag, side = result.forces.side;
   const resultant = result.forces.resultant;
-  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), Math.abs(side), resultant, 1e-12);
+  const weight = result.weight; // null when no material was selected
+  const maxMag = Math.max(
+    Math.abs(lift), Math.abs(drag), Math.abs(side), resultant, Math.abs(weight || 0), 1e-12
+  );
   const visualScale = 0.9 / maxMag;
 
-  function addArrow(dirBody, signedMagnitude, color) {
+  function addArrow(dirBody, signedMagnitude, color, origin) {
     const mag = Math.abs(signedMagnitude);
     if (mag < 1e-12) return; // zero-length ArrowHelper direction is undefined, skip instead
     const sign = signedMagnitude < 0 ? -1 : 1;
     const dirScene = bodyDirToScene(dirBody.x * sign, dirBody.y * sign, dirBody.z * sign).normalize();
-    group.add(new THREE.ArrowHelper(dirScene, originScene, mag * visualScale, color, 0.1, 0.05));
+    group.add(new THREE.ArrowHelper(dirScene, origin, mag * visualScale, color, 0.1, 0.05));
   }
 
-  addArrow(dragDirBody, drag, 0xe0a72f);
-  addArrow(liftDirBody, lift, 0x4f8cff);
-  addArrow(sideDirBody, side, 0xcc66ff);
+  addArrow(dragDirBody, drag, 0xe0a72f, originScene);
+  addArrow(liftDirBody, lift, 0x4f8cff, originScene);
+  addArrow(sideDirBody, side, 0xcc66ff, originScene);
 
   const resultantVecBody = {
     x: dragDirBody.x * drag + liftDirBody.x * lift + sideDirBody.x * side,
     y: dragDirBody.y * drag + liftDirBody.y * lift + sideDirBody.y * side,
     z: dragDirBody.z * drag + liftDirBody.z * lift + sideDirBody.z * side,
   };
-  addArrow(resultantVecBody, resultant, 0xeeeeee);
+  addArrow(resultantVecBody, resultant, 0xeeeeee, originScene);
+
+  if (weight != null) {
+    // Gravity acts in body -Z regardless of AoA/sideslip (unlike the
+    // aerodynamic forces above, it does not rotate with the freestream).
+    addArrow({ x: 0, y: 0, z: -1 }, weight, 0x996633, comScene);
+  }
 
   return group;
 }
@@ -1233,6 +1334,13 @@ function renderCalculationSteps(result) {
     "Mz = CMz * q * A * l = " + fmt(result.moments.cmz) + " * " + fmt(q) + " * " +
       fmt(A) + " * " + fmt(l) + " = " + fmt(result.moments.mz) + " Nm",
   ];
+  if (result.mass != null) {
+    lines.push(
+      "",
+      "G = Masse * g = " + fmt(result.mass) + " * 9.80665 = " + fmt(result.weight) +
+        " N (Gewichtskraft, Material: " + (MATERIAL_LABELS[result.material] || result.material) + ")",
+    );
+  }
   document.getElementById("calculation-steps-text").textContent = lines.join("\n");
 }
 
@@ -1281,6 +1389,13 @@ function renderResult(result, jobId) {
   document.getElementById("center-of-mass-hint").textContent =
     "Geometrischer Schwerpunkt (aus der STEP-Geometrie berechnet, nimmt homogenes Material an): x=" +
     com[0].toPrecision(3) + " m, y=" + com[1].toPrecision(3) + " m, z=" + com[2].toPrecision(3) + " m.";
+  document.getElementById("volume-value").textContent = result.volume.toPrecision(3);
+  document.getElementById("material-value").textContent =
+    result.material == null ? "-" : (MATERIAL_LABELS[result.material] || result.material);
+  document.getElementById("mass-value").textContent =
+    result.mass == null ? "-" : result.mass.toPrecision(3);
+  document.getElementById("weight-value").textContent =
+    result.weight == null ? "-" : result.weight.toPrecision(3);
   renderCalculationSteps(result);
 
   const badge = document.getElementById("convergence-badge");

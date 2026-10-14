@@ -59,6 +59,8 @@ def test_case_params_reject_invalid_input():
         CaseParams(velocity=10, aoa_deg=0, max_iterations=0)
     with pytest.raises(ValueError, match="n_profile_points"):
         CaseParams(velocity=10, aoa_deg=0, n_profile_points=2)
+    with pytest.raises(ValueError, match="material"):
+        CaseParams(velocity=10, aoa_deg=0, material="unobtainium")
 
 
 def test_run_case_actually_uses_n_profile_points(tmp_path, monkeypatch):
@@ -152,6 +154,7 @@ def test_run_case_end_to_end_on_a_real_step_file(tmp_path, gmsh_executable, su2_
         max_iterations=15,
         mpi_ranks=1,
         time_discretization="RUNGE-KUTTA_EXPLICIT",
+        material="aluminium",
     )
     result = run_case(
         step_path,
@@ -191,6 +194,16 @@ def test_run_case_end_to_end_on_a_real_step_file(tmp_path, gmsh_executable, su2_
     assert cx > 0.0
     assert cy == pytest.approx(-0.6, abs=0.05)  # mid-span, same convention as moment_origin
     assert cz == pytest.approx(0.0, abs=1e-3)  # NACA0012 is symmetric top/bottom
+
+    # Weight-force estimate (point 7, docs/ARCHITECTURE.md): material
+    # was selected above, so density/mass/weight must all be filled in
+    # (not None) and mutually consistent via mass=density*volume,
+    # weight=mass*g - the real end-to-end path, not a mocked volume.
+    assert result.volume > 0.0
+    assert result.material == "aluminium"
+    assert result.material_density == pytest.approx(2700.0)
+    assert result.mass == pytest.approx(result.material_density * result.volume)
+    assert result.weight == pytest.approx(result.mass * 9.80665)
 
 
 @pytest.mark.slow

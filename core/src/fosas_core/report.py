@@ -407,6 +407,11 @@ class JobReportData:
     my: float
     mz: float
     center_of_mass: tuple[float, float, float]
+    volume: float
+    material: str | None
+    material_density: float | None
+    mass: float | None
+    weight: float | None
     surface_points: tuple[JobReportSurfacePoint, ...]
 
     def __post_init__(self):
@@ -459,11 +464,18 @@ def _render_job_fbd_chart_png(data: JobReportData) -> bytes:
     # in this 2D chart at all, so the "R" arrow here uses only the
     # in-plane (D,L) resultant, not data.resultant (which includes side).
     resultant_in_plane = math.hypot(data.lift, data.drag)
-    max_mag = max(abs(data.lift), abs(data.drag), resultant_in_plane, 1e-12)
+    # Weight folded into the same scale as D/L/R (see clients/web/app.js's
+    # buildForcesLayer for the same reasoning): a real part's weight and
+    # its aerodynamic forces at a modest test velocity can differ by
+    # orders of magnitude, better shown honestly than normalized away.
+    max_mag = max(abs(data.lift), abs(data.drag), resultant_in_plane, abs(data.weight or 0.0), 1e-12)
     body_span = max(max(xs) - min(xs), max(zs) - min(zs), 1e-6)
     arrow_scale = body_span * 0.6 / max_mag
 
-    def draw_arrow(dir_vec: tuple[float, float], signed_mag: float, color: str, label: str) -> None:
+    def draw_arrow(
+        dir_vec: tuple[float, float], signed_mag: float, color: str, label: str,
+        origin: tuple[float, float] = (origin_x, origin_z),
+    ) -> None:
         mag = abs(signed_mag)
         if mag < 1e-12:
             return
@@ -471,10 +483,10 @@ def _render_job_fbd_chart_png(data: JobReportData) -> bytes:
         dx = dir_vec[0] * sign * mag * arrow_scale
         dz = dir_vec[1] * sign * mag * arrow_scale
         ax.annotate(
-            "", xy=(origin_x + dx, origin_z + dz), xytext=(origin_x, origin_z),
+            "", xy=(origin[0] + dx, origin[1] + dz), xytext=origin,
             arrowprops={"arrowstyle": "->", "color": color, "linewidth": 2},
         )
-        ax.text(origin_x + dx * 1.05, origin_z + dz * 1.05, label, color=color, fontsize=8)
+        ax.text(origin[0] + dx * 1.05, origin[1] + dz * 1.05, label, color=color, fontsize=8)
 
     draw_arrow(drag_dir, data.drag, "tab:orange", f"D = {data.drag:.3g} N")
     draw_arrow(lift_dir, data.lift, "tab:blue", f"L = {data.lift:.3g} N")
@@ -487,6 +499,13 @@ def _render_job_fbd_chart_png(data: JobReportData) -> bytes:
         (resultant_vec[0] / resultant_norm, resultant_vec[1] / resultant_norm),
         resultant_in_plane, "black", f"R(D,L) = {resultant_in_plane:.3g} N",
     )
+    if data.weight is not None:
+        # Gravity IS representable in this X-Z-plane view (unlike the
+        # side force below), acting straight down at the center of mass,
+        # not at the moment reference point.
+        com_x, com_z = data.center_of_mass[0], data.center_of_mass[2]
+        ax.plot(com_x, com_z, "o", color="#33cc33", markersize=5, zorder=5)
+        draw_arrow((0.0, -1.0), data.weight, "#996633", f"G = {data.weight:.3g} N", origin=(com_x, com_z))
     if abs(data.side) > 1e-9:
         ax.text(
             0.02, 0.02,
@@ -554,6 +573,11 @@ def render_job_report(data: JobReportData) -> bytes:
         "my": data.my,
         "mz": data.mz,
         "center_of_mass": list(data.center_of_mass),
+        "volume": data.volume,
+        "material": data.material,
+        "material_density": data.material_density,
+        "mass": data.mass,
+        "weight": data.weight,
     }
     files = {"cp_chart.png": cp_chart_png, "fbd_chart.png": fbd_chart_png}
     return _compile_report(_JOB_TEMPLATE_PATH, payload, files)

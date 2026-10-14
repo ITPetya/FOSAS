@@ -134,6 +134,19 @@
 <script>
 const TOKEN = "__FOSAS_TOKEN__";
 
+// Same as clients/web/app.js's MATERIAL_LABELS - must match
+// fosas_core.materials.MATERIAL_DENSITIES_KG_M3's keys.
+const MATERIAL_LABELS = {
+  aluminium: "Aluminium",
+  stahl: "Stahl",
+  titan: "Titan",
+  cfk: "CFK (Kohlefaser-Verbund)",
+  gfk: "GFK (Glasfaser-Verbund)",
+  abs: "ABS (Kunststoff)",
+  pla: "PLA (Kunststoff, 3D-Druck)",
+  balsaholz: "Balsaholz",
+};
+
 function authHeaders() {
   return { "Authorization": "Bearer " + TOKEN };
 }
@@ -220,6 +233,12 @@ function renderSidebar(job) {
     html += '<p class="hint">Geometrischer Schwerpunkt (aus STEP berechnet, Annahme homogenes Material): x=' +
       r.center_of_mass[0].toPrecision(3) + " m, y=" + r.center_of_mass[1].toPrecision(3) +
       " m, z=" + r.center_of_mass[2].toPrecision(3) + " m</p>";
+
+    html += '<h3>Masse / Gewichtskraft (optional)</h3>';
+    html += row("Volumen", r.volume.toPrecision(3) + " m&sup3;");
+    html += row("Material", r.material == null ? "-" : (MATERIAL_LABELS[r.material] || r.material));
+    html += row("Masse", r.mass == null ? "-" : r.mass.toPrecision(3) + " kg");
+    html += row("Gewichtskraft G", r.weight == null ? "-" : r.weight.toPrecision(3) + " N");
 
     html += '<h3>Flaechen und Oberflaeche</h3>';
     html += row("Bezugsflaeche A", r.forces.reference_area.toPrecision(3) + " m&sup2;");
@@ -376,21 +395,23 @@ function drawFbdChart(result) {
   const dragDir = { x: Math.cos(aoaRad), z: Math.sin(aoaRad) };
   const liftDir = { x: -Math.sin(aoaRad), z: Math.cos(aoaRad) };
   const lift = result.forces.lift, drag = result.forces.drag, resultant = result.forces.resultant;
-  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, 1e-12);
+  const weight = result.weight; // null when no material was selected
+  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, Math.abs(weight || 0), 1e-12);
   const maxArrowPx = Math.min(W, H) * 0.3;
 
-  function drawArrow(dirBody, signedMag, color, label) {
+  function drawArrow(dirBody, signedMag, color, label, origin) {
+    origin = origin || originPx;
     const mag = Math.abs(signedMag);
     if (mag < 1e-12) return;
     const sign = signedMag < 0 ? -1 : 1;
     const lengthPx = (mag / maxMag) * maxArrowPx;
     const dx = dirBody.x * sign, dz = dirBody.z * sign;
     const normLen = Math.hypot(dx, dz) || 1;
-    const endX = originPx.x + (dx / normLen) * lengthPx;
-    const endY = originPx.y - (dz / normLen) * lengthPx;
+    const endX = origin.x + (dx / normLen) * lengthPx;
+    const endY = origin.y - (dz / normLen) * lengthPx;
 
     const line = document.createElementNS(ns, "line");
-    line.setAttribute("x1", originPx.x); line.setAttribute("y1", originPx.y);
+    line.setAttribute("x1", origin.x); line.setAttribute("y1", origin.y);
     line.setAttribute("x2", endX); line.setAttribute("y2", endY);
     line.setAttribute("stroke", color); line.setAttribute("stroke-width", "2.2");
     svg.appendChild(line);
@@ -424,8 +445,19 @@ function drawFbdChart(result) {
   const resVec = { x: dragDir.x * drag + liftDir.x * lift, z: dragDir.z * drag + liftDir.z * lift };
   drawArrow(resVec, resultantInPlane, "#eeeeee", "R(D,L) = " + resultantInPlane.toPrecision(3) + " N");
 
+  if (weight != null) {
+    const comX = result.center_of_mass[0], comZ = result.center_of_mass[2];
+    const comPx = { x: sx(comX), y: sy(comZ) };
+    const comDot = document.createElementNS(ns, "circle");
+    comDot.setAttribute("cx", comPx.x); comDot.setAttribute("cy", comPx.y);
+    comDot.setAttribute("r", 3.5); comDot.setAttribute("fill", "#33cc33");
+    svg.appendChild(comDot);
+    drawArrow({ x: 0, z: -1 }, weight, "#996633", "G = " + weight.toPrecision(3) + " N", comPx);
+  }
+
   const legendEl = document.getElementById("fbd-legend");
-  let legend = "Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse.";
+  let legend = "Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse." +
+    (weight == null ? "" : " Gruener Punkt: geometrischer Schwerpunkt (Gewichtskraft G setzt dort an).");
   if (Math.abs(side) > 1e-9) {
     legend +=
       " Achtung: Dieses Bild zeigt nur die X-Z-Ebene (Sehne/Hochachse). Die Seitenkraft S = " +
@@ -540,7 +572,7 @@ function buildCoordLayer(aoaDeg, sideslipDeg) {
   return group;
 }
 
-function buildForcesLayer(result, originScene) {
+function buildForcesLayer(result, originScene, comScene) {
   const group = new THREE.Group();
   const aoaRad = (result.aoa_deg * Math.PI) / 180;
   const betaRad = (result.sideslip_deg * Math.PI) / 180;
@@ -552,15 +584,19 @@ function buildForcesLayer(result, originScene) {
 
   const lift = result.forces.lift, drag = result.forces.drag, side = result.forces.side;
   const resultant = result.forces.resultant;
-  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), Math.abs(side), resultant, 1e-12);
+  const weight = result.weight; // null when no material was selected
+  const maxMag = Math.max(
+    Math.abs(lift), Math.abs(drag), Math.abs(side), resultant, Math.abs(weight || 0), 1e-12
+  );
   const visualScale = 0.9 / maxMag;
 
-  function addArrow(dirBody, signedMagnitude, color) {
+  function addArrow(dirBody, signedMagnitude, color, origin) {
+    origin = origin || originScene;
     const mag = Math.abs(signedMagnitude);
     if (mag < 1e-12) return;
     const sign = signedMagnitude < 0 ? -1 : 1;
     const dirScene = bodyDirToScene(dirBody.x * sign, dirBody.y * sign, dirBody.z * sign).normalize();
-    group.add(new THREE.ArrowHelper(dirScene, originScene, mag * visualScale, color, 0.1, 0.05));
+    group.add(new THREE.ArrowHelper(dirScene, origin, mag * visualScale, color, 0.1, 0.05));
   }
 
   addArrow(dragDirBody, drag, 0xe0a72f);
@@ -572,6 +608,10 @@ function buildForcesLayer(result, originScene) {
     z: dragDirBody.z * drag + liftDirBody.z * lift + sideDirBody.z * side,
   };
   addArrow(resultantVecBody, resultant, 0xeeeeee);
+
+  if (weight != null) {
+    addArrow({ x: 0, y: 0, z: -1 }, weight, 0x996633, comScene);
+  }
 
   return group;
 }
@@ -635,9 +675,6 @@ function setupViewer(result) {
     result.moments.moment_origin[0], result.moments.moment_origin[1], result.moments.moment_origin[2],
     cx, cy, cz, extent,
   );
-  const forcesLayer = buildForcesLayer(result, momentOriginScene);
-  forcesLayer.visible = false;
-  scene.add(forcesLayer);
 
   // Geometric center of mass marker, same as clients/web/app.js.
   const comScene = bodyPointToScene(
@@ -650,6 +687,10 @@ function setupViewer(result) {
   );
   comMarker.position.copy(comScene);
   coordLayer.add(comMarker);
+
+  const forcesLayer = buildForcesLayer(result, momentOriginScene, comScene);
+  forcesLayer.visible = false;
+  scene.add(forcesLayer);
 
   const initialCameraPos = new THREE.Vector3(1.8, 1.3, 1.8);
   const width = container.clientWidth, height = container.clientHeight;

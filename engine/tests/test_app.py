@@ -100,6 +100,11 @@ def _fake_case_result(work_dir):
             mx=0.1, my=-12.5, mz=0.02,
         ),
         center_of_mass=(0.3, 0.6, 0.0),
+        volume=0.00012,
+        material="aluminium",
+        material_density=2700.0,
+        mass=0.324,
+        weight=3.177,
         mesh_path=work_dir / "mesh.su2",
         solve_dir=work_dir / "solve",
     )

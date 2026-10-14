@@ -44,6 +44,7 @@ class CaseParamsOut(BaseModel):
     time_discretization: str
     background_size_min_factor: float
     background_size_max_factor: float
+    material: str | None
 
 
 class ConvergenceOut(BaseModel):
@@ -117,6 +118,11 @@ class CaseResultOut(BaseModel):
     # material (see fosas_core.pipeline.run_case for the full caveat).
     # Not the same point as moments.moment_origin.
     center_of_mass: tuple[float, float, float]
+    volume: float
+    material: str | None
+    material_density: float | None
+    mass: float | None
+    weight: float | None
     surface: list[SurfacePointOut]
 
 
@@ -162,6 +168,7 @@ class JobOut(BaseModel):
             time_discretization=job.params.time_discretization,
             background_size_min_factor=job.params.background_size_min_factor,
             background_size_max_factor=job.params.background_size_max_factor,
+            material=job.params.material,
         )
         result_out = None
         if job.result is not None:
@@ -232,6 +239,11 @@ class JobOut(BaseModel):
                     mz=job.result.moments.mz,
                 ),
                 center_of_mass=job.result.center_of_mass,
+                volume=job.result.volume,
+                material=job.result.material,
+                material_density=job.result.material_density,
+                mass=job.result.mass,
+                weight=job.result.weight,
                 surface=surface_out,
             )
         progress = compute_progress(job)

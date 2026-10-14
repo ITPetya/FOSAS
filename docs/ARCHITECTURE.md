@@ -468,14 +468,49 @@ angenommen.
    y auf halber Spannweite, z praktisch null (Ober-/Unterseiten-
    Symmetrie). Ausdruecklich NICHT derselbe Punkt wie der (weiterhin
    festen, Bounding-Box-basierten) Momenten-Bezugspunkt.
-   **Weiterhin offen, fuer die eigentliche Gewichtskraft/Lagerreaktionen
-   noch nicht begonnen:** eine echte Masse (der geometrische Schwerpunkt
-   oben braucht dafuer KEINE Dichte, der Massenwert selbst aber schon)
-   und eine Lagerposition. Beides sind echte Produktentscheidungen
-   (woher kommt die Masse: direkte Eingabe vs. Material+Dichtetabelle;
-   wie waehlt der Nutzer die Lagerposition), die der Projektinhaber
-   treffen muss, nicht Implementierungsdetails - bewusst nicht geraten,
-   siehe CLAUDE.md.
+   **Entscheidungen getroffen (2026-10-14):** Massequelle = Material-
+   Dropdown + Dichte-Tabelle (nicht direkte Masseeingabe); Lagerposition
+   = Anklicken im 3D-Viewer (nicht Koordinaten-Eingabe).
+   **Material/Masse/Gewichtskraft umgesetzt (2026-10-14):** neues Modul
+   `fosas_core.materials` (`MATERIAL_DENSITIES_KG_M3`, acht Materialien:
+   Aluminium/Stahl/Titan/CFK/GFK/ABS/PLA/Balsaholz, Dichtewerte per
+   Websuche gegen oeffentliche Quellen geprueft, siehe Modul-Docstring
+   fuer die einzelnen Quellen, alle als Annahme/Richtwert gekennzeichnet,
+   keine exakte Legierung/Charge). Neues optionales `CaseParams.material`
+   (None = kein Material, keine Masse/Gewichtskraft, keine stille Null).
+   `fosas_core.pipeline.run_case` berechnet `volume` immer (reine
+   Geometrie, `build123d.Shape.compute_volume()`, Gesichert), bei
+   gesetztem Material zusaetzlich `material_density`/`mass`/`weight`
+   (G = Masse \* g, g = 9.80665 m/s² Gesichert). Material-Dropdown in
+   allen drei Formularen (Einzelauftrag, Polaren-/GCI-Studie), neue
+   Kachelgruppe "Masse / Gewichtskraft" im Ergebnis-Panel, neue
+   Gewichtskraft-Pfeile (eigene Farbe, am geometrischen Schwerpunkt
+   statt am Momenten-Bezugspunkt, da Gewichtskraft dort wirkt) sowohl im
+   2D-Freikoerperbild (dort tatsaechlich darstellbar, anders als die
+   Seitenkraft) als auch in der 3D-Ansicht (beide Clients), sowie im
+   PDF-Bericht. Bewusst in dieselbe Laengenskala wie D/L/S/R gefaltet,
+   nicht eine eigene zweite Skala: ein echtes Bauteilgewicht und seine
+   Luftkraft bei einer bescheidenen Testgeschwindigkeit koennen sich um
+   Groessenordnungen unterscheiden, das ehrlich zu zeigen ist besser als
+   es durch eine zweite, nicht vergleichbare Skala zu verstecken.
+   End-to-End gegen eine echte Rechnung bestaetigt (Zylinder, Material
+   Stahl): `volume=1.5708e-6 m^3`, `material_density=7850`,
+   `mass=0.012331 kg`, `weight=0.1209 N`, alle per Hand nachgerechnet
+   (volume\*density=mass, mass\*g=weight) und im echten PDF-Bericht
+   wiedergefunden.
+   **Noch offen, nicht in diesem Schritt:** die eigentliche
+   Lagerreaktionsberechnung braucht einen Lagerpunkt, und der
+   entschiedene Mechanismus dafuer (Anklicken im 3D-Viewer) setzt eine
+   neue, bisher nicht existierende Zweiphasen-Abgabe voraus (STEP
+   hochladen -> Geometrie-Vorschau in 3D ohne Loeserlauf -> Punkt
+   anklicken -> erst dann den eigentlichen Auftrag mit dem gewaehlten
+   Punkt abschicken), da FOSAS aktuell STEP-Datei und Parameter immer
+   gemeinsam in einem Schritt abschickt und vor dem Loeserlauf keine
+   3D-Vorschau zeigt. Das ist eine echte Erweiterung der
+   Upload-/Abgabe-Architektur, kein reines Implementierungsdetail des
+   bereits gefassten Beschlusses - bewusst zurueckgestellt, bis das mit
+   dem Projektinhaber abgestimmt ist, statt eine neue
+   Interaktionsarchitektur ungefragt zu bauen.
 8. Rechenweg (F = c*q*A, M = cm*q*A*l mit eingesetzten Zahlen) ->
    **Ergebnis-Panel-Teil umgesetzt (2026-10-06):** aufklappbarer
    "Rechenweg"-Block zeigt L, D, Mx, My, Mz jeweils als Formel mit den
