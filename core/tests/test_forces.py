@@ -23,15 +23,36 @@ def test_zero_drag_gives_none_glide_ratio_not_a_crash():
 
 def test_negative_lift_handled_via_atan2():
     # A symmetric body at negative AoA: lift can be negative, drag stays positive.
+    # resultant_angle_deg folds lift and side into one non-negative "tilt
+    # from the drag axis" magnitude (needed once side != 0 is possible, a
+    # single signed angle could no longer disambiguate a 2-DOF tilt
+    # direction anyway) - direction itself is still fully recoverable from
+    # lift's/side's own signs, shown separately.
     result = compute_force_system(cl=-0.5, cd=0.2, dynamic_pressure=10.0, reference_area=1.0)
     assert result.lift == pytest.approx(-5.0)
     assert result.drag == pytest.approx(2.0)
-    assert result.resultant_angle_deg < 0
+    assert result.resultant_angle_deg == pytest.approx(math.degrees(math.atan2(5.0, 2.0)))
 
 
 def test_rejects_non_positive_reference_area():
     with pytest.raises(ValueError):
         compute_force_system(cl=1.0, cd=0.1, dynamic_pressure=10.0, reference_area=0.0)
+
+
+def test_side_force_from_sideslip_folds_into_resultant():
+    # cs=0.3 (nonzero only for a sideslipping/crosswind case, see
+    # pipeline.aoa_to_velocity_components), q=10 Pa, A=2 m^2.
+    result = compute_force_system(cl=0.5, cd=0.1, cs=0.3, dynamic_pressure=10.0, reference_area=2.0)
+    assert result.side == pytest.approx(6.0)
+    assert result.resultant == pytest.approx(math.hypot(10.0, 2.0, 6.0))
+    # glide_ratio is lift/drag only, unaffected by a side force.
+    assert result.glide_ratio == pytest.approx(5.0)
+
+
+def test_default_side_force_is_zero():
+    # No cs passed: every pre-sideslip call site keeps working unchanged.
+    result = compute_force_system(cl=1.0, cd=0.1, dynamic_pressure=10.0, reference_area=1.0)
+    assert result.side == 0.0
 
 
 def test_rejects_negative_dynamic_pressure():

@@ -19,8 +19,10 @@ def _fake_result(work_dir: Path) -> CaseResult:
         element_count=5678,
         markers=("airfoil", "farfield"),
         aoa_deg=5.0,
+        sideslip_deg=0.0,
         cl=1.29,
         cd=0.08,
+        cs=0.0,
         frontal_area=0.06,
         cl_frontal=12.9,
         cd_frontal=0.8,
@@ -40,7 +42,7 @@ def _fake_result(work_dir: Path) -> CaseResult:
         dynamic_pressure=450.6,
         reynolds_number=2.1e6,
         forces=ForceSystem(
-            reference_area=0.72, lift=334.8, drag=20.8, resultant=335.4,
+            reference_area=0.72, lift=334.8, drag=20.8, side=0.0, resultant=335.4,
             glide_ratio=16.1, resultant_angle_deg=86.4,
         ),
         moments=MomentSystem(

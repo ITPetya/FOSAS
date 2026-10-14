@@ -265,6 +265,33 @@ angenommen.
    Duplizierung wie beim cp-/Freikoerperbild-Diagramm, siehe RISKS.md
    R21 fuer die Begruendung), gegen eine echte Rechnung per
    Node-Simulation mit einem minimalen three.js-Stub geprueft.
+   **Beta-Teil nachtraeglich umgesetzt (2026-10-14), Entscheidung des
+   Projektinhabers ("ja Seitenwinde oder schraeg angreifende Winde
+   waeren schon gut"):** `aoa_to_velocity_components` um `sideslip_deg`
+   erweitert, Standard-Windachsen-zu-Koerperachsen-Zerlegung (vx = V*
+   cos(α)*cos(β), vy = V*sin(β), vz = V*sin(α)*cos(β), reduziert sich
+   bei β=0 exakt auf die vorherige Formel), neue volle 3D-Windachsen-
+   Basis (D/L/S-Richtungen) rein rechnerisch per Skalarprodukt auf
+   Orthonormalitaet geprueft (D.L = D.S = L.S = 0, je Einheitslaenge).
+   `buildCoordLayer` zeichnet jetzt zusaetzlich einen zweiten
+   Winkelbogen fuer β (eigene Farbe, X-Y-Ebene, nur bei β != 0
+   sichtbar), der α-Bogen bleibt wie bisher in der X-Z-Ebene (zwei
+   getrennte Boegen fuer zwei getrennte Eingabewinkel, keine
+   zusammengesetzte Drehung). SU2 liefert den Seitenkraftbeiwert "CSF"
+   bereits in derselben `AERO_COEFF`-Historiengruppe wie CL/CD/CM*
+   (keine Solver-Konfigurationsaenderung noetig). End-to-End gegen
+   eine echte Rechnung verifiziert (Zylinder-Testfall, α=4°, β=6°,
+   lokale Engine): `cs=-0.6293`, daraus per Hand nachgerechnet
+   `side = cs*q*A = -0.03084 N`, `resultant = hypot(L,D,S) = 0.30565 N`,
+   `resultant_angle_deg = atan2(hypot(L,S), D) = 5.79°`, alle drei exakt
+   mit der API-Antwort uebereinstimmend. In `app.js` und `viewer.html`
+   identisch umgesetzt (Datei-Duplizierung wie bei den anderen 3D-
+   Ebenen). Das 2D-Freikoerperbild (reine X-Z-Ebene) kann eine
+   Seitenkraft grundsaetzlich nicht zeichnen (Y-Komponente); dort
+   zeigt der "R"-Pfeil deshalb jetzt explizit nur noch den
+   X-Z-Ebenen-Anteil (`R(D,L) = hypot(L,D)`, nicht den vollen 3D-Wert),
+   mit einem sichtbaren Hinweistext, sobald S != 0 ist (keine stille,
+   irrefuehrende Darstellung, CLAUDE.md "keine stillen Fallbacks").
 2. Anstroemung (Pfeil mit v, rho, Staudruck q, Reynolds-Zahl) ->
    Ergebnis-Metadaten (Ergebnis-Panel + Bericht). **Umgesetzt
    (2026-10-05):** q und Re werden in `fosas_core.boundary_layer`
@@ -311,15 +338,24 @@ angenommen.
    D-/L-Richtung, Resultierende per Vektorsumme exakt reproduziert).
    Pfeile setzen am Momenten-Bezugspunkt an, nicht am tatsaechlichen
    Druckpunkt (den gibt es noch nicht, siehe Punkt 5).
-   Noch offen: die D/L/S- bzw. Fx/Fy/Fz-Zerlegung in Koerperachsen
-   (braucht Beta/Schiebewinkel, siehe Punkt 1, das symmetrische
-   Testprofil liefert dafuer bisher keinen sinnvollen Pruefwert).
    **Auch in `viewer.html` umgesetzt (2026-10-14):** dieselben 3D-Pfeile
    (D/L/R) jetzt auch in der Vollbildansicht, als eigener Umschalt-Knopf
    "Kraftpfeile" (`buildForcesLayer`, 1:1 aus `app.js` uebernommen). Die
    Hauptseite und die Vollbildansicht zeigen die Kraft-/Momentenebenen
    damit jetzt beide vollstaendig, in 3D UND (nur `viewer.html`) auch
    als 2D-Freikoerperbild.
+   **D/L/S-Zerlegung in Windachsen nachtraeglich umgesetzt (2026-10-14),
+   siehe Punkt 1 fuer die Beta-Herleitung/Verifikation:**
+   `buildForcesLayer` zeichnet jetzt einen vierten Pfeil S (eigene
+   Farbe) entlang der Seitenkraft-Richtung der vollen Windachsen-Basis,
+   die Resultierende R ist jetzt die Vektorsumme aller drei (D+L+S),
+   nicht mehr nur D+L. Bei β=0 bleibt S exakt null (kein Pfeil
+   gezeichnet), die bisherige reine D/L-Darstellung aendert sich dann
+   nicht. Fx/Fy/Fz in reinen Koerperachsen (statt Windachsen) ist
+   weiterhin nicht umgesetzt, war auch urspruenglich nur als
+   Alternative ("D/L/S *oder* Fx/Fy/Fz") formuliert, Windachsen sind
+   fuer die Zielgruppe (Technische Mechanik, Kraeftesystem aus der
+   Anstroemung) die sinnvollere Wahl.
 5. Momente (Druckpunkt markiert, Bezugspunkt waehlbar: Schwerpunkt/
    Ursprung/frei, Mx/My/Mz in Nm mit Momentenbeiwerten) ->
    **Rohmomente umgesetzt (2026-10-06), kleiner als urspruenglich
@@ -382,6 +418,15 @@ angenommen.
    plausibel geraten werden sollten (CLAUDE.md: keine stillen Annahmen
    bei Unterspezifikation). Eigener, spaeterer Schritt, sobald eine
    Entscheidung zur Schwerpunktlage getroffen ist.
+   **Teilentscheidung getroffen (2026-10-14):** Falls/wenn dieser Punkt
+   umgesetzt wird, soll der Schwerpunkt automatisch aus der STEP-
+   Geometrie berechnet werden, nicht manuell eingegeben ("der
+   Schwerpunkt soll wenn dann berechnet werden aus der STEP"). Noch
+   offen: Lagerposition (weiterhin keine Eingabe dafuer vorhanden) und
+   die Massenquelle fuer eine Schwerpunktberechnung (Volumen * Dichte
+   setzt eine homogene Dichteannahme voraus, die bei einem realen,
+   nicht-homogenen Bauteil explizit als Annahme gekennzeichnet werden
+   muesste, siehe CLAUDE.md). Umsetzung selbst noch nicht begonnen.
 8. Rechenweg (F = c*q*A, M = cm*q*A*l mit eingesetzten Zahlen) ->
    **Ergebnis-Panel-Teil umgesetzt (2026-10-06):** aufklappbarer
    "Rechenweg"-Block zeigt L, D, Mx, My, Mz jeweils als Formel mit den
@@ -452,6 +497,12 @@ angenommen.
     nicht die neuen Kraft-/Momentenwerte pro Zustand - waere eine
     eigene, separate Erweiterung derselben Berichte, kein Teil dieses
     Einzelauftrags-Berichts.
+    **Um Schiebewinkel/Seitenkraft ergaenzt (2026-10-14):** Bericht
+    zeigt jetzt zusaetzlich Schiebewinkel, cs und Seitenkraft S, mit
+    demselben Hinweistext wie das Ergebnis-Panel, sobald β != 0 ist
+    (Winkel-R-Mehrdeutigkeit, Freikoerperbild zeigt keine Seitenkraft).
+    Per echtem Lauf erzeugt und per Textextraktion (`pypdf`) inhaltlich
+    geprueft, nicht nur "ist ein PDF".
 
 Harte Vorgabe fuer die Umsetzung, sobald sie beginnt: alle Werte werden in
 der Logikschicht (`fosas_core`) berechnet, die UI zeigt nur an, keine

@@ -29,6 +29,7 @@ class CaseParamsOut(BaseModel):
 
     velocity: float
     aoa_deg: float
+    sideslip_deg: float
     density: float
     dynamic_viscosity: float
     temperature: float
@@ -68,6 +69,7 @@ class ForceSystemOut(BaseModel):
     reference_area: float
     lift: float
     drag: float
+    side: float
     resultant: float
     glide_ratio: float | None
     resultant_angle_deg: float
@@ -91,8 +93,10 @@ class CaseResultOut(BaseModel):
     element_count: int
     markers: list[str]
     aoa_deg: float
+    sideslip_deg: float
     cl: float
     cd: float
+    cs: float
     frontal_area: float
     cl_frontal: float | None
     cd_frontal: float | None
@@ -135,6 +139,7 @@ class JobOut(BaseModel):
         params_out = CaseParamsOut(
             velocity=job.params.velocity,
             aoa_deg=job.params.aoa_deg,
+            sideslip_deg=job.params.sideslip_deg,
             density=job.params.density,
             dynamic_viscosity=job.params.dynamic_viscosity,
             temperature=job.params.temperature,
@@ -175,11 +180,13 @@ class JobOut(BaseModel):
                 element_count=job.result.element_count,
                 markers=list(job.result.markers),
                 aoa_deg=job.result.aoa_deg,
+                sideslip_deg=job.result.sideslip_deg,
                 frontal_area=job.result.frontal_area,
                 cl_frontal=job.result.cl_frontal,
                 cd_frontal=job.result.cd_frontal,
                 cl=job.result.cl,
                 cd=job.result.cd,
+                cs=job.result.cs,
                 convergence=ConvergenceOut(
                     converged=job.result.convergence.converged,
                     final_residual=job.result.convergence.final_residual,
@@ -197,6 +204,7 @@ class JobOut(BaseModel):
                     reference_area=job.result.forces.reference_area,
                     lift=job.result.forces.lift,
                     drag=job.result.forces.drag,
+                    side=job.result.forces.side,
                     resultant=job.result.forces.resultant,
                     glide_ratio=job.result.forces.glide_ratio,
                     resultant_angle_deg=job.result.forces.resultant_angle_deg,

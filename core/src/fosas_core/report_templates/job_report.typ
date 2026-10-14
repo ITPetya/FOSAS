@@ -21,7 +21,8 @@
 
 *Datei:* #data.step_filename \
 *Erzeugt:* #data.generated_at \
-*Anstellwinkel:* #fmt_num(data.aoa_deg, digits: 2) Grad
+*Anstellwinkel:* #fmt_num(data.aoa_deg, digits: 2) Grad \
+*Schiebewinkel:* #fmt_num(data.sideslip_deg, digits: 2) Grad
 
 Automatisch erzeugter Bericht. Dieser Bericht enthaelt ausschliesslich
 diesen einen Rechenzustand; er ersetzt nicht die Einordnung in der
@@ -39,10 +40,10 @@ docs/RISKS.md, u. a. R10 zur Konvergenzfrage).
 == Kraftbeiwerte und Anstroemung
 
 #table(
-  columns: 4,
+  columns: 5,
   fill: table_fill,
-  [*cl*], [*cd*], [*Staudruck q (Pa)*], [*Reynolds-Zahl*],
-  fmt_num(data.cl), fmt_num(data.cd), fmt_num(data.dynamic_pressure, digits: 2),
+  [*cl*], [*cd*], [*cs*], [*Staudruck q (Pa)*], [*Reynolds-Zahl*],
+  fmt_num(data.cl), fmt_num(data.cd), fmt_num(data.cs), fmt_num(data.dynamic_pressure, digits: 2),
   str(calc.round(data.reynolds_number, digits: 0)),
 )
 
@@ -51,12 +52,20 @@ docs/RISKS.md, u. a. R10 zur Konvergenzfrage).
 *Bezugsflaeche A:* #fmt_num(data.reference_area, digits: 6) m^2 (Grundrissflaeche, Sehnenlaenge \* Spannweite)
 
 #table(
-  columns: 5,
+  columns: 6,
   fill: table_fill,
-  [*Auftrieb L (N)*], [*Widerstand D (N)*], [*Resultierende R (N)*], [*Gleitzahl L/D*], [*Winkel R (Grad)*],
-  fmt_num(data.lift, digits: 6), fmt_num(data.drag, digits: 6), fmt_num(data.resultant, digits: 6),
+  [*Auftrieb L (N)*], [*Widerstand D (N)*], [*Seitenkraft S (N)*], [*Resultierende R (N)*], [*Gleitzahl L/D*], [*Winkel R (Grad)*],
+  fmt_num(data.lift, digits: 6), fmt_num(data.drag, digits: 6), fmt_num(data.side, digits: 6), fmt_num(data.resultant, digits: 6),
   fmt_num(data.glide_ratio, digits: 3), fmt_num(data.resultant_angle_deg, digits: 2),
 )
+
+#if calc.abs(data.sideslip_deg) > 0.001 or calc.abs(data.side) > 1e-9 [
+  *Hinweis:* Bei einem Schiebewinkel ungleich null kann der Winkel R
+  (oben) keine Richtung mehr eindeutig angeben, nur noch die Neigung
+  gegenueber der Widerstandsachse als Betrag (atan2 aus Auftrieb und
+  Seitenkraft zusammen gegen Widerstand). Die Richtung ergibt sich aus
+  den Vorzeichen von L und S getrennt.
+]
 
 == Momente
 
@@ -87,6 +96,7 @@ Rechnung aufgeschrieben (F = c \* q \* A, M = cm \* q \* A \* l):
 #block[
   L = CL \* q \* A = #fmt_num(data.cl) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) = #fmt_num(data.lift, digits: 6) N \
   D = CD \* q \* A = #fmt_num(data.cd) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) = #fmt_num(data.drag, digits: 6) N \
+  S = CS \* q \* A = #fmt_num(data.cs) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) = #fmt_num(data.side, digits: 6) N \
   Mx = CMx \* q \* A \* l = #fmt_num(data.cmx) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) \* #fmt_num(data.reference_length, digits: 4) = #fmt_num(data.mx, digits: 6) Nm \
   My = CMy \* q \* A \* l = #fmt_num(data.cmy) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) \* #fmt_num(data.reference_length, digits: 4) = #fmt_num(data.my, digits: 6) Nm \
   Mz = CMz \* q \* A \* l = #fmt_num(data.cmz) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) \* #fmt_num(data.reference_length, digits: 4) = #fmt_num(data.mz, digits: 6) Nm
@@ -97,7 +107,10 @@ Rechnung aufgeschrieben (F = c \* q \* A, M = cm \* q \* A \* l):
 #image("/fbd_chart.png", width: 90%)
 
 Grauer Punkt: Momenten-Bezugspunkt. Pfeillaenge nur relativ zueinander
-massstabsgetreu, nicht zur Koerpergroesse.
+massstabsgetreu, nicht zur Koerpergroesse. Diese Zeichnung zeigt nur die
+X-Z-Ebene (Sehne/Hochachse); eine Seitenkraft (Querrichtung) ist darin
+nicht darstellbar, siehe Hinweistext im Bild selbst, falls ungleich
+null.
 
 == Oberflaeche
 

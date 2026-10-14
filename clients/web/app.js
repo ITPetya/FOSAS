@@ -41,6 +41,18 @@ const INFO_TEXT = {
     automatisch, ein stationaerer Loeser wie dieser kann in der Naehe
     eines Stalls zusaetzlich schlechter konvergieren.</p>
   `,
+  sideslip_deg: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Schiebewinkel (Sideslip Angle)</h4>
+    <p>Der Winkel zwischen der Sehnenrichtung und der Anstroemung,
+    diesmal nicht wie der Anstellwinkel in der Hoehen-Richtung (X-Z-Ebene)
+    gemessen, sondern seitlich (X-Y-Ebene, Spannweitenrichtung) - die
+    uebliche Situation bei Seitenwind oder schraeg anliegendem Wind.
+    0 Grad heisst: Wind kommt genau von vorne (bzw. nur mit dem
+    Anstellwinkel geneigt), kein Seitenanteil.</p>
+    <p>Erzeugt eine Seitenkraft S (siehe Kraeftesystem unten), die bei
+    0 Grad Schiebewinkel immer null ist.</p>
+  `,
   aoa_values: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Anstellwinkel-Liste</h4>
@@ -311,24 +323,34 @@ const INFO_TEXT = {
     Anstroemrichtung (in deren Richtung wirkend, daher immer positiv fuer
     einen realen, nicht antreibenden Koerper).</p>
   `,
+  side_force: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Seitenkraft S</h4>
+    <p>S = CS * q * A, senkrecht zu Auftrieb UND Widerstand (die dritte
+    Richtung im raeumlichen Kraeftesystem). Nur bei einem Schiebewinkel
+    ungleich 0 Grad (Seitenwind) ungleich null; bei reiner Frontal-
+    anstroemung ist S immer 0.</p>
+  `,
   resultant_force: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Resultierende R</h4>
-    <p>R = Wurzel(L^2 + D^2), die geometrische Summe aus Auftrieb und
-    Widerstand, dieselbe Vektoraddition wie bei jedem zentralen
-    Kraeftesystem in der Technischen Mechanik. Der Winkel dieser
-    Resultierenden zur Anstroemrichtung ergibt sich aus
-    atan2(L, D).</p>
+    <p>R = Wurzel(L^2 + D^2 + S^2), die geometrische Summe aus Auftrieb,
+    Widerstand und Seitenkraft, dieselbe Vektoraddition wie bei jedem
+    zentralen Kraeftesystem in der Technischen Mechanik (bei S=0 reduziert
+    sich das auf die bekannte 2D-Form Wurzel(L^2+D^2)).</p>
   `,
   resultant_angle: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Winkel der Resultierenden</h4>
     <p>Winkel zwischen der Resultierenden R und der Anstroemrichtung
-    (= Widerstandsrichtung), berechnet per atan2(L, D). 0 Grad hiesse:
-    die gesamte Kraft zeigt genau in Widerstandsrichtung, kein Auftrieb.
-    90 Grad hiesse: reiner Auftrieb, kein Widerstand. Ueblich fuer ein
-    Fluegelprofil im normalen Betriebsbereich ist ein Wert nahe 90 Grad
-    (viel Auftrieb, wenig Widerstand im Vergleich).</p>
+    (= Widerstandsrichtung), berechnet per atan2(Wurzel(L^2+S^2), D). 0
+    Grad hiesse: die gesamte Kraft zeigt genau in Widerstandsrichtung,
+    weder Auftrieb noch Seitenkraft. 90 Grad hiesse: kein Widerstandsanteil.
+    Dieser Winkel allein sagt nicht, in welche Richtung (Auftrieb oder
+    Seite oder eine Mischung) die Kraft neben dem Widerstand zeigt, nur
+    wie weit sie insgesamt von der reinen Widerstandsrichtung abweicht -
+    dafuer L und S selbst ansehen, die ihr Vorzeichen jeweils einzeln
+    behalten.</p>
   `,
   glide_ratio: `
     <span class="tag gesichert">Gesichert</span>
@@ -530,7 +552,7 @@ function authHeaders() {
 
 function paramFields() {
   return [
-    "velocity", "aoa_deg", "density", "dynamic_viscosity", "temperature",
+    "velocity", "aoa_deg", "sideslip_deg", "density", "dynamic_viscosity", "temperature",
     "target_y_plus", "growth_ratio", "bl_thickness_factor", "span_layers",
     "n_profile_points", "max_iterations", "mpi_ranks", "time_discretization",
     "residual_threshold",
@@ -708,14 +730,31 @@ function drawFreeBodyDiagram(result) {
     svg.appendChild(text);
   }
 
+  const side = result.forces.side;
+  // This diagram is a pure X-Z-plane (body-axis chord/vertical) view: a
+  // side force (Y-axis, perpendicular to this plane) cannot be drawn
+  // here at all. Per CLAUDE.md's "no silent fallbacks" rule, do not draw
+  // the full 3D resultant's magnitude in a 2D arrow that physically only
+  // spans D and L - use the in-plane resultant for the arrow itself and
+  // say so explicitly in the legend whenever a side force is present.
+  const resultantInPlane = Math.hypot(lift, drag);
   drawArrow(dragDir, drag, "#e0a72f", "D = " + drag.toPrecision(3) + " N");
   drawArrow(liftDir, lift, "#4f8cff", "L = " + lift.toPrecision(3) + " N");
   const resVec = { x: dragDir.x * drag + liftDir.x * lift, z: dragDir.z * drag + liftDir.z * lift };
-  drawArrow(resVec, resultant, "#eeeeee", "R = " + resultant.toPrecision(3) + " N");
+  drawArrow(resVec, resultantInPlane, "#eeeeee", "R(D,L) = " + resultantInPlane.toPrecision(3) + " N");
 
-  document.getElementById("fbd-legend").textContent =
+  let legend =
     "Grauer Punkt: Momenten-Bezugspunkt (Pfeile setzen dort an, nicht am tatsaechlichen Druckpunkt). " +
     "Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse.";
+  if (Math.abs(side) > 1e-9) {
+    legend +=
+      " Achtung: Dieses Bild zeigt nur die X-Z-Ebene (Sehne/Hochachse). Die Seitenkraft S = " +
+      side.toPrecision(3) + " N (Querrichtung, aus dem Schiebewinkel) liegt senkrecht zu dieser " +
+      "Ebene und ist hier nicht darstellbar - der gezeichnete Pfeil 'R(D,L)' ist deshalb NICHT " +
+      "der volle 3D-Resultierende (das ist die Kachel 'Resultierende R' oben, " +
+      result.forces.resultant.toPrecision(3) + " N).";
+  }
+  document.getElementById("fbd-legend").textContent = legend;
 }
 
 // Generic small line-chart-in-SVG helper, used for the Polaren-/GCI-
@@ -903,7 +942,7 @@ function renderSurface3D(result) {
   const scene = new THREE.Scene();
   scene.add(points);
 
-  const coordLayer = buildCoordLayer(result.aoa_deg);
+  const coordLayer = buildCoordLayer(result.aoa_deg, result.sideslip_deg);
   scene.add(coordLayer);
 
   const momentOriginScene = bodyPointToScene(
@@ -920,9 +959,11 @@ function renderSurface3D(result) {
     "Achsen: <span style=\"color:#ff3333\">X</span> stromab, " +
     "<span style=\"color:#33ff33\">Y</span> Spannweite, " +
     "<span style=\"color:#3366ff\">Z</span> vertikal, " +
-    "<span style=\"color:#eeeeee\">weiss</span> Windachse (α=" + result.aoa_deg.toFixed(1) + "°) &middot; " +
+    "<span style=\"color:#eeeeee\">weiss</span> Windachse (α=" + result.aoa_deg.toFixed(1) +
+    "°, β=" + result.sideslip_deg.toFixed(1) + "°) &middot; " +
     "Kraftpfeile: <span style=\"color:#e0a72f\">D</span>=" + result.forces.drag.toPrecision(3) + " N, " +
     "<span style=\"color:#4f8cff\">L</span>=" + result.forces.lift.toPrecision(3) + " N, " +
+    "<span style=\"color:#cc66ff\">S</span>=" + result.forces.side.toPrecision(3) + " N, " +
     "<span style=\"color:#eeeeee\">R</span>=" + result.forces.resultant.toPrecision(3) + " N";
 
   const width = container.clientWidth, height = container.clientHeight;
@@ -973,53 +1014,86 @@ function renderSurface3D(result) {
 }
 
 // Simple colored-line coordinate triad (body axes) plus the wind-axis
-// direction arrow and an angle arc for alpha, all anchored at the scene
-// origin (the body's own bounding-box center, same point the old
-// AxesHelper used). No sideslip angle arc: beta is not modelled by
-// fosas_core yet, see INFO_TEXT.viewer_layer_coord.
-function buildCoordLayer(aoaDeg) {
+// direction arrow and angle arcs for alpha (X-Z plane) and beta (X-Y
+// plane, sideslip/crosswind), all anchored at the scene origin (the
+// body's own bounding-box center, same point the old AxesHelper used).
+// Wind direction uses the full wind-axes-to-body-axes basis (same
+// formula as fosas_core.pipeline.aoa_to_velocity_components, see
+// buildForcesLayer below for the matching lift/side directions and an
+// orthonormality note); at beta=0 this reduces exactly to the previous
+// alpha-only arrow.
+function buildCoordLayer(aoaDeg, sideslipDeg) {
   const group = new THREE.Group();
   group.add(new THREE.AxesHelper(0.7));
 
   const aoaRad = (aoaDeg * Math.PI) / 180;
-  const windDirBody = { x: Math.cos(aoaRad), y: 0, z: Math.sin(aoaRad) };
+  const betaRad = (sideslipDeg * Math.PI) / 180;
+  const windDirBody = {
+    x: Math.cos(aoaRad) * Math.cos(betaRad),
+    y: Math.sin(betaRad),
+    z: Math.sin(aoaRad) * Math.cos(betaRad),
+  };
   const windDirScene = bodyDirToScene(windDirBody.x, windDirBody.y, windDirBody.z).normalize();
   const windArrow = new THREE.ArrowHelper(windDirScene, new THREE.Vector3(0, 0, 0), 0.9, 0xeeeeee, 0.12, 0.06);
   group.add(windArrow);
 
-  // Angle arc between the body +X axis and the wind direction, swept
-  // through the actual aoa_deg (not just a fixed decorative arc), same
-  // X-Z body plane since there is no sideslip.
+  // Alpha arc: body +X axis to the wind direction's X-Z-plane component,
+  // swept through the actual aoa_deg, drawn independent of beta (alpha
+  // and beta are the two separate input angles, shown as two separate
+  // arcs rather than one compound rotation arc).
   const arcRadius = 0.35;
   const arcSteps = 24;
-  const arcPoints = [];
+  const alphaArcPoints = [];
   for (let i = 0; i <= arcSteps; i++) {
     const t = (aoaRad * i) / arcSteps;
-    arcPoints.push(bodyDirToScene(Math.cos(t) * arcRadius, 0, Math.sin(t) * arcRadius));
+    alphaArcPoints.push(bodyDirToScene(Math.cos(t) * arcRadius, 0, Math.sin(t) * arcRadius));
   }
-  const arcGeometry = new THREE.BufferGeometry().setFromPoints(arcPoints);
-  const arcLine = new THREE.Line(arcGeometry, new THREE.LineBasicMaterial({ color: 0xeeeeee }));
-  group.add(arcLine);
+  const alphaArcGeometry = new THREE.BufferGeometry().setFromPoints(alphaArcPoints);
+  const alphaArcLine = new THREE.Line(alphaArcGeometry, new THREE.LineBasicMaterial({ color: 0xeeeeee }));
+  group.add(alphaArcLine);
+
+  // Beta arc: body +X axis to the wind direction's X-Y-plane component,
+  // only drawn for an actually nonzero sideslip (otherwise a zero-length
+  // arc would just clutter the default, still most common beta=0 view).
+  if (Math.abs(betaRad) > 1e-9) {
+    const betaArcPoints = [];
+    for (let i = 0; i <= arcSteps; i++) {
+      const t = (betaRad * i) / arcSteps;
+      betaArcPoints.push(bodyDirToScene(Math.cos(t) * arcRadius, Math.sin(t) * arcRadius, 0));
+    }
+    const betaArcGeometry = new THREE.BufferGeometry().setFromPoints(betaArcPoints);
+    const betaArcLine = new THREE.Line(betaArcGeometry, new THREE.LineBasicMaterial({ color: 0xcc66ff }));
+    group.add(betaArcLine);
+  }
 
   return group;
 }
 
-// Force arrows (D along the wind direction, L perpendicular to it, R as
+// Force arrows (D along the wind direction, L perpendicular to it in the
+// X-Z plane, S perpendicular to both/the side-force direction, R as
 // their vector sum), anchored at the moment reference point (not the
 // true center of pressure, see INFO_TEXT.viewer_layer_forces), scaled so
-// the largest of the three has a fixed visual length regardless of the
+// the largest of the four has a fixed visual length regardless of the
 // forces' actual physical magnitude (otherwise a small validation case's
 // micro-Newton forces would render as invisible, zero-length arrows).
+// D/L/S directions are the same orthonormal wind-axes basis as
+// buildCoordLayer's wind arrow (verified via dot products: D.L = D.S =
+// L.S = 0, each unit length); at sideslip_deg=0 this reduces exactly to
+// the previous drag/lift-only basis (S direction becomes body +Y, but S
+// itself is then always 0 so no arrow is drawn).
 function buildForcesLayer(result, originScene) {
   const group = new THREE.Group();
   const aoaRad = (result.aoa_deg * Math.PI) / 180;
-  const dragDirBody = { x: Math.cos(aoaRad), y: 0, z: Math.sin(aoaRad) };
-  // +90 degrees from the drag/wind direction in the body X-Z plane; at
-  // alpha=0 this is body +Z ("up"), matching the usual lift convention.
-  const liftDirBody = { x: -Math.sin(aoaRad), y: 0, z: Math.cos(aoaRad) };
+  const betaRad = (result.sideslip_deg * Math.PI) / 180;
+  const cosA = Math.cos(aoaRad), sinA = Math.sin(aoaRad);
+  const cosB = Math.cos(betaRad), sinB = Math.sin(betaRad);
+  const dragDirBody = { x: cosA * cosB, y: sinB, z: sinA * cosB };
+  const liftDirBody = { x: -sinA, y: 0, z: cosA };
+  const sideDirBody = { x: -cosA * sinB, y: cosB, z: -sinA * sinB };
 
-  const lift = result.forces.lift, drag = result.forces.drag, resultant = result.forces.resultant;
-  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, 1e-12);
+  const lift = result.forces.lift, drag = result.forces.drag, side = result.forces.side;
+  const resultant = result.forces.resultant;
+  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), Math.abs(side), resultant, 1e-12);
   const visualScale = 0.9 / maxMag;
 
   function addArrow(dirBody, signedMagnitude, color) {
@@ -1032,11 +1106,12 @@ function buildForcesLayer(result, originScene) {
 
   addArrow(dragDirBody, drag, 0xe0a72f);
   addArrow(liftDirBody, lift, 0x4f8cff);
+  addArrow(sideDirBody, side, 0xcc66ff);
 
   const resultantVecBody = {
-    x: dragDirBody.x * drag + liftDirBody.x * lift,
-    y: 0,
-    z: dragDirBody.z * drag + liftDirBody.z * lift,
+    x: dragDirBody.x * drag + liftDirBody.x * lift + sideDirBody.x * side,
+    y: dragDirBody.y * drag + liftDirBody.y * lift + sideDirBody.y * side,
+    z: dragDirBody.z * drag + liftDirBody.z * lift + sideDirBody.z * side,
   };
   addArrow(resultantVecBody, resultant, 0xeeeeee);
 
@@ -1085,6 +1160,8 @@ function renderCalculationSteps(result) {
       " = " + fmt(result.forces.lift) + " N",
     "D = CD * q * A = " + fmt(result.cd) + " * " + fmt(q) + " * " + fmt(A) +
       " = " + fmt(result.forces.drag) + " N",
+    "S = CS * q * A = " + fmt(result.cs) + " * " + fmt(q) + " * " + fmt(A) +
+      " = " + fmt(result.forces.side) + " N (Seitenkraft, nur bei Schiebewinkel != 0 ungleich 0)",
     "",
     "Mx = CMx * q * A * l = " + fmt(result.moments.cmx) + " * " + fmt(q) + " * " +
       fmt(A) + " * " + fmt(l) + " = " + fmt(result.moments.mx) + " Nm",
@@ -1122,6 +1199,7 @@ function renderResult(result, jobId) {
   // showing it.
   document.getElementById("lift-value").textContent = result.forces.lift.toPrecision(3);
   document.getElementById("drag-value").textContent = result.forces.drag.toPrecision(3);
+  document.getElementById("side-value").textContent = result.forces.side.toPrecision(3);
   document.getElementById("resultant-value").textContent = result.forces.resultant.toPrecision(3);
   document.getElementById("resultant-angle-value").textContent = result.forces.resultant_angle_deg.toFixed(1) + "°";
   document.getElementById("glide-ratio-value").textContent =
@@ -1807,6 +1885,7 @@ document.getElementById("polar-form").addEventListener("submit", async (e) => {
     const form = new FormData();
     form.append("step_file", fileInput.files[0]);
     form.append("velocity", document.getElementById("polar-velocity").value);
+    form.append("sideslip_deg", document.getElementById("polar-sideslip_deg").value);
     for (const v of aoaValues) form.append("aoa_values", v);
     appendAdvancedParams(form, "polar-");
 
@@ -1842,6 +1921,7 @@ document.getElementById("gci-form").addEventListener("submit", async (e) => {
     form.append("step_file", fileInput.files[0]);
     form.append("velocity", document.getElementById("gci-velocity").value);
     form.append("aoa_deg", document.getElementById("gci-aoa_deg").value);
+    form.append("sideslip_deg", document.getElementById("gci-sideslip_deg").value);
     form.append("refinement_ratio", document.getElementById("gci-refinement_ratio").value);
     appendAdvancedParams(form, "gci-");
 

@@ -21,8 +21,13 @@ its own.
 
 Deliberately narrow: only the resultant force system and the raw moment
 system about the solver's existing fixed reference point, not yet
-center-of-pressure markers or body-axis (Fx/Fy/Fz, needs a sideslip
-angle this project does not model yet) decomposition.
+center-of-pressure markers or a full body-axis (Fx/Fy/Fz) decomposition.
+
+Side force (S, wind-axis force perpendicular to both lift and drag,
+non-zero only for a sideslipping/crosswind case) is included: SU2
+already writes a side-force coefficient ("CSF") into the same
+AERO_COEFF history group as CL/CD, confirmed by reading the actual
+history CSV columns, same as CMx/CMy/CMz already were.
 """
 
 from __future__ import annotations
@@ -36,14 +41,22 @@ class ForceSystem:
     reference_area: float
     lift: float
     drag: float
+    # Wind-axis side force, perpendicular to both lift and drag; zero
+    # for a zero-sideslip case (every case before sideslip_deg existed),
+    # non-zero for a sideslipping/crosswind case.
+    side: float
     resultant: float
     # None when drag is exactly zero (glide ratio undefined), not a
     # silently wrong number: a real body always has some drag, this
     # only happens for a synthetic/degenerate test input.
     glide_ratio: float | None
     # Angle between the resultant and the drag (freestream) direction,
-    # degrees. atan2, not atan(lift/drag): stays correct (and finite)
-    # even if drag is zero or either component is negative.
+    # degrees, folding lift and side into one perpendicular magnitude
+    # (sqrt(lift^2 + side^2)) - this alone does not say which direction
+    # within the lift/side plane the resultant leans, lift and side are
+    # shown separately for that. atan2, not atan(.../drag): stays
+    # correct (and finite) even if drag is zero or any component is
+    # negative.
     resultant_angle_deg: float
 
 
@@ -116,20 +129,24 @@ def rescale_coefficient_to_frontal_area(
     return coefficient * planform_area / frontal_area
 
 
-def compute_force_system(cl: float, cd: float, dynamic_pressure: float, reference_area: float) -> ForceSystem:
+def compute_force_system(
+    cl: float, cd: float, dynamic_pressure: float, reference_area: float, cs: float = 0.0
+) -> ForceSystem:
     if dynamic_pressure < 0:
         raise ValueError("dynamic_pressure must not be negative (Pa)")
     if reference_area <= 0:
         raise ValueError("reference_area must be positive (m^2)")
     lift = cl * dynamic_pressure * reference_area
     drag = cd * dynamic_pressure * reference_area
-    resultant = math.hypot(lift, drag)
+    side = cs * dynamic_pressure * reference_area
+    resultant = math.hypot(lift, drag, side)
     glide_ratio = lift / drag if drag != 0 else None
-    resultant_angle_deg = math.degrees(math.atan2(lift, drag))
+    resultant_angle_deg = math.degrees(math.atan2(math.hypot(lift, side), drag))
     return ForceSystem(
         reference_area=reference_area,
         lift=lift,
         drag=drag,
+        side=side,
         resultant=resultant,
         glide_ratio=glide_ratio,
         resultant_angle_deg=resultant_angle_deg,

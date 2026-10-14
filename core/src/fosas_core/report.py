@@ -375,8 +375,10 @@ class JobReportData:
     step_filename: str
     generated_at: datetime
     aoa_deg: float
+    sideslip_deg: float
     cl: float
     cd: float
+    cs: float
     converged: bool
     convergence_message: str
     mean_y_plus: float
@@ -388,6 +390,7 @@ class JobReportData:
     reference_area: float
     lift: float
     drag: float
+    side: float
     resultant: float
     glide_ratio: float | None
     resultant_angle_deg: float
@@ -446,7 +449,12 @@ def _render_job_fbd_chart_png(data: JobReportData) -> bytes:
     aoa_rad = math.radians(data.aoa_deg)
     drag_dir = (math.cos(aoa_rad), math.sin(aoa_rad))
     lift_dir = (-math.sin(aoa_rad), math.cos(aoa_rad))
-    max_mag = max(abs(data.lift), abs(data.drag), data.resultant, 1e-12)
+    # Same X-Z-plane-only limitation as the browser's drawFreeBodyDiagram:
+    # a side force (Y-axis, from a nonzero sideslip_deg) cannot be drawn
+    # in this 2D chart at all, so the "R" arrow here uses only the
+    # in-plane (D,L) resultant, not data.resultant (which includes side).
+    resultant_in_plane = math.hypot(data.lift, data.drag)
+    max_mag = max(abs(data.lift), abs(data.drag), resultant_in_plane, 1e-12)
     body_span = max(max(xs) - min(xs), max(zs) - min(zs), 1e-6)
     arrow_scale = body_span * 0.6 / max_mag
 
@@ -472,8 +480,16 @@ def _render_job_fbd_chart_png(data: JobReportData) -> bytes:
     resultant_norm = math.hypot(*resultant_vec) or 1.0
     draw_arrow(
         (resultant_vec[0] / resultant_norm, resultant_vec[1] / resultant_norm),
-        data.resultant, "black", f"R = {data.resultant:.3g} N",
+        resultant_in_plane, "black", f"R(D,L) = {resultant_in_plane:.3g} N",
     )
+    if abs(data.side) > 1e-9:
+        ax.text(
+            0.02, 0.02,
+            f"Seitenkraft S = {data.side:.3g} N (Querrichtung, aus dem Schiebewinkel)\n"
+            f"liegt senkrecht zu dieser Ebene, hier nicht darstellbar.\n"
+            f"Voller 3D-Resultierender (inkl. S): {data.resultant:.3g} N.",
+            transform=ax.transAxes, fontsize=7, color="#555555", va="bottom",
+        )
 
     ax.set_aspect("equal")
     ax.set_xlabel("x (m)")
@@ -501,8 +517,10 @@ def render_job_report(data: JobReportData) -> bytes:
         "step_filename": data.step_filename,
         "generated_at": _format_timestamp(data.generated_at),
         "aoa_deg": data.aoa_deg,
+        "sideslip_deg": data.sideslip_deg,
         "cl": data.cl,
         "cd": data.cd,
+        "cs": data.cs,
         "converged": data.converged,
         "convergence_message": data.convergence_message,
         "mean_y_plus": data.mean_y_plus,
@@ -514,6 +532,7 @@ def render_job_report(data: JobReportData) -> bytes:
         "reference_area": data.reference_area,
         "lift": data.lift,
         "drag": data.drag,
+        "side": data.side,
         "resultant": data.resultant,
         "glide_ratio": data.glide_ratio,
         "resultant_angle_deg": data.resultant_angle_deg,

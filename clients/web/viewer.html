@@ -111,7 +111,7 @@
 <div id="fbd-overlay" hidden>
   <h3>Freikoerperbild (D/L/R am Momenten-Bezugspunkt)</h3>
   <svg id="fbd-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
-  <p class="hint">Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse.</p>
+  <p class="hint" id="fbd-legend">Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse.</p>
 </div>
 
 <div id="sidebar">
@@ -185,6 +185,7 @@ function renderSidebar(job) {
   html += '<h3>Eingaben</h3>';
   html += row("Geschwindigkeit", p.velocity + " m/s");
   html += row("Anstellwinkel", p.aoa_deg + " deg");
+  html += row("Schiebewinkel", (p.sideslip_deg == null ? 0 : p.sideslip_deg) + " deg");
   html += row("Zeitintegration", p.time_discretization);
   html += row("Max. Iterationen", p.max_iterations);
   if (job.result) {
@@ -203,6 +204,7 @@ function renderSidebar(job) {
     html += '<h3>Kraeftesystem (Windachsen)</h3>';
     html += row("Auftrieb L", r.forces.lift.toPrecision(3) + " N");
     html += row("Widerstand D", r.forces.drag.toPrecision(3) + " N");
+    html += row("Seitenkraft S", r.forces.side.toPrecision(3) + " N");
     html += row("Resultierende R", r.forces.resultant.toPrecision(3) + " N");
     html += row("Winkel R", r.forces.resultant_angle_deg.toFixed(1) + "&deg;");
     html += row("Gleitzahl L/D", r.forces.glide_ratio == null ? "-" : r.forces.glide_ratio.toFixed(2));
@@ -407,10 +409,27 @@ function drawFbdChart(result) {
     svg.appendChild(text);
   }
 
+  const side = result.forces.side;
+  // X-Z-plane-only view, same caveat as clients/web/app.js's
+  // drawFreeBodyDiagram: a side force (Y-axis) cannot be drawn here, so
+  // the arrow uses the in-plane (D,L) resultant, not the full 3D one.
+  const resultantInPlane = Math.hypot(lift, drag);
   drawArrow(dragDir, drag, "#e0a72f", "D = " + drag.toPrecision(3) + " N");
   drawArrow(liftDir, lift, "#4f8cff", "L = " + lift.toPrecision(3) + " N");
   const resVec = { x: dragDir.x * drag + liftDir.x * lift, z: dragDir.z * drag + liftDir.z * lift };
-  drawArrow(resVec, resultant, "#eeeeee", "R = " + resultant.toPrecision(3) + " N");
+  drawArrow(resVec, resultantInPlane, "#eeeeee", "R(D,L) = " + resultantInPlane.toPrecision(3) + " N");
+
+  const legendEl = document.getElementById("fbd-legend");
+  let legend = "Pfeillaenge nur relativ zueinander massstabsgetreu, nicht zur Koerpergroesse.";
+  if (Math.abs(side) > 1e-9) {
+    legend +=
+      " Achtung: Dieses Bild zeigt nur die X-Z-Ebene (Sehne/Hochachse). Die Seitenkraft S = " +
+      side.toPrecision(3) + " N (Querrichtung, aus dem Schiebewinkel) liegt senkrecht zu dieser " +
+      "Ebene und ist hier nicht darstellbar - der gezeichnete Pfeil 'R(D,L)' ist deshalb NICHT " +
+      "der volle 3D-Resultierende (das ist 'Resultierende R' in der Auftragsliste links, " +
+      resultant.toPrecision(3) + " N).";
+  }
+  legendEl.textContent = legend;
 }
 
 async function main() {
@@ -472,26 +491,46 @@ function bodyPointToScene(x, y, z, cx, cy, cz, extent) {
   return new THREE.Vector3((x - cx) / extent, (z - cz) / extent, (y - cy) / extent);
 }
 
-function buildCoordLayer(aoaDeg) {
+// Full wind-axes basis (same as fosas_core.pipeline.aoa_to_velocity_
+// components, orthonormality verified via dot products: D.L = D.S =
+// L.S = 0, each unit length); at sideslip_deg=0 reduces exactly to the
+// previous alpha-only basis.
+function buildCoordLayer(aoaDeg, sideslipDeg) {
   const group = new THREE.Group();
   group.add(new THREE.AxesHelper(0.7));
 
   const aoaRad = (aoaDeg * Math.PI) / 180;
-  const windDirBody = { x: Math.cos(aoaRad), y: 0, z: Math.sin(aoaRad) };
+  const betaRad = (sideslipDeg * Math.PI) / 180;
+  const windDirBody = {
+    x: Math.cos(aoaRad) * Math.cos(betaRad),
+    y: Math.sin(betaRad),
+    z: Math.sin(aoaRad) * Math.cos(betaRad),
+  };
   const windDirScene = bodyDirToScene(windDirBody.x, windDirBody.y, windDirBody.z).normalize();
   const windArrow = new THREE.ArrowHelper(windDirScene, new THREE.Vector3(0, 0, 0), 0.9, 0xeeeeee, 0.12, 0.06);
   group.add(windArrow);
 
   const arcRadius = 0.35;
   const arcSteps = 24;
-  const arcPoints = [];
+  const alphaArcPoints = [];
   for (let i = 0; i <= arcSteps; i++) {
     const t = (aoaRad * i) / arcSteps;
-    arcPoints.push(bodyDirToScene(Math.cos(t) * arcRadius, 0, Math.sin(t) * arcRadius));
+    alphaArcPoints.push(bodyDirToScene(Math.cos(t) * arcRadius, 0, Math.sin(t) * arcRadius));
   }
-  const arcGeometry = new THREE.BufferGeometry().setFromPoints(arcPoints);
-  const arcLine = new THREE.Line(arcGeometry, new THREE.LineBasicMaterial({ color: 0xeeeeee }));
-  group.add(arcLine);
+  const alphaArcGeometry = new THREE.BufferGeometry().setFromPoints(alphaArcPoints);
+  const alphaArcLine = new THREE.Line(alphaArcGeometry, new THREE.LineBasicMaterial({ color: 0xeeeeee }));
+  group.add(alphaArcLine);
+
+  if (Math.abs(betaRad) > 1e-9) {
+    const betaArcPoints = [];
+    for (let i = 0; i <= arcSteps; i++) {
+      const t = (betaRad * i) / arcSteps;
+      betaArcPoints.push(bodyDirToScene(Math.cos(t) * arcRadius, Math.sin(t) * arcRadius, 0));
+    }
+    const betaArcGeometry = new THREE.BufferGeometry().setFromPoints(betaArcPoints);
+    const betaArcLine = new THREE.Line(betaArcGeometry, new THREE.LineBasicMaterial({ color: 0xcc66ff }));
+    group.add(betaArcLine);
+  }
 
   return group;
 }
@@ -499,11 +538,16 @@ function buildCoordLayer(aoaDeg) {
 function buildForcesLayer(result, originScene) {
   const group = new THREE.Group();
   const aoaRad = (result.aoa_deg * Math.PI) / 180;
-  const dragDirBody = { x: Math.cos(aoaRad), y: 0, z: Math.sin(aoaRad) };
-  const liftDirBody = { x: -Math.sin(aoaRad), y: 0, z: Math.cos(aoaRad) };
+  const betaRad = (result.sideslip_deg * Math.PI) / 180;
+  const cosA = Math.cos(aoaRad), sinA = Math.sin(aoaRad);
+  const cosB = Math.cos(betaRad), sinB = Math.sin(betaRad);
+  const dragDirBody = { x: cosA * cosB, y: sinB, z: sinA * cosB };
+  const liftDirBody = { x: -sinA, y: 0, z: cosA };
+  const sideDirBody = { x: -cosA * sinB, y: cosB, z: -sinA * sinB };
 
-  const lift = result.forces.lift, drag = result.forces.drag, resultant = result.forces.resultant;
-  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, 1e-12);
+  const lift = result.forces.lift, drag = result.forces.drag, side = result.forces.side;
+  const resultant = result.forces.resultant;
+  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), Math.abs(side), resultant, 1e-12);
   const visualScale = 0.9 / maxMag;
 
   function addArrow(dirBody, signedMagnitude, color) {
@@ -516,10 +560,11 @@ function buildForcesLayer(result, originScene) {
 
   addArrow(dragDirBody, drag, 0xe0a72f);
   addArrow(liftDirBody, lift, 0x4f8cff);
+  addArrow(sideDirBody, side, 0xcc66ff);
   const resultantVecBody = {
-    x: dragDirBody.x * drag + liftDirBody.x * lift,
-    y: 0,
-    z: dragDirBody.z * drag + liftDirBody.z * lift,
+    x: dragDirBody.x * drag + liftDirBody.x * lift + sideDirBody.x * side,
+    y: dragDirBody.y * drag + liftDirBody.y * lift + sideDirBody.y * side,
+    z: dragDirBody.z * drag + liftDirBody.z * lift + sideDirBody.z * side,
   };
   addArrow(resultantVecBody, resultant, 0xeeeeee);
 
@@ -577,7 +622,7 @@ function setupViewer(result) {
   const scene = new THREE.Scene();
   scene.add(points);
 
-  const coordLayer = buildCoordLayer(result.aoa_deg);
+  const coordLayer = buildCoordLayer(result.aoa_deg, result.sideslip_deg);
   coordLayer.visible = false;
   scene.add(coordLayer);
 

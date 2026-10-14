@@ -249,6 +249,13 @@
           <input type="text" id="polar-aoa_values" value="0, 5, 10" required>
         </div>
       </div>
+      <div class="row">
+        <div>
+          <label data-info="sideslip_deg">Schiebewinkel (Grad, Seitenwind, fest fuer die ganze Reihe)</label>
+          <input type="number" id="polar-sideslip_deg" value="0" step="any">
+        </div>
+        <div></div>
+      </div>
 
       <details>
         <summary>Erweiterte Einstellungen</summary>
@@ -322,7 +329,10 @@
           <label data-info="refinement_ratio">Verfeinerungsverhaeltnis</label>
           <input type="number" id="gci-refinement_ratio" value="1.5" step="any" required>
         </div>
-        <div></div>
+        <div>
+          <label data-info="sideslip_deg">Schiebewinkel (Grad, Seitenwind)</label>
+          <input type="number" id="gci-sideslip_deg" value="0" step="any">
+        </div>
       </div>
       <p class="hint" style="margin:0 0 10px;">
         Moderat bleiben (z. B. 1,2 bis 1,5): ein zu hohes Verhaeltnis kann
@@ -402,6 +412,13 @@
           <label data-info="aoa_deg">Anstellwinkel (Grad)</label>
           <input type="number" id="aoa_deg" value="5" step="any" required>
         </div>
+      </div>
+      <div class="row">
+        <div>
+          <label data-info="sideslip_deg">Schiebewinkel (Grad, Seitenwind)</label>
+          <input type="number" id="sideslip_deg" value="0" step="any">
+        </div>
+        <div></div>
       </div>
 
       <details>
@@ -490,6 +507,7 @@
     <div class="metrics">
       <div class="metric"><div class="value" id="lift-value">-</div><div class="label" data-info="lift_force">Auftrieb L (N)</div></div>
       <div class="metric"><div class="value" id="drag-value">-</div><div class="label" data-info="drag_force">Widerstand D (N)</div></div>
+      <div class="metric"><div class="value" id="side-value">-</div><div class="label" data-info="side_force">Seitenkraft S (N)</div></div>
       <div class="metric"><div class="value" id="resultant-value">-</div><div class="label" data-info="resultant_force">Resultierende R (N)</div></div>
       <div class="metric"><div class="value" id="resultant-angle-value">-</div><div class="label" data-info="resultant_angle">Winkel R zur Anstroemung</div></div>
       <div class="metric"><div class="value" id="glide-ratio-value">-</div><div class="label" data-info="glide_ratio">Gleitzahl L/D</div></div>

@@ -74,23 +74,46 @@ class ExecutablePaths:
     mpirun: str = "mpirun"
 
 
-def aoa_to_velocity_components(velocity: float, aoa_deg: float) -> tuple[float, float, float]:
-    """Freestream velocity vector (X, Y, Z) for a given angle of attack,
-    matching the project's axis convention (X chordwise/downstream, Y
-    spanwise, Z vertical, see docs/ARCHITECTURE.md): the inflow rotates
-    in the X-Z plane, Y stays zero. Extracted out of run_case so a
-    polar sweep (Phase 2) can reuse the exact same conversion per AoA
-    value without duplicating it.
+def aoa_to_velocity_components(
+    velocity: float, aoa_deg: float, sideslip_deg: float = 0.0
+) -> tuple[float, float, float]:
+    """Freestream velocity vector (X, Y, Z) for a given angle of attack
+    and sideslip angle, matching the project's axis convention (X
+    chordwise/downstream, Y spanwise, Z vertical, see
+    docs/ARCHITECTURE.md). Standard wind-axes-to-body-axes conversion
+    (Gesichert, standard flight-dynamics textbook form, e.g. Anderson,
+    "Fundamentals of Aerodynamics"; also matches how SU2 itself derives
+    "Angle of attack"/"Side slip angle" from a given velocity vector,
+    confirmed directly in its own solver-preprocessing log output):
+
+        vx = V * cos(alpha) * cos(beta)
+        vy = V * sin(beta)
+        vz = V * sin(alpha) * cos(beta)
+
+    At sideslip_deg=0 this reduces exactly to the previous alpha-only
+    form (vy=0), so every existing case is unaffected. Extracted out of
+    run_case so a polar sweep (Phase 2) can reuse the exact same
+    conversion per AoA value without duplicating it.
     """
-    vx = velocity * math.cos(math.radians(aoa_deg))
-    vz = velocity * math.sin(math.radians(aoa_deg))
-    return vx, 0.0, vz
+    alpha = math.radians(aoa_deg)
+    beta = math.radians(sideslip_deg)
+    vx = velocity * math.cos(alpha) * math.cos(beta)
+    vy = velocity * math.sin(beta)
+    vz = velocity * math.sin(alpha) * math.cos(beta)
+    return vx, vy, vz
 
 
 @dataclass(frozen=True)
 class CaseParams:
     velocity: float
     aoa_deg: float
+    # Sideslip angle beta (crosswind-type oblique inflow), rotating the
+    # freestream additionally in the X-Y (chordwise/spanwise) plane -
+    # see aoa_to_velocity_components. 0.0 (no sideslip) reproduces every
+    # previous case exactly. Requested explicitly by the project owner
+    # for crosswind/oblique-wind use cases, see docs/ARCHITECTURE.md
+    # "Technische-Mechanik-Visualisierung" point 1.
+    sideslip_deg: float = 0.0
     density: float = 1.225
     dynamic_viscosity: float = 1.81e-5
     temperature: float = 288.15
@@ -139,8 +162,13 @@ class CaseResult:
     # input params, which the API does not otherwise expose after
     # submission.
     aoa_deg: float
+    sideslip_deg: float
     cl: float
     cd: float
+    # Side-force coefficient (wind-axis, perpendicular to lift and drag),
+    # read from SU2's own "CSF" history column alongside CL/CD, zero
+    # for a zero-sideslip case (every case before sideslip_deg existed).
+    cs: float
     # Alternative coefficients on the projected-frontal-area convention
     # (point 3, docs/ARCHITECTURE.md), None for a near-zero-thickness
     # body where that area is undefined; see where frontal_area is
@@ -313,7 +341,7 @@ def run_case(
         except MeshingError as exc:
             raise PipelineError("meshing", str(exc)) from exc
 
-    vx, _, vz = aoa_to_velocity_components(params.velocity, params.aoa_deg)
+    vx, vy, vz = aoa_to_velocity_components(params.velocity, params.aoa_deg, params.sideslip_deg)
     solve_dir = work_dir / "solve"
     # If a previous attempt got partway through solving before being
     # interrupted (crash, engine restart), SU2 will have written its own
@@ -325,7 +353,7 @@ def run_case(
         mesh_su2_path=mesh_path,
         freestream=FreestreamConditions(
             density=params.density,
-            velocity=(vx, 0.0, vz),
+            velocity=(vx, vy, vz),
             temperature=params.temperature,
             dynamic_viscosity=params.dynamic_viscosity,
         ),
@@ -357,6 +385,7 @@ def run_case(
     max_y_plus = max(y_plus_values)
     final_cl = result.final("CL")
     final_cd = result.final("CD")
+    final_cs = result.final("CSF")
     q = dynamic_pressure(params.density, params.velocity)
 
     # Alternative reference area (point 3 of the technical-mechanics
@@ -395,8 +424,10 @@ def run_case(
         element_count=mesh_info.element_count,
         markers=mesh_info.markers,
         aoa_deg=params.aoa_deg,
+        sideslip_deg=params.sideslip_deg,
         cl=final_cl,
         cd=final_cd,
+        cs=final_cs,
         frontal_area=frontal_area,
         cl_frontal=cl_frontal,
         cd_frontal=cd_frontal,
@@ -409,7 +440,9 @@ def run_case(
         max_wall_shear_stress=max_wall_shear_stress,
         dynamic_pressure=q,
         reynolds_number=reynolds_number(params.density, params.velocity, chord, params.dynamic_viscosity),
-        forces=compute_force_system(cl=final_cl, cd=final_cd, dynamic_pressure=q, reference_area=planform_area),
+        forces=compute_force_system(
+            cl=final_cl, cd=final_cd, cs=final_cs, dynamic_pressure=q, reference_area=planform_area
+        ),
         moments=compute_moment_system(
             cmx=result.final("CMx"),
             cmy=result.final("CMy"),
