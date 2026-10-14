@@ -256,12 +256,15 @@ angenommen.
    Browser-Test (siehe eigene Einschraenkung weiter unten im
    Dokument).
    Beta (Schiebewinkel) bleibt wie beschrieben unmodelliert, dafuer
-   also bewusst kein Winkelbogen. **Weiterhin nicht umgesetzt:** die
-   3D-Windachsen-Pfeil/Winkelbogen-Ebene selbst in `viewer.html` (siehe
-   RISKS.md R21 fuer dessen umfassenderen, am 2026-10-06 behobenen
-   Ausbau - der bringt Text-/2D-Anzeige fuer Kraefte/Momente und ein
-   2D-Freikoerperbild auch in `viewer.html`, aber nicht diese
-   3D-Koordinatenebene im three.js-Canvas selbst).
+   also bewusst kein Winkelbogen. **Auch in `viewer.html` umgesetzt
+   (2026-10-14):** dieselbe 3D-Ebene (Koerperachsen, Windrichtungspfeil,
+   Winkelbogen) jetzt auch in der Vollbildansicht, als eigener
+   Umschalt-Knopf "Achsen/Windrichtung" (ersetzt den vorherigen reinen
+   `AxesHelper`-Knopf). `bodyDirToScene`/`bodyPointToScene`/
+   `buildCoordLayer` 1:1 aus `app.js` uebernommen (dieselbe Datei-
+   Duplizierung wie beim cp-/Freikoerperbild-Diagramm, siehe RISKS.md
+   R21 fuer die Begruendung), gegen eine echte Rechnung per
+   Node-Simulation mit einem minimalen three.js-Stub geprueft.
 2. Anstroemung (Pfeil mit v, rho, Staudruck q, Reynolds-Zahl) ->
    Ergebnis-Metadaten (Ergebnis-Panel + Bericht). **Umgesetzt
    (2026-10-05):** q und Re werden in `fosas_core.boundary_layer`
@@ -310,9 +313,13 @@ angenommen.
    Druckpunkt (den gibt es noch nicht, siehe Punkt 5).
    Noch offen: die D/L/S- bzw. Fx/Fy/Fz-Zerlegung in Koerperachsen
    (braucht Beta/Schiebewinkel, siehe Punkt 1, das symmetrische
-   Testprofil liefert dafuer bisher keinen sinnvollen Pruefwert) und
-   die 3D-Pfeile selbst in `viewer.html` (das 2D-Freikoerperbild mit
-   denselben Pfeilen gibt es dort inzwischen, siehe RISKS.md R21).
+   Testprofil liefert dafuer bisher keinen sinnvollen Pruefwert).
+   **Auch in `viewer.html` umgesetzt (2026-10-14):** dieselben 3D-Pfeile
+   (D/L/R) jetzt auch in der Vollbildansicht, als eigener Umschalt-Knopf
+   "Kraftpfeile" (`buildForcesLayer`, 1:1 aus `app.js` uebernommen). Die
+   Hauptseite und die Vollbildansicht zeigen die Kraft-/Momentenebenen
+   damit jetzt beide vollstaendig, in 3D UND (nur `viewer.html`) auch
+   als 2D-Freikoerperbild.
 5. Momente (Druckpunkt markiert, Bezugspunkt waehlbar: Schwerpunkt/
    Ursprung/frei, Mx/My/Mz in Nm mit Momentenbeiwerten) ->
    **Rohmomente umgesetzt (2026-10-06), kleiner als urspruenglich

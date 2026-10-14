@@ -95,7 +95,8 @@
   <h1 id="job-title">FOSAS 3D-Vollbildansicht</h1>
   <button type="button" class="tool-btn" id="tool-color-cp">Farbe: cp</button>
   <button type="button" class="tool-btn" id="tool-color-yplus">Farbe: y+</button>
-  <button type="button" class="tool-btn" id="tool-axes">Achsen</button>
+  <button type="button" class="tool-btn" id="tool-axes" title="Koerperachsen, Windachse und Anstellwinkel-Bogen">Achsen/Windrichtung</button>
+  <button type="button" class="tool-btn" id="tool-forces" title="Kraftpfeile D/L/R am Momenten-Bezugspunkt, massstabsgetreu zueinander">Kraftpfeile</button>
   <button type="button" class="tool-btn" id="tool-chart">cp-Diagramm</button>
   <button type="button" class="tool-btn" id="tool-fbd">Freikoerperbild</button>
   <button type="button" class="tool-btn" id="tool-reset">Ansicht zuruecksetzen</button>
@@ -449,7 +450,7 @@ async function main() {
 
   drawCpChart(job.result.surface);
   drawFbdChart(job.result);
-  setupViewer(job.result.surface);
+  setupViewer(job.result);
 }
 
 document.getElementById("viewer-combined-report-btn").addEventListener("click", () => {
@@ -459,7 +460,74 @@ document.getElementById("viewer-combined-report-btn").addEventListener("click", 
   downloadPdf("/reports/combined?polar_study_id=" + polarId + "&gci_study_id=" + gciId, "combined_report.pdf");
 });
 
-function setupViewer(surface) {
+// Same helpers/layers as clients/web/app.js (index.html's 3D view) -
+// duplicated rather than shared, same reasoning as the cp/FBD charts
+// above: this page has its own standalone script, see
+// docs/ARCHITECTURE.md.
+function bodyDirToScene(x, y, z) {
+  return new THREE.Vector3(x, z, y);
+}
+
+function bodyPointToScene(x, y, z, cx, cy, cz, extent) {
+  return new THREE.Vector3((x - cx) / extent, (z - cz) / extent, (y - cy) / extent);
+}
+
+function buildCoordLayer(aoaDeg) {
+  const group = new THREE.Group();
+  group.add(new THREE.AxesHelper(0.7));
+
+  const aoaRad = (aoaDeg * Math.PI) / 180;
+  const windDirBody = { x: Math.cos(aoaRad), y: 0, z: Math.sin(aoaRad) };
+  const windDirScene = bodyDirToScene(windDirBody.x, windDirBody.y, windDirBody.z).normalize();
+  const windArrow = new THREE.ArrowHelper(windDirScene, new THREE.Vector3(0, 0, 0), 0.9, 0xeeeeee, 0.12, 0.06);
+  group.add(windArrow);
+
+  const arcRadius = 0.35;
+  const arcSteps = 24;
+  const arcPoints = [];
+  for (let i = 0; i <= arcSteps; i++) {
+    const t = (aoaRad * i) / arcSteps;
+    arcPoints.push(bodyDirToScene(Math.cos(t) * arcRadius, 0, Math.sin(t) * arcRadius));
+  }
+  const arcGeometry = new THREE.BufferGeometry().setFromPoints(arcPoints);
+  const arcLine = new THREE.Line(arcGeometry, new THREE.LineBasicMaterial({ color: 0xeeeeee }));
+  group.add(arcLine);
+
+  return group;
+}
+
+function buildForcesLayer(result, originScene) {
+  const group = new THREE.Group();
+  const aoaRad = (result.aoa_deg * Math.PI) / 180;
+  const dragDirBody = { x: Math.cos(aoaRad), y: 0, z: Math.sin(aoaRad) };
+  const liftDirBody = { x: -Math.sin(aoaRad), y: 0, z: Math.cos(aoaRad) };
+
+  const lift = result.forces.lift, drag = result.forces.drag, resultant = result.forces.resultant;
+  const maxMag = Math.max(Math.abs(lift), Math.abs(drag), resultant, 1e-12);
+  const visualScale = 0.9 / maxMag;
+
+  function addArrow(dirBody, signedMagnitude, color) {
+    const mag = Math.abs(signedMagnitude);
+    if (mag < 1e-12) return;
+    const sign = signedMagnitude < 0 ? -1 : 1;
+    const dirScene = bodyDirToScene(dirBody.x * sign, dirBody.y * sign, dirBody.z * sign).normalize();
+    group.add(new THREE.ArrowHelper(dirScene, originScene, mag * visualScale, color, 0.1, 0.05));
+  }
+
+  addArrow(dragDirBody, drag, 0xe0a72f);
+  addArrow(liftDirBody, lift, 0x4f8cff);
+  const resultantVecBody = {
+    x: dragDirBody.x * drag + liftDirBody.x * lift,
+    y: 0,
+    z: dragDirBody.z * drag + liftDirBody.z * lift,
+  };
+  addArrow(resultantVecBody, resultant, 0xeeeeee);
+
+  return group;
+}
+
+function setupViewer(result) {
+  const surface = result.surface;
   const container = document.getElementById("canvas-wrap");
   if (typeof THREE === "undefined") {
     document.getElementById("status-message").hidden = false;
@@ -484,9 +552,10 @@ function setupViewer(surface) {
   const positions = new Float32Array(surface.length * 3);
   const colors = new Float32Array(surface.length * 3);
   surface.forEach((p, i) => {
-    positions[i * 3 + 0] = (p.x - cx) / extent;
-    positions[i * 3 + 1] = (p.z - cz) / extent;
-    positions[i * 3 + 2] = (p.y - cy) / extent;
+    const scenePos = bodyPointToScene(p.x, p.y, p.z, cx, cy, cz, extent);
+    positions[i * 3 + 0] = scenePos.x;
+    positions[i * 3 + 1] = scenePos.y;
+    positions[i * 3 + 2] = scenePos.z;
   });
 
   function applyColors() {
@@ -507,9 +576,18 @@ function setupViewer(surface) {
 
   const scene = new THREE.Scene();
   scene.add(points);
-  const axes = new THREE.AxesHelper(0.7);
-  axes.visible = false;
-  scene.add(axes);
+
+  const coordLayer = buildCoordLayer(result.aoa_deg);
+  coordLayer.visible = false;
+  scene.add(coordLayer);
+
+  const momentOriginScene = bodyPointToScene(
+    result.moments.moment_origin[0], result.moments.moment_origin[1], result.moments.moment_origin[2],
+    cx, cy, cz, extent,
+  );
+  const forcesLayer = buildForcesLayer(result, momentOriginScene);
+  forcesLayer.visible = false;
+  scene.add(forcesLayer);
 
   const initialCameraPos = new THREE.Vector3(1.8, 1.3, 1.8);
   const width = container.clientWidth, height = container.clientHeight;
@@ -585,8 +663,13 @@ function setupViewer(surface) {
   setColorButtonsActive();
 
   document.getElementById("tool-axes").addEventListener("click", (e) => {
-    axes.visible = !axes.visible;
-    e.target.className = "tool-btn" + (axes.visible ? " active" : "");
+    coordLayer.visible = !coordLayer.visible;
+    e.target.className = "tool-btn" + (coordLayer.visible ? " active" : "");
+  });
+
+  document.getElementById("tool-forces").addEventListener("click", (e) => {
+    forcesLayer.visible = !forcesLayer.visible;
+    e.target.className = "tool-btn" + (forcesLayer.visible ? " active" : "");
   });
 
   document.getElementById("tool-reset").addEventListener("click", () => {
