@@ -614,6 +614,19 @@ Konsequenzen:
   ampel entsprechend wieder auf "validiert" angehoben. Dieser Fall ist
   erwuenscht, kein Rueckschritt.
 
+Update (Projektinhaber, 2026-10-14): Nach weiteren sechs eigenstaendigen
+Vernetzungs-/Loeser-Varianten (siehe RISKS.md R10 fuer alle Details:
+Feldansatz-Standard, Feldansatz mit der Fan-Community-Empfehlung,
+`extrudeBoundaryLayer`-Prototyp, `FanPointsList` isoliert in 2D,
+`FanPointsList` in der vollen 3D-Pipeline auf zwei verschiedenen
+Rechner-Architekturen) ohne Durchbruch wird R10 jetzt bewusst als
+**ausgereizt** behandelt, nicht nur als offen zurueckgestellt: weiteres
+Ausprobieren einzelner neuer Netz- oder Loeser-Varianten gilt als
+schlechtes Aufwand-Nutzen-Verhaeltnis, kein aktiver Untersuchungspunkt
+mehr, solange sich die Lage nicht aendert (siehe die Bedingungen oben,
+unter denen das rueckwirkend vermerkt wuerde). Das aendert nichts an den
+Konsequenzen oben, insbesondere nicht an der Validierungs-Markierung.
+
 ## ADR-0017: Phase 2, GCI als separater Lauf, Zylinder als primaerer Nachweisfall
 
 Kontext: Zwei konkrete Zuschnittsfragen mussten vor dem Start von
