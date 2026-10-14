@@ -1032,11 +1032,62 @@ Konfiguration verhaelt sich auf dem offiziellen Netz grundlegend anders
 Plateau). Das verbleibende, mit aktueller Werkzeugausstattung noch nicht
 direkt widerlegte Hauptverdaechtige bleibt damit die eigene Vernetzung
 selbst (unstrukturierte Extrusion, siehe Zellqualitaetsbefund weiter
-oben), nicht die Solver-Parametrisierung. Naechster sinnvoller, aber
-deutlich groesserer Schritt: den alternativen `extrudeBoundaryLayer`-
-Vernetzungsweg (siehe ADR-0007, bisher nur per Python-API demonstriert,
-nie fuer einen echten Loeserlauf verwendet) tatsaechlich implementieren
-und denselben Vergleich wiederholen.
+oben), nicht die Solver-Parametrisierung.
+
+Korrektur einer eigenen Falschempfehlung (wichtig): An dieser Stelle
+wurde zunaechst vorgeschlagen, `extrudeBoundaryLayer` als naechsten
+Schritt "tatsaechlich zu implementieren". Das war ein eigener Fehler,
+entstanden dadurch, dass dieser Eintrag nicht vollstaendig gelesen wurde,
+bevor weitergearbeitet wurde: Weiter oben in genau diesem Eintrag
+("Update, `extrudeBoundaryLayer` als Alternative zum Feld-Ansatz
+prototypisch getestet") steht bereits, dass dieser Weg laengst
+prototypisch getestet wurde und dabei ein neues, eigenes Problem erzeugt
+(echte invertierte Elemente, 3-11 Prozent, Ursache ungeklaert), waehrend
+der Feld-Ansatz null invertierte Elemente hat. Ebenso steht weiter oben
+bereits ("Update, Community-Recherche"), dass `FanPointsList` an der
+Hinterkante schon direkt getestet wurde (2D-Isolationstest) und die
+Qualitaet nur marginal verbessert (49,0 auf 47,7 Prozent unter minSICN
+0,1), waehrend die schlechtesten Elemente nachweislich NICHT an den
+Profil-Ecken konzentriert sind, sondern ueber die gesamte Sehnenlaenge
+verteilt. Beide Wege waren also bereits bekannt nicht erfolgversprechend.
+
+Update, derselbe Fehler fast wiederholt, diesmal mit einem zusaetzlichen,
+neuen Befund (Gesichert, eigener Test, 2026-10-12/14, auf Wunsch des
+Projektinhabers "weiter perfektionieren"): Ohne die obigen Befunde
+praesent zu haben, wurde erneut `FanPointsList` an der Hinterkante
+getestet, diesmal aber fuer die VOLLE 3D-Pipeline (STEP-Import, 2D-Feld,
+Spannweiten-Extrusion), nicht nur den schnelleren 2D-Isolationstest von
+oben. Ergebnis: Die Vernetzung wird mit `FanPointsList` so langsam, dass
+sie in drei von drei Versuchen nicht fertig wird, zwei davon in dieser
+Sandbox (Timeout nach 300 s, sowohl mit 15 als auch mit Gmshs eigenem
+Standardwert 5 Fan-Elementen), ein dritter auf dem separaten,
+echten x86_64-AWS-Testserver (`ubuntu@3.121.224.90`, 2 Kerne, 7,6 GB RAM,
+seit 13 Tagen im Leerlauf erreichbar) mit grosszuegigem 900-s-Timeout,
+ebenfalls ohne Ergebnis. Normale Vernetzung ohne `FanPointsList` braucht
+fuer dieselbe Geometrie unter einer Minute. Das ist kein
+Ressourcenproblem (dieselbe Nicht-Terminierung auf zwei Architekturen),
+sondern eine schlechte Wechselwirkung zwischen `FanPointsList` und den
+bestehenden `Field[1]`(Distance)/`Field[2]`(Threshold)-Hintergrundfeldern
+speziell bei der vollen 3D-Extrusion, die im fruehen, reinen 2D-Test oben
+nicht auftrat (der lief dort erfolgreich durch, nur ohne Nutzen).
+
+Einordnung: Das ist ein neuer, aber nur ergaenzender Befund (die
+Fan-Hypothese selbst war bereits vorher verworfen, siehe oben), keine
+neue Hoffnung. Produktionscode wurde nicht geaendert, dieser Test lief
+komplett ausserhalb der Pipeline. Nach jetzt sechs eigenstaendigen
+Vernetzungsversuchen (Feld-Ansatz Standard, Feld-Ansatz mit
+Fan-Kombination aus der Community-Empfehlung, extrudeBoundaryLayer-
+Prototyp, FanPointsList 2D-isoliert, FanPointsList volle 3D-Pipeline
+zweimal) plus der Community-Recherche (seit 2017 offenes, nie beantwortetes
+SU2-Issue #533 mit sehr aehnlichem Symptom auf fremden RANS-3D-Fluegel-
+Faellen) ist die Einschaetzung des Projektinhabers/Assistenten:
+weiteres Ausprobieren einzelner neuer Netz-/Loeser-Varianten hat ab
+hier eine niedrig eingeschaetzte Erfolgsaussicht im Verhaeltnis zum
+Aufwand. Empfehlung: R10 hier als tatsaechlich ausgereizt behandeln
+(nicht nur vorlaeufig zurueckgestellt), nicht aus Bequemlichkeit, sondern
+weil die Bandbreite an eigenstaendig und per Community-Recherche
+geprueften Ursachen inzwischen gross ist und keine einzige einen
+Durchbruch brachte.
 
 Beleg (eigener Test mit vom Projektinhaber bereitgestellter Datei
 `Test_Spoiler.step`, STEP-Datei von Open CASCADE 7.7 erzeugt, automotive
