@@ -180,6 +180,18 @@ def test_run_case_end_to_end_on_a_real_step_file(tmp_path, gmsh_executable, su2_
     assert result.max_y_plus >= result.mean_y_plus
     assert isinstance(result.convergence.message, str) and result.convergence.message
 
+    # Geometric center of mass (point 7, docs/ARCHITECTURE.md): must
+    # come from the real, asymmetric NACA0012 profile, not the
+    # bounding-box center (chord/2 = 0.3) already used elsewhere (e.g.
+    # moments.moment_origin) - NACA0012's mass is concentrated toward
+    # the thicker leading section, so the real centroid sits well
+    # forward of mid-chord.
+    cx, cy, cz = result.center_of_mass
+    assert cx < 0.3 * 0.9  # clearly forward of the bounding-box center
+    assert cx > 0.0
+    assert cy == pytest.approx(-0.6, abs=0.05)  # mid-span, same convention as moment_origin
+    assert cz == pytest.approx(0.0, abs=1e-3)  # NACA0012 is symmetric top/bottom
+
 
 @pytest.mark.slow
 def test_run_case_resumes_instead_of_restarting_from_scratch(tmp_path, gmsh_executable, su2_executable, mpirun_executable):

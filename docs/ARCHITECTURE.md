@@ -451,7 +451,31 @@ angenommen.
    die Massenquelle fuer eine Schwerpunktberechnung (Volumen * Dichte
    setzt eine homogene Dichteannahme voraus, die bei einem realen,
    nicht-homogenen Bauteil explizit als Annahme gekennzeichnet werden
-   muesste, siehe CLAUDE.md). Umsetzung selbst noch nicht begonnen.
+   muesste, siehe CLAUDE.md).
+   **Geometrischer Schwerpunkt umgesetzt (2026-10-14):**
+   `fosas_core.pipeline.run_case` berechnet jetzt `center_of_mass` direkt
+   aus der STEP-Geometrie (`build123d.Shape.combined_center(...,
+   CenterOf.MASS)`, OCCTs Volumenschwerpunkt unter einer angenommenen
+   homogenen Materialverteilung), neues Feld auf `CaseResult`/API, eigene
+   Kachel/Tooltip im Ergebnis-Panel (mit explizitem
+   Annahme-Hinweis) und ein neuer gruener Punkt-Marker in der 3D-Ansicht
+   (beide Clients) sowie im PDF-Bericht. Gegen zwei echte Faelle
+   bestaetigt: am symmetrischen Zylinder-Testfall trifft der Schwerpunkt
+   exakt die Bounding-Box-Mitte (wie physikalisch erwartet), am
+   asymmetrischen NACA0012-Fluegelprofil (realer SU2-Lauf) liegt er bei
+   x=0.2526 m eines 0.6 m Chords (42%, deutlich VOR der Bounding-Box-
+   Mitte bei 0.3 m/50%, wie fuer ein vorne dickeres Profil zu erwarten),
+   y auf halber Spannweite, z praktisch null (Ober-/Unterseiten-
+   Symmetrie). Ausdruecklich NICHT derselbe Punkt wie der (weiterhin
+   festen, Bounding-Box-basierten) Momenten-Bezugspunkt.
+   **Weiterhin offen, fuer die eigentliche Gewichtskraft/Lagerreaktionen
+   noch nicht begonnen:** eine echte Masse (der geometrische Schwerpunkt
+   oben braucht dafuer KEINE Dichte, der Massenwert selbst aber schon)
+   und eine Lagerposition. Beides sind echte Produktentscheidungen
+   (woher kommt die Masse: direkte Eingabe vs. Material+Dichtetabelle;
+   wie waehlt der Nutzer die Lagerposition), die der Projektinhaber
+   treffen muss, nicht Implementierungsdetails - bewusst nicht geraten,
+   siehe CLAUDE.md.
 8. Rechenweg (F = c*q*A, M = cm*q*A*l mit eingesetzten Zahlen) ->
    **Ergebnis-Panel-Teil umgesetzt (2026-10-06):** aufklappbarer
    "Rechenweg"-Block zeigt L, D, Mx, My, Mz jeweils als Formel mit den

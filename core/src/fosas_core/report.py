@@ -406,6 +406,7 @@ class JobReportData:
     mx: float
     my: float
     mz: float
+    center_of_mass: tuple[float, float, float]
     surface_points: tuple[JobReportSurfacePoint, ...]
 
     def __post_init__(self):
@@ -552,6 +553,7 @@ def render_job_report(data: JobReportData) -> bytes:
         "mx": data.mx,
         "my": data.my,
         "mz": data.mz,
+        "center_of_mass": list(data.center_of_mass),
     }
     files = {"cp_chart.png": cp_chart_png, "fbd_chart.png": fbd_chart_png}
     return _compile_report(_JOB_TEMPLATE_PATH, payload, files)

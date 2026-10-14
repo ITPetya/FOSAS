@@ -25,7 +25,7 @@ import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from build123d import Plane
+from build123d import CenterOf, Plane, Shape
 
 from .boundary_layer import dynamic_pressure, first_cell_height, reynolds_number
 from .forces import (
@@ -208,6 +208,14 @@ class CaseResult:
     reynolds_number: float
     forces: ForceSystem
     moments: MomentSystem
+    # Geometric volume centroid of the STEP geometry (point 7,
+    # docs/ARCHITECTURE.md), ASSUMES HOMOGENEOUS MATERIAL (no density/
+    # mass input exists yet) - see where this is actually computed for
+    # the full caveat and the real-fixture cross-check. Not the same
+    # point as moments.moment_origin (that is still the bounding-box-
+    # based chord/2 point the force/moment system is reported about,
+    # unrelated to mass distribution).
+    center_of_mass: tuple[float, float, float]
     mesh_path: Path
     solve_dir: Path
 
@@ -318,6 +326,27 @@ def run_case(
     thickness *= _MM_TO_M
     mid_y *= _MM_TO_M
     profile_points = tuple((x * _MM_TO_M, z * _MM_TO_M) for x, z in profile_points_native)
+
+    # Geometric center of mass (point 7, docs/ARCHITECTURE.md
+    # "Technische-Mechanik-Visualisierung"; project owner's decision,
+    # 2026-10-14: "der Schwerpunkt soll wenn dann berechnet werden aus
+    # der STEP"). CenterOf.MASS is OCCT's volume centroid under an
+    # ASSUMED HOMOGENEOUS material (no density/material data exists in
+    # a bare STEP file or anywhere else in FOSAS yet) - explicitly an
+    # Annahme, not the true mass centroid of a real, non-uniform part,
+    # see the caveat surfaced alongside this value in the UI/report.
+    # Confirmed by direct test against both a symmetric cylinder (exact
+    # bounding-box-center match, as physically expected) and the
+    # asymmetric NACA0012 wing fixture (x=251.5mm of a 600mm chord,
+    # i.e. NOT the bounding-box center of 300mm, as expected for a
+    # profile whose mass is concentrated toward the thicker leading
+    # section; z sits at 0, the profile's own symmetry axis).
+    center_of_mass_native = Shape.combined_center([geometry.shape], CenterOf.MASS)
+    center_of_mass = (
+        center_of_mass_native.X * _MM_TO_M,
+        center_of_mass_native.Y * _MM_TO_M,
+        center_of_mass_native.Z * _MM_TO_M,
+    )
 
     y1 = first_cell_height(
         density=params.density,
@@ -489,6 +518,7 @@ def run_case(
             reference_length=chord,
             moment_origin=moment_origin,
         ),
+        center_of_mass=center_of_mass,
         mesh_path=mesh_path,
         solve_dir=solve_dir,
     )

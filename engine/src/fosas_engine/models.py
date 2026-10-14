@@ -113,6 +113,10 @@ class CaseResultOut(BaseModel):
     reynolds_number: float
     forces: ForceSystemOut
     moments: MomentSystemOut
+    # Geometric volume centroid of the STEP geometry, assumes homogeneous
+    # material (see fosas_core.pipeline.run_case for the full caveat).
+    # Not the same point as moments.moment_origin.
+    center_of_mass: tuple[float, float, float]
     surface: list[SurfacePointOut]
 
 
@@ -227,6 +231,7 @@ class JobOut(BaseModel):
                     my=job.result.moments.my,
                     mz=job.result.moments.mz,
                 ),
+                center_of_mass=job.result.center_of_mass,
                 surface=surface_out,
             )
         progress = compute_progress(job)

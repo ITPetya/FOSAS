@@ -255,6 +255,7 @@ def _job_data(**overrides):
         mx=4.6e-6,
         my=-1.6e-8,
         mz=-5.35e-5,
+        center_of_mass=(0.0042, -0.01, 0.0001),
         surface_points=_job_surface_points(),
     )
     defaults.update(overrides)

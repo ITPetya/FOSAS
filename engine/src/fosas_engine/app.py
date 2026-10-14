@@ -232,6 +232,7 @@ def create_app(settings: Settings) -> FastAPI:
             mx=job.result.moments.mx,
             my=job.result.moments.my,
             mz=job.result.moments.mz,
+            center_of_mass=job.result.center_of_mass,
             surface_points=tuple(
                 JobReportSurfacePoint(x=xs[i], z=zs[i], cp=cps[i]) for i in range(surface.num_points)
             ),

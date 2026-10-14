@@ -54,6 +54,7 @@ def _fake_result(work_dir: Path) -> CaseResult:
             cmx=0.001, cmy=-0.08, cmz=0.0002,
             mx=0.1, my=-12.5, mz=0.02,
         ),
+        center_of_mass=(0.3, 0.6, 0.0),
         mesh_path=work_dir / "mesh.su2",
         solve_dir=work_dir / "solve",
     )

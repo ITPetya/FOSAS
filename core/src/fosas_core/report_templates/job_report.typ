@@ -71,7 +71,12 @@ docs/RISKS.md, u. a. R10 zur Konvergenzfrage).
 
 *Bezugspunkt (aktuell fest, noch nicht waehlbar):* x=#fmt_num(data.moment_origin.at(0), digits: 4) m,
 y=#fmt_num(data.moment_origin.at(1), digits: 4) m, z=#fmt_num(data.moment_origin.at(2), digits: 4) m \
-*Bezugslaenge l:* #fmt_num(data.reference_length, digits: 4) m
+*Bezugslaenge l:* #fmt_num(data.reference_length, digits: 4) m \
+*Geometrischer Schwerpunkt* (aus der STEP-Geometrie berechnet, Annahme:
+homogenes Material, nicht derselbe Punkt wie der Bezugspunkt oben):
+x=#fmt_num(data.center_of_mass.at(0), digits: 4) m,
+y=#fmt_num(data.center_of_mass.at(1), digits: 4) m,
+z=#fmt_num(data.center_of_mass.at(2), digits: 4) m
 
 #table(
   columns: 6,

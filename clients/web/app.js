@@ -390,6 +390,25 @@ const INFO_TEXT = {
     Spannweite physikalisch meist klein, ein von null abweichender Wert
     ist hier oft Netzaufloesungs-Rauschen, keine reale Kraftwirkung.</p>
   `,
+  center_of_mass: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Geometrischer Schwerpunkt</h4>
+    <p>Der Volumenschwerpunkt der STEP-Geometrie, direkt aus der
+    Geometrie berechnet (nicht manuell eingegeben) - so vom
+    Projektinhaber entschieden, falls/wenn eine Schwerpunktanzeige
+    kommt.</p>
+    <p><span class="tag annahme">Annahme</span> Nimmt ueberall gleiche
+    (homogene) Dichte an, da FOSAS aktuell keine Material-/Dichtedaten
+    hat. Bei einem Bauteil mit ungleichmaessiger Materialverteilung
+    (z. B. eingebauten Komponenten aus anderem Material) ist das NICHT
+    der tatsaechliche Massenschwerpunkt. Dieser Punkt ist nicht
+    dasselbe wie der Momenten-Bezugspunkt oben (der bleibt die feste
+    Sehnen-/Spannweitenmitte, unabhaengig von der Massenverteilung).</p>
+    <p>Fuer eine Gewichtskraft (G = m * g) und Lagerreaktionen fehlt
+    FOSAS weiterhin eine echte Masse/Dichte sowie ein Lager-/
+    Befestigungspunkt - beides noch offene Entscheidungen, nicht Teil
+    dieser Anzeige.</p>
+  `,
   calculation_steps: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Rechenweg</h4>
@@ -973,6 +992,24 @@ function renderSurface3D(result) {
   const forcesLayer = buildForcesLayer(result, momentOriginScene);
   scene.add(forcesLayer);
 
+  // Small sphere marker for the geometric center of mass (point 7,
+  // docs/ARCHITECTURE.md): part of the coordinate/reference layer, not
+  // the forces layer, since it is a geometry-derived reference point,
+  // not a force. Deliberately not its own toggle layer: a single static
+  // point marker does not add the visual clutter a dedicated on/off
+  // switch would be worth, unlike the arrow/arc-heavy coord and forces
+  // layers.
+  const comScene = bodyPointToScene(
+    result.center_of_mass[0], result.center_of_mass[1], result.center_of_mass[2],
+    cx, cy, cz, extent,
+  );
+  const comMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.025, 12, 12),
+    new THREE.MeshBasicMaterial({ color: 0x33cc33 }),
+  );
+  comMarker.position.copy(comScene);
+  coordLayer.add(comMarker);
+
   // Exact colors THREE.AxesHelper itself renders (pure red/green/blue
   // vertex colors), not just a similar-looking tone, so the legend text
   // and the 3D lines are unambiguously the same color to the eye.
@@ -985,7 +1022,8 @@ function renderSurface3D(result) {
     "Kraftpfeile: <span style=\"color:#e0a72f\">D</span>=" + result.forces.drag.toPrecision(3) + " N, " +
     "<span style=\"color:#4f8cff\">L</span>=" + result.forces.lift.toPrecision(3) + " N, " +
     "<span style=\"color:#cc66ff\">S</span>=" + result.forces.side.toPrecision(3) + " N, " +
-    "<span style=\"color:#eeeeee\">R</span>=" + result.forces.resultant.toPrecision(3) + " N";
+    "<span style=\"color:#eeeeee\">R</span>=" + result.forces.resultant.toPrecision(3) + " N &middot; " +
+    "<span style=\"color:#33cc33\">●</span> Geometrischer Schwerpunkt (Annahme: homogenes Material)";
 
   const width = container.clientWidth, height = container.clientHeight;
   const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 100);
@@ -1239,6 +1277,10 @@ function renderResult(result, jobId) {
     "Momenten-Bezugspunkt (aktuell fest, noch nicht waehlbar): x=" + origin[0].toPrecision(3) +
     " m, y=" + origin[1].toPrecision(3) + " m, z=" + origin[2].toPrecision(3) +
     " m (Mitte der Sehne/Spannweite).";
+  const com = result.center_of_mass;
+  document.getElementById("center-of-mass-hint").textContent =
+    "Geometrischer Schwerpunkt (aus der STEP-Geometrie berechnet, nimmt homogenes Material an): x=" +
+    com[0].toPrecision(3) + " m, y=" + com[1].toPrecision(3) + " m, z=" + com[2].toPrecision(3) + " m.";
   renderCalculationSteps(result);
 
   const badge = document.getElementById("convergence-badge");
