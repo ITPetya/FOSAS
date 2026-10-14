@@ -169,6 +169,19 @@ class CaseResult:
     # read from SU2's own "CSF" history column alongside CL/CD, zero
     # for a zero-sideslip case (every case before sideslip_deg existed).
     cs: float
+    # Pressure/friction decomposition of cd (point 6, docs/ARCHITECTURE.md
+    # "Technische-Mechanik-Visualisierung"): SU2's AERO_COEFF history
+    # group has no separate columns for this (confirmed directly), so
+    # these come from SU2's own "forces_breakdown.dat" text report
+    # instead (see solver.ForcesBreakdown/_parse_forces_breakdown),
+    # cross-checked against cd above rather than trusted blindly (see
+    # where this is filled in). drag_pressure/drag_friction are the same
+    # split already scaled to Newton (= cd_pressure/cd_friction * q * A),
+    # same pairing convention as cl/cd next to forces.lift/forces.drag.
+    cd_pressure: float
+    cd_friction: float
+    drag_pressure: float
+    drag_friction: float
     # Alternative coefficients on the projected-frontal-area convention
     # (point 3, docs/ARCHITECTURE.md), None for a near-zero-thickness
     # body where that area is undefined; see where frontal_area is
@@ -408,6 +421,26 @@ def run_case(
     cl_frontal = rescale_coefficient_to_frontal_area(final_cl, planform_area, frontal_area)
     cd_frontal = rescale_coefficient_to_frontal_area(final_cd, planform_area, frontal_area)
 
+    # Cross-check forces_breakdown.dat's own Total CD against the
+    # independently-read history CD (final_cd above): guards against a
+    # stale or mismatched breakdown file rather than silently trusting
+    # its pressure/friction split (see solver.ForcesBreakdown). 1%
+    # relative or 1e-6 absolute, whichever is larger, allows for the
+    # breakdown file's fewer printed decimal digits without masking an
+    # actual inconsistency.
+    breakdown = result.forces_breakdown
+    if abs(breakdown.cd_total - final_cd) > max(1e-6, abs(final_cd) * 0.01):
+        raise PipelineError(
+            "solving",
+            f"forces_breakdown.dat's Total CD ({breakdown.cd_total}) does not "
+            f"match history.csv's final CD ({final_cd}); not trusting the "
+            "pressure/friction drag split.",
+        )
+    cd_pressure = breakdown.cd_pressure
+    cd_friction = breakdown.cd_friction
+    drag_pressure = cd_pressure * q * planform_area
+    drag_friction = cd_friction * q * planform_area
+
     cf_x = result.surface.column("Skin_Friction_Coefficient_x")
     cf_y = result.surface.column("Skin_Friction_Coefficient_y")
     cf_z = result.surface.column("Skin_Friction_Coefficient_z")
@@ -428,6 +461,10 @@ def run_case(
         cl=final_cl,
         cd=final_cd,
         cs=final_cs,
+        cd_pressure=cd_pressure,
+        cd_friction=cd_friction,
+        drag_pressure=drag_pressure,
+        drag_friction=drag_friction,
         frontal_area=frontal_area,
         cl_frontal=cl_frontal,
         cd_frontal=cd_frontal,

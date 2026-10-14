@@ -204,6 +204,8 @@ function renderSidebar(job) {
     html += '<h3>Kraeftesystem (Windachsen)</h3>';
     html += row("Auftrieb L", r.forces.lift.toPrecision(3) + " N");
     html += row("Widerstand D", r.forces.drag.toPrecision(3) + " N");
+    html += row("davon Druckwiderstand D_p", r.drag_pressure.toPrecision(3) + " N");
+    html += row("davon Reibungswiderstand D_f", r.drag_friction.toPrecision(3) + " N");
     html += row("Seitenkraft S", r.forces.side.toPrecision(3) + " N");
     html += row("Resultierende R", r.forces.resultant.toPrecision(3) + " N");
     html += row("Winkel R", r.forces.resultant_angle_deg.toFixed(1) + "&deg;");

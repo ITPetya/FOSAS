@@ -379,6 +379,10 @@ class JobReportData:
     cl: float
     cd: float
     cs: float
+    cd_pressure: float
+    cd_friction: float
+    drag_pressure: float
+    drag_friction: float
     converged: bool
     convergence_message: str
     mean_y_plus: float
@@ -521,6 +525,10 @@ def render_job_report(data: JobReportData) -> bytes:
         "cl": data.cl,
         "cd": data.cd,
         "cs": data.cs,
+        "cd_pressure": data.cd_pressure,
+        "cd_friction": data.cd_friction,
+        "drag_pressure": data.drag_pressure,
+        "drag_friction": data.drag_friction,
         "converged": data.converged,
         "convergence_message": data.convergence_message,
         "mean_y_plus": data.mean_y_plus,

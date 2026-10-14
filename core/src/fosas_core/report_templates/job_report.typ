@@ -96,6 +96,8 @@ Rechnung aufgeschrieben (F = c \* q \* A, M = cm \* q \* A \* l):
 #block[
   L = CL \* q \* A = #fmt_num(data.cl) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) = #fmt_num(data.lift, digits: 6) N \
   D = CD \* q \* A = #fmt_num(data.cd) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) = #fmt_num(data.drag, digits: 6) N \
+  D_p = cd_Druck \* q \* A = #fmt_num(data.cd_pressure) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) = #fmt_num(data.drag_pressure, digits: 6) N \
+  D_f = cd_Reibung \* q \* A = #fmt_num(data.cd_friction) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) = #fmt_num(data.drag_friction, digits: 6) N \
   S = CS \* q \* A = #fmt_num(data.cs) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) = #fmt_num(data.side, digits: 6) N \
   Mx = CMx \* q \* A \* l = #fmt_num(data.cmx) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) \* #fmt_num(data.reference_length, digits: 4) = #fmt_num(data.mx, digits: 6) Nm \
   My = CMy \* q \* A \* l = #fmt_num(data.cmy) \* #fmt_num(data.dynamic_pressure, digits: 2) \* #fmt_num(data.reference_area, digits: 6) \* #fmt_num(data.reference_length, digits: 4) = #fmt_num(data.my, digits: 6) Nm \
@@ -117,5 +119,17 @@ null.
 *Wandschubspannung:* Mittel #fmt_num(data.mean_wall_shear_stress, digits: 3) Pa,
 Maximum #fmt_num(data.max_wall_shear_stress, digits: 3) Pa \
 *y+:* Mittel #fmt_num(data.mean_y_plus, digits: 2), Maximum #fmt_num(data.max_y_plus, digits: 2)
+
+*Aufteilung des Widerstands in Druck- und Reibungsanteil* (aus SU2s
+eigenem "forces_breakdown.dat"-Bericht, nicht aus der Iterationshistorie
+ableitbar, siehe docs/ARCHITECTURE.md):
+
+#table(
+  columns: 4,
+  fill: table_fill,
+  [*cd_Druck*], [*cd_Reibung*], [*Druckwiderstand D_p (N)*], [*Reibungswiderstand D_f (N)*],
+  fmt_num(data.cd_pressure), fmt_num(data.cd_friction),
+  fmt_num(data.drag_pressure, digits: 6), fmt_num(data.drag_friction, digits: 6),
+)
 
 #image("/cp_chart.png", width: 90%)

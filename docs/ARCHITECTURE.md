@@ -391,14 +391,39 @@ angenommen.
    3D-Darstellung.
    Noch offen: lokale Druckkraftpfeile und eine ortsaufgeloeste
    Wandschubspannungs-Darstellung im 3D-Viewer (reine Visualisierung,
-   Daten liegen vor); die Aufteilung des Gesamtwiderstands in Druck-
-   und Reibungsanteil ist dagegen NICHT mit den vorhandenen Daten
-   erledigt, SU2s History-Ausgabe (`AERO_COEFF`) enthaelt keine
-   getrennten CD_P/CD_V-Spalten (direkt an den echten Spalten dieser
-   Sitzung gegengeprueft) - das braucht eine echte flaechengewichtete
-   Integration von Druck und Wandschubspannung ueber alle Netzzellen,
-   nicht nur die bereits vorliegenden punktweisen Werte. Eigener,
-   groesserer Schritt.
+   Daten liegen vor).
+   **Aufteilung Druck-/Reibungswiderstand nachtraeglich umgesetzt
+   (2026-10-14):** Die urspruengliche Einschaetzung oben ("braucht eine
+   echte Flaechenintegration") galt nur fuer die Herleitung aus der
+   History-Ausgabe (`AERO_COEFF`, dort tatsaechlich weiterhin keine
+   CD_P/CD_V-Spalten) - SU2 fuehrt diese Flaechenintegration aber
+   bereits selbst durch und schreibt das Ergebnis in einen eigenen,
+   bisher ungenutzten Bericht: Per echtem Test bestaetigt (Zylinder-
+   Testfall), dass die SU2-Konfigurationsoption `WRT_FORCES_BREAKDOWN=
+   YES` eine Text-Datei "forces_breakdown.dat" erzeugt, die Druck- und
+   Reibungsanteil fuer CD (und CL/CSF/CM*, hier aber nur CD genutzt)
+   explizit auftrennt ("Total CD: 6.263383 | Pressure (98%): 6.142443 |
+   Friction (1%): 0.120940 | ..."), unabhaengig von der sonstigen
+   `OUTPUT_FILES`-Konfiguration geschrieben, auch unter MPI
+   (mpi_ranks=3 real getestet) fehlerfrei. `fosas_core.solver.
+   _parse_forces_breakdown` liest die globale "Total CD:"-Zeile per
+   Regex aus (nicht die spaeter im selben Bericht wiederholte
+   Pro-Oberflaechen-Zeile), `pipeline.run_case` prueft das Ergebnis
+   gegen die unabhaengig aus der History gelesene End-CD (Toleranz 1%
+   oder 1e-6 absolut, da der Bericht nur 6 Nachkommastellen druckt) statt
+   es ungeprueft zu uebernehmen, und wirft einen Fehler bei
+   Abweichung statt die Werte stillschweigend zu benutzen. Neue Felder
+   `cd_pressure`/`cd_friction` (Beiwerte) und `drag_pressure`/
+   `drag_friction` (N, = Beiwert * q * A) auf `CaseResult`, durchgaengig
+   bis in API, UI-Kacheln, Tooltip, Rechenweg und PDF-Bericht verfuegbar.
+   End-to-End gegen eine echte Rechnung bestaetigt (Zylinder, α=4°):
+   `cd_pressure=6.150884`, `cd_friction=0.121526`, daraus per Hand
+   nachgerechnet `drag_pressure=0.301393 N`, `drag_friction=0.005955 N`,
+   Summe exakt gleich `forces.drag=0.307348 N`.
+   Als Risiko dokumentiert (siehe RISKS.md): Das ist ein unstrukturierter
+   Text-Bericht, kein stabiles, versioniertes Dateiformat, das Parsen
+   per Regex ist also an die aktuell installierte SU2-Version (8.5.0)
+   gebunden, nicht an eine oeffentliche, stabile Schnittstelle.
 7. Freikoerperbild-Modus (2D-Schnittansicht, optional Gewichtskraft und
    Befestigungspunkt mit Lagerreaktionen) -> **Pflichtteil umgesetzt
    (2026-10-06):** neue 2D-SVG-Ansicht (`drawFreeBodyDiagram`) direkt

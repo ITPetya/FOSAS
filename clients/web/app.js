@@ -411,9 +411,30 @@ const INFO_TEXT = {
     Laufs; eine ortsaufgeloeste Darstellung auf der 3D-Oberflaeche
     selbst gibt es noch nicht, nur diese zusammenfassenden Werte. Die
     Aufteilung des Gesamtwiderstands in einen Druck- und einen
-    Reibungsanteil ist ebenfalls noch nicht umgesetzt (braucht eine
-    echte Flaechenintegration ueber alle Netzzellen, nicht nur diese
-    punktweisen Werte).</p>
+    Reibungsanteil (siehe Druckwiderstand D_p / Reibungswiderstand D_f
+    weiter unten) kommt dagegen nicht aus dieser punktweisen
+    Wandschubspannung, sondern direkt aus SU2s eigenem
+    "forces_breakdown.dat"-Bericht.</p>
+  `,
+  drag_pressure: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Druckwiderstand D_p</h4>
+    <p>Der Anteil des Widerstands D, der aus dem Druckunterschied
+    zwischen Vorder- und Rueckseite des Koerpers entsteht (bei einem
+    stumpfen Koerper meist der groessere Anteil). D_p = cd_Druck * q * A,
+    aus SU2s eigenem "forces_breakdown.dat"-Bericht (nicht aus der
+    Iterationshistorie ableitbar, die hat keine getrennten
+    Druck-/Reibungs-Spalten). D_p + D_f = D (Pruefung gegen den
+    unabhaengig gelesenen Gesamtwiderstand, nicht blind uebernommen).</p>
+  `,
+  drag_friction: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Reibungswiderstand D_f</h4>
+    <p>Der Anteil des Widerstands D, der aus der Wandschubspannung
+    (Reibung der Stroemung an der Oberflaeche) entsteht, dieselbe
+    Groesse wie die Wandschubspannung oben, hier aber ueber die ganze
+    Oberflaeche zu einer einzigen Kraft aufintegriert. D_f = cd_Reibung
+    * q * A, Quelle wie bei Druckwiderstand D_p.</p>
   `,
   mean_y_plus: `
     <span class="tag gesichert">Gesichert</span>
@@ -1162,6 +1183,10 @@ function renderCalculationSteps(result) {
       " = " + fmt(result.forces.drag) + " N",
     "S = CS * q * A = " + fmt(result.cs) + " * " + fmt(q) + " * " + fmt(A) +
       " = " + fmt(result.forces.side) + " N (Seitenkraft, nur bei Schiebewinkel != 0 ungleich 0)",
+    "D_p = cd_Druck * q * A = " + fmt(result.cd_pressure) + " * " + fmt(q) + " * " + fmt(A) +
+      " = " + fmt(result.drag_pressure) + " N",
+    "D_f = cd_Reibung * q * A = " + fmt(result.cd_friction) + " * " + fmt(q) + " * " + fmt(A) +
+      " = " + fmt(result.drag_friction) + " N",
     "",
     "Mx = CMx * q * A * l = " + fmt(result.moments.cmx) + " * " + fmt(q) + " * " +
       fmt(A) + " * " + fmt(l) + " = " + fmt(result.moments.mx) + " Nm",
@@ -1182,6 +1207,8 @@ function renderResult(result, jobId) {
   document.getElementById("yplus-value").textContent = result.mean_y_plus.toFixed(2);
   document.getElementById("tau-mean-value").textContent = result.mean_wall_shear_stress.toPrecision(3);
   document.getElementById("tau-max-value").textContent = result.max_wall_shear_stress.toPrecision(3);
+  document.getElementById("drag-pressure-value").textContent = result.drag_pressure.toPrecision(3);
+  document.getElementById("drag-friction-value").textContent = result.drag_friction.toPrecision(3);
   document.getElementById("area-value").textContent = result.forces.reference_area.toPrecision(3);
   document.getElementById("frontal-area-value").textContent = result.frontal_area.toPrecision(3);
   document.getElementById("cl-frontal-value").textContent =

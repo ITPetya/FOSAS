@@ -9,6 +9,7 @@ from fosas_core.solver import (
     ReferenceValues,
     SolverError,
     SolverParams,
+    _parse_forces_breakdown,
     count_completed_iterations,
     generate_config,
     run_su2,
@@ -143,6 +144,65 @@ def test_end_to_end_mesh_and_solve_produces_parseable_history(tmp_path, gmsh_exe
     assert result.surface.num_points > 0
     assert "Pressure_Coefficient" in result.surface.columns
     assert "Y_Plus" in result.surface.columns
+    # Pressure/friction drag split (point 6, docs/ARCHITECTURE.md): must
+    # sum exactly to the breakdown file's own total, and that total
+    # should be close to the history CD (not exact: the breakdown file
+    # prints fewer decimal digits, same tolerance as pipeline.run_case's
+    # own cross-check).
+    breakdown = result.forces_breakdown
+    # Real run, not the hand-picked excerpt below: the file only prints 6
+    # decimal digits, so pressure+friction can be off from the printed
+    # total by a rounding unit in the last digit (observed directly:
+    # 0.627198 vs printed total 0.627197), not a parsing bug.
+    assert breakdown.cd_pressure + breakdown.cd_friction == pytest.approx(breakdown.cd_total, abs=1e-5)
+    assert abs(breakdown.cd_total - result.final("CD")) < max(1e-6, abs(result.final("CD")) * 0.01)
+
+
+# Trimmed excerpt of a real SU2 8.5.0 forces_breakdown.dat (captured
+# 2026-10-14, cylinder test case), with the per-surface section's own
+# numbers deliberately changed from the real file so this test actually
+# proves the global ("Forces breakdown:") section's "Total CD:" line is
+# the one parsed, not the later per-surface repeat further down.
+_REAL_BREAKDOWN_EXCERPT = """
+Forces breakdown:
+
+Center of Pressure: X=-9984.297651Z-0.005943.
+
+ m.
+
+NOTE: Multiply forces by the non-dimensional factor: 0.049000, and the reference factor: 1.000000
+to obtain the dimensional force.
+
+Total CL:      -0.000627 | Pressure (  242%):   -0.001520 | Friction ( -142%):    0.000892 | Momentum (    0%):    0.000000
+Total CD:       6.263383 | Pressure (   98%):    6.142443 | Friction (    1%):    0.120940 | Momentum (    0%):    0.000000
+Total CSF:      0.000070 | Pressure (    0%):   -0.000000 | Friction (   99%):    0.000070 | Momentum (    0%):    0.000000
+
+
+Surface name: airfoil
+
+Total CD    (  100%):    1.000000 | Pressure (   50%):    0.500000 | Friction (   50%):    0.500000 | Momentum (    0%):    0.000000
+"""
+
+
+def test_parse_forces_breakdown_reads_the_global_section_not_the_per_surface_repeat(tmp_path):
+    path = tmp_path / "forces_breakdown.dat"
+    path.write_text(_REAL_BREAKDOWN_EXCERPT)
+    breakdown = _parse_forces_breakdown(path)
+    assert breakdown.cd_total == pytest.approx(6.263383)
+    assert breakdown.cd_pressure == pytest.approx(6.142443)
+    assert breakdown.cd_friction == pytest.approx(0.120940)
+    # Pressure + friction must reproduce the total to within the file's
+    # own printed precision (6 decimals; see the real end-to-end test
+    # below for a case where this is off by one unit in the last digit,
+    # not exact for every run).
+    assert breakdown.cd_pressure + breakdown.cd_friction == pytest.approx(breakdown.cd_total, abs=1e-5)
+
+
+def test_parse_forces_breakdown_rejects_a_file_without_the_expected_line(tmp_path):
+    path = tmp_path / "forces_breakdown.dat"
+    path.write_text("Some unrelated SU2 output with no Total CD line at all.\n")
+    with pytest.raises(SolverError, match="Total CD"):
+        _parse_forces_breakdown(path)
 
 
 def test_count_completed_iterations_reports_zero_when_nothing_exists_yet(tmp_path):

@@ -1499,3 +1499,44 @@ Begruendung oben), aber als bekannte, wiederkehrende Fehlerquelle
 hier festgehalten: jede zukuenftige API-Feldaenderung sollte explizit
 gegen BEIDE Clients gegengeprueft werden, nicht nur gegen den gerade
 bearbeiteten.
+
+## R22: Druck-/Reibungswiderstand-Aufteilung haengt an einem Text-Bericht, nicht an einer stabilen SU2-Schnittstelle (offen, bewusst in Kauf genommen)
+
+Fuer Punkt 6 der Technische-Mechanik-Visualisierung (siehe
+ARCHITECTURE.md) wird seit 2026-10-14 SU2s Option
+`WRT_FORCES_BREAKDOWN= YES` genutzt, die eine Datei
+"forces_breakdown.dat" mit Zeilen wie
+
+```
+Total CD:       6.263383 | Pressure (   98%):    6.142443 | Friction (    1%):    0.120940 | Momentum (    0%):    0.000000
+```
+
+schreibt. `fosas_core.solver._parse_forces_breakdown` liest die erste
+("globale") solche "Total CD:"-Zeile per Regex aus.
+
+**Risiko:** Dies ist ein fuer Menschen lesbarer Diagnose-Bericht, keine
+dokumentierte, versionierte Schnittstelle wie die CSV-Spalten der
+History-/Surface-Dateien. Eine zukuenftige SU2-Version koennte das
+Format (Spaltennamen, Prozentangaben, Zeilenumbrueche - die Datei
+enthaelt bereits jetzt eine erkennbar fehlerhafte Formatierung an
+anderer Stelle, "Center of Pressure: X=...Z=..." ohne Trennzeichen/
+Zeilenumbruch) ohne Vorwarnung aendern, was den Regex entweder
+erkennbar zum Fehlschlagen bringt (guter Fall, `_parse_forces_breakdown`
+wirft dann `SolverError`, kein stiller Fehler) oder im schlimmsten Fall
+ein anderes Zahlenpaar an derselben Textposition liefert, das der
+Cross-Check gegen die History-CD (siehe `pipeline.run_case`) aber
+auffangen sollte, da Druck+Reibung dann nicht mehr zur bekannten
+Gesamt-CD passen wuerden.
+
+**Mitigation, bereits umgesetzt:** Der Parser sucht gezielt nach der
+Zeile, nicht nach einer Zeilennummer/Position (robuster gegen kleine
+Formatverschiebungen). Der Cross-Check in `pipeline.run_case` (Toleranz
+1% oder 1e-6 absolut) faengt eine grobe Fehlinterpretation ab, keine
+stille Falschuebernahme. Getestet gegen die tatsaechlich installierte
+Version (SU2 8.5.0 "Harrier", conda-forge), inklusive eines echten
+Mehrkern-Laufs (mpi_ranks=3) ohne Dateikonflikt.
+
+**Bewusst nicht mitigiert:** Kein automatischer Test gegen eine andere
+SU2-Version (nur die eine, im Projekt installierte Version ist
+verfuegbar). Ein SU2-Versionswechsel sollte diesen Parser explizit
+erneut gegen eine echte Rechnung pruefen, nicht blind vertrauen.

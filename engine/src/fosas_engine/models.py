@@ -97,6 +97,10 @@ class CaseResultOut(BaseModel):
     cl: float
     cd: float
     cs: float
+    cd_pressure: float
+    cd_friction: float
+    drag_pressure: float
+    drag_friction: float
     frontal_area: float
     cl_frontal: float | None
     cd_frontal: float | None
@@ -187,6 +191,10 @@ class JobOut(BaseModel):
                 cl=job.result.cl,
                 cd=job.result.cd,
                 cs=job.result.cs,
+                cd_pressure=job.result.cd_pressure,
+                cd_friction=job.result.cd_friction,
+                drag_pressure=job.result.drag_pressure,
+                drag_friction=job.result.drag_friction,
                 convergence=ConvergenceOut(
                     converged=job.result.convergence.converged,
                     final_residual=job.result.convergence.final_residual,

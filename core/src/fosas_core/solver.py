@@ -130,9 +130,25 @@ class SurfaceData:
 
 
 @dataclass(frozen=True)
+class ForcesBreakdown:
+    """Pressure/friction decomposition of the total drag coefficient,
+    parsed from SU2's own "forces_breakdown.dat" text report (see
+    WRT_FORCES_BREAKDOWN in generate_config). cd_total is kept alongside
+    the split so the caller can cross-check it against the
+    independently-read history CD (see pipeline.run_case) instead of
+    silently trusting a possibly stale/mismatched file.
+    """
+
+    cd_total: float
+    cd_pressure: float
+    cd_friction: float
+
+
+@dataclass(frozen=True)
 class SolverResult:
     history: IterationHistory
     surface: SurfaceData
+    forces_breakdown: ForcesBreakdown
     output_dir: Path
     config_path: Path
 
@@ -221,10 +237,47 @@ HISTORY_OUTPUT= (ITER, RMS_RES, AERO_COEFF)
 OUTPUT_FILES= (RESTART, SURFACE_CSV)
 VOLUME_OUTPUT= (COORDINATES, SOLUTION, PRIMITIVE)
 WRT_RESTART_COMPACT= NO
+
+% Pressure/friction drag split (docs/ARCHITECTURE.md Technische-Mechanik-
+% Visualisierung, Point 6): confirmed by direct test (2026-10-14) that
+% SU2's AERO_COEFF history group has no separate CD_P/CD_V columns, but
+% this independent text report does contain exactly that split ("Total
+% CD: ... | Pressure (...): ... | Friction (...): ..."), written once at
+% the end of the run regardless of OUTPUT_FILES above (that list is
+% unrelated to this option). Parsed in _parse_forces_breakdown below.
+WRT_FORCES_BREAKDOWN= YES
+BREAKDOWN_FILENAME= {output_dir}/forces_breakdown.dat
 """
 
 
 _ERROR_BLOCK_RE = re.compile(r'Error in ".*?".*?Error Exit -+', re.DOTALL)
+
+# Matches the first ("Forces breakdown:", i.e. the global one, not a
+# later per-surface repeat further down the same file - numerically
+# identical for a single wall marker, but the global one is the one to
+# trust in general) "Total CD:" line, e.g.:
+#   Total CD:       6.263383 | Pressure (   98%):    6.142443 | Friction (    1%):    0.120940 | Momentum (    0%):    0.000000
+# Confirmed by direct test (2026-10-14) against a real SU2 8.5.0 run;
+# format is SU2-version-specific, not a stable public API, see
+# docs/RISKS.md.
+_BREAKDOWN_CD_RE = re.compile(
+    r"^Total CD:\s*([-\d.eE+]+)\s*\|\s*Pressure\s*\([^)]*\):\s*([-\d.eE+]+)\s*\|"
+    r"\s*Friction\s*\([^)]*\):\s*([-\d.eE+]+)",
+    re.MULTILINE,
+)
+
+
+def _parse_forces_breakdown(path: Path) -> ForcesBreakdown:
+    text = path.read_text()
+    match = _BREAKDOWN_CD_RE.search(text)
+    if match is None:
+        raise SolverError(
+            f"Could not find a 'Total CD:' breakdown line in '{path}'. SU2's "
+            "forces_breakdown.dat format may have changed; this parser was "
+            "written against SU2 8.5.0's output, see docs/RISKS.md."
+        )
+    cd_total, cd_pressure, cd_friction = (float(x) for x in match.groups())
+    return ForcesBreakdown(cd_total=cd_total, cd_pressure=cd_pressure, cd_friction=cd_friction)
 
 
 def run_su2(
@@ -298,10 +351,17 @@ def run_su2(
             f"SU2 exited successfully but the expected surface file "
             f"'{surface_path}' was not created."
         )
+    breakdown_path = output_dir / "forces_breakdown.dat"
+    if not breakdown_path.exists():
+        raise SolverError(
+            f"SU2 exited successfully but the expected forces breakdown file "
+            f"'{breakdown_path}' was not created."
+        )
 
     return SolverResult(
         history=IterationHistory(columns=_read_csv_columns(history_path)),
         surface=SurfaceData(columns=_read_csv_columns(surface_path)),
+        forces_breakdown=_parse_forces_breakdown(breakdown_path),
         output_dir=output_dir,
         config_path=config_path,
     )
