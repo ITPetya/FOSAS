@@ -4,7 +4,7 @@ pytest.importorskip("build123d")
 
 from build123d import Box, Compound, Locations, export_step
 
-from fosas_core.geometry import GeometryError, import_step
+from fosas_core.geometry import GeometryError, detect_axis_orientation, import_step
 
 
 @pytest.fixture
@@ -99,3 +99,72 @@ def test_import_step_with_sewing_tolerance_still_rejects_a_genuine_gap(open_shel
     # invent a face that was never exported in the first place.
     with pytest.raises(GeometryError, match="open"):
         import_step(open_shell_step, sewing_tolerance=1e-3)
+
+
+# --- detect_axis_orientation (docs/RISKS.md R13): synthetic boxes with
+# exactly the real-world dimension ratios two actual, previously-failing
+# STEP files had (see docs/ARCHITECTURE.md/DECISIONS.md ADR-0020),
+# captured once (2026-10-16) and kept here as regression fixtures - the
+# real files themselves are the project owner's own CAD data, not
+# committed to the repository.
+
+def test_detect_axis_orientation_leaves_an_already_correct_shape_alone():
+    # chord=100, span=500, thickness=10 - already plausible as given.
+    box = Box(100, 500, 10)
+    result = detect_axis_orientation(box)
+    assert result.applied_label is None
+    assert result.confident is True
+    assert result.shape is box  # not even a same-dimensions rotated copy, the exact original
+
+
+def test_detect_axis_orientation_confidently_fixes_the_real_wing_case():
+    # Exact dimension ratios of a real STEP file that failed in
+    # production (docs/RISKS.md R13): chord=100, but what FOSAS read as
+    # "span" (Y) and "thickness" (Z) were swapped - the real span (500)
+    # was along Z, the real thickness (10.23) was along Y.
+    box = Box(100, 10.23, 500)
+    result = detect_axis_orientation(box)
+    assert result.confident is True
+    assert result.applied_label == "rot_x90"
+    bbox = result.shape.bounding_box()
+    chord = bbox.max.X - bbox.min.X
+    span = bbox.max.Y - bbox.min.Y
+    thickness = bbox.max.Z - bbox.min.Z
+    assert chord == pytest.approx(100, rel=1e-3)
+    assert span == pytest.approx(500, rel=1e-3)
+    assert thickness == pytest.approx(10.23, rel=1e-3)
+
+
+def test_detect_axis_orientation_declines_an_ambiguous_real_case():
+    # Exact dimension ratios of a second real STEP file (docs/RISKS.md
+    # R13) that is NOT a simple single wing - even its best candidate
+    # among all 6 possible axis assignments has an implausibly thick
+    # (49%) thickness/chord ratio, so no automatic fix should be
+    # confidently applied; this must stay a manual/preview case.
+    box = Box(207.5, 150.2, 308)
+    result = detect_axis_orientation(box)
+    assert result.confident is False
+    assert result.applied_label is None
+    assert result.shape is box
+    # All 6 candidates must still be reported, for the error message/
+    # future preview tool to show real numbers instead of nothing.
+    assert len(result.candidates) == 6
+    assert any(c.plausible for c in result.candidates)  # some candidates do pass the loose bound
+    assert min(c.thickness_ratio for c in result.candidates if c.plausible) > 0.3  # but none confidently
+
+
+def test_detect_axis_orientation_picks_up_a_genuine_3_cycle_permutation():
+    # A case only reachable via one of the two combined rotations, not
+    # any single 90-degree rotation about one axis alone: real chord=50
+    # should be read off the geometry's own Z-extent, real span=400 off
+    # its own X-extent, real thickness=5 off its own Y-extent.
+    box = Box(400, 5, 50)  # (X=400, Y=5, Z=50) in the box's own frame
+    result = detect_axis_orientation(box)
+    assert result.confident is True
+    bbox = result.shape.bounding_box()
+    chord = bbox.max.X - bbox.min.X
+    span = bbox.max.Y - bbox.min.Y
+    thickness = bbox.max.Z - bbox.min.Z
+    assert chord == pytest.approx(50, rel=1e-3)
+    assert span == pytest.approx(400, rel=1e-3)
+    assert thickness == pytest.approx(5, rel=1e-3)

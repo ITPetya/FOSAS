@@ -787,3 +787,70 @@ Anfragepfade (Einzelwinkel ohne GCI, Einzelwinkel mit GCI, mehrere
 Winkel), jeweils mit genau den Feldern, die das neue Formular senden
 wuerde - alle drei vom unveraenderten Server akzeptiert. Echter
 Klicktest im Browser durch den Projektinhaber steht noch aus.
+
+## ADR-0020: Automatische Achsenkorrektur (eindeutiger Fall) + manuelle Dreh-Vorschau (Rest), ersetzt die reine Ablehnung aus R13
+
+**Kontext:** Der Projektinhaber hat zwei echte eigene STEP-Dateien
+("Tragflaeche Halbsymmetrisches Profil.stp", "Heckfluegel.stp") ueber
+die neue UI hochgeladen, beide scheiterten an der Achsenplausibilitaets-
+pruefung aus R13. Die Tragflaeche-Datei ist dieselbe wie im R13-Vorfall
+selbst. R13 hatte "automatische Korrektur" damals bewusst zugunsten der
+nie gebauten "vom Nutzer per 3D-Vorschau bestaetigten Ausrichtung"
+zurueckgestellt (Abschnitt 3 der urspruenglichen Anforderungen, siehe
+ARCHITECTURE.md "Koordinatenkonvention"). Der Projektinhaber hat diese
+Entscheidung jetzt ausdruecklich revidiert: "soll automatisch passieren
+oder sogar direkt vom User dort machbar sein koennen mit Live-Vorschau"
+- auf Nachfrage bestaetigt: beides, nicht nur eins.
+
+**Vor der Entscheidung direkt gegen beide echten Dateien geprueft** (nicht
+geraten): Von 6 moeglichen 90-Grad-Achsenzuordnungen hat die
+Tragflaeche genau eine eindeutig plausible (chord=100, span=500,
+thickness=10.2mm, Dicke/Sehnen-Verhaeltnis 10%) - ein zweiter,
+rechnerisch ebenfalls "plausibler" Kandidat (977% Dicke/Sehne) ist
+offensichtlich Unsinn. Der Heckfluegel hat dagegen vier von sechs
+Kandidaten, die die lockere Pruefung bestehen, der beste davon immer
+noch 49% Dicke/Sehne (echte Profile: 6-18%) - vermutlich keine einfache
+Einzelfluegel-Geometrie. Das bestaetigt direkt: ein automatischer
+Ansatz alleine reicht nicht fuer jeden Fall, eine manuelle Vorschau
+bleibt fuer den mehrdeutigen Rest notwendig.
+
+**Entscheidung, Teil A (umgesetzt, 2026-10-16):**
+`fosas_core.geometry.detect_axis_orientation` probiert alle 6 moeglichen
+Achsenzuordnungen (Identitaet, drei einzelne 90-Grad-Drehungen, zwei
+Kombinationen - nachweislich erschoepfend) und wendet eine Korrektur nur
+an, wenn genau eine Kandidatin ein Dicke/Sehnen-Verhaeltnis <= 30%
+(Annahme/Richtwert, liegt zwischen den beiden echten Beobachtungen
+10%/49%) UND mindestens Faktor 2 Abstand zur naechstbesten plausiblen
+Kandidatin hat. Eine bereits plausible Ausgangsform (besteht die
+bestehende Pruefung schon unveraendert) wird NIE angetastet, selbst wenn
+eine andere Zuordnung rechnerisch "besser" aussehen wuerde - die
+Heuristik ist ein Ersatz fuer "keine Pruefung besteht", nicht fuer eine
+schon funktionierende Ausrichtung. `pipeline.run_case` nutzt das
+Ergebnis vor der eigentlichen Pruefung; eine angewendete Drehung wird im
+neuen `CaseResult.geometry_rotation_applied`-Feld immer offen ausgewiesen
+(CLAUDE.md: keine stillen Aenderungen). Scheitert die Pruefung trotzdem,
+listet die neue Fehlermeldung alle 6 Kandidaten mit echten Zahlen auf
+(statt nur "re-export or rotate"), inklusive Verweis auf Teil B.
+
+**Entscheidung, Teil B (in Arbeit, siehe ARCHITECTURE.md fuer den
+jeweils aktuellen Stand):** Ein neuer, bewusst kurzlebiger Vorschau-
+Endpunkt (`POST /geometry/preview`, kein Gmsh/SU2-Aufruf, nur
+`import_step` + Tessellierung) liefert eine 3D-Darstellung der
+Roh-Geometrie; eine neue, sekundaere UI-Aktion laesst den Nutzer die
+Geometrie in 90-Grad-Schritten drehen (rein clientseitige Live-Vorschau
+auf der schon geladenen Punktwolke, kein Server-Rundweg pro Klick),
+bevor der eigentliche Rechenauftrag mit der gewaehlten Drehung
+abgeschickt wird. Dieselbe Zwei-Phasen-Idee (Datei hoch, Vorschau ohne
+Rechnung, dann erst der echte Auftrag), die auch fuer den spaeter
+geplanten Lagerpunkt-Picker (Punkt 7, ARCHITECTURE.md) gebraucht wird.
+
+**Verifikation Teil A:** Neue Unit-Tests mit synthetischen Boxen in
+genau den beobachteten Seitenverhaeltnissen (eindeutiger Fall,
+mehrdeutiger Fall, und ein nur ueber eine Kombination erreichbarer
+3-Achsen-Zyklus) - dauerhaft im Testlauf, unabhaengig von den echten,
+nicht committeten Dateien. Echter Lauf gegen beide tatsaechlich
+gescheiterten Dateien (noch lokal vorhanden): Tragflaeche laeuft jetzt
+durch Vernetzung und Loesung durch (automatisch `rot_x90` angewendet,
+cl/cd nach 15 Iterationen plausibel, siehe RISKS.md R13), Heckfluegel
+bekommt die neue, ausfuehrliche Fehlermeldung mit allen 6 echten
+Kandidatenzahlen.

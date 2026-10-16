@@ -1187,7 +1187,7 @@ Gmsh-Kindprozess wurde beendet. Das Zugriffsproblem, das der
 Projektinhaber danach hatte, war ein separates, unabhaengiges Problem
 (abgebrochener SSH-Tunnel auf dem iPad), keine Folge des OOM-Vorfalls.
 
-Massnahme: Die eigentliche Ursache (kein automatischer
+Massnahme (Stand 2026-10-06): Die eigentliche Ursache (kein automatischer
 Ausrichtungsschritt fuer beliebig orientierte STEP-Dateien) bleibt
 bestehen, das ist ADR-mässig weiterhin genau die vom Projektinhaber in
 der urspruenglichen Anforderung vorgesehene, aber noch nicht gebaute
@@ -1195,6 +1195,31 @@ der urspruenglichen Anforderung vorgesehene, aber noch nicht gebaute
 urspruenglichen Anforderungen). Bis dahin schuetzt die neue Pruefung nur
 vor Ressourcenverschwendung und gibt eine verstaendliche Fehlermeldung,
 loest das eigentliche UX-Problem aber nicht automatisch.
+
+**Update 2026-10-16, automatische Haelfte jetzt doch umgesetzt (ADR-0020):**
+Genau diese Datei wurde erneut hochgeladen (ueber die neue, vereinheitlichte
+UI, Tailscale-Funnel-Testinstanz) und scheiterte wieder an derselben
+Pruefung. Der Projektinhaber hat die oben als "zurueckgestellt" markierte
+automatische Korrektur jetzt ausdruecklich angefordert, zusaetzlich zu
+(nicht statt) der urspruenglich vorgesehenen manuellen 3D-Vorschau.
+`fosas_core.geometry.detect_axis_orientation` probiert alle 6 moeglichen
+90-Grad-Achsenzuordnungen durch und wendet die Korrektur nur an, wenn
+genau eine davon eindeutig (Dicke/Sehnen-Verhaeltnis <= 30%, mindestens
+Faktor 2 Abstand zur naechstbesten) plausibel ist - eine bereits
+plausible Ausgangsform wird nie angetastet, auch wenn eine andere
+Zuordnung "besser" aussehen wuerde. Gegen genau diese Datei (lokal unter
+`/tmp/fosas_funnel_demo/d7bc8d36293446bf8ace6b90f2c764ee/input.step`
+noch vorhanden) end-to-end bestaetigt: Automatische Korrektur
+`rot_x90` angewendet (chord=0.1m, span=0.5m nach Umrechnung), Lauf kommt
+jetzt durch Vernetzung und Loesung (cl=0.506, cd=0.420 bei 15 Iterationen,
+erwartungsgemaess noch nicht konvergiert). Eine zweite echte Datei
+("Heckfluegel.stp", ebenfalls real gescheitert) ist dagegen *nicht*
+eindeutig (vier von sechs Kandidaten bestehen die lockere Pruefung, die
+beste hat trotzdem 49% Dicke/Sehnen-Verhaeltnis) - bleibt bewusst
+unkorrigiert, bekommt aber jetzt eine viel konkretere Fehlermeldung mit
+allen sechs Kandidatenzahlen statt der alten, generischen. Die manuelle
+3D-Dreh-Vorschau fuer genau diesen (und jeden anderen uneindeutigen)
+Fall ist nicht Teil dieser automatischen Haelfte, siehe ADR-0020.
 
 ## R14: Kein Absturzschutz, Auftragsstatus an einen einzelnen Browser-Tab gebunden (in Arbeit)
 

@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from build123d import BRepBuilderAPI_Sewing, Edge, Shape, Shell, Solid, import_step as _import_step
+from build123d import Axis, BRepBuilderAPI_Sewing, Edge, Shape, Shell, Solid, import_step as _import_step
 
 
 class GeometryError(Exception):
@@ -170,3 +170,112 @@ def _repair_and_validate(shape: Shape, path: Path, tolerance: float) -> Imported
         )
 
     return _validate_solid(sewn_solid, path, repair_report=report)
+
+
+# Axis-orientation detection (point 3 of the original requirements,
+# docs/ARCHITECTURE.md "Koordinatenkonvention"; docs/RISKS.md R13
+# explicitly deferred automatic correction in favour of a user-
+# confirmed 3D preview, never built - this finally adds the automatic
+# half, for the unambiguous case only, see below).
+#
+# Threshold confirmed against two real STEP files that actually failed
+# in production (docs/RISKS.md R13, 2026-10-16): a correctly-oriented
+# wing, once rotated into the right axes, measured thickness/chord =
+# 10% (chord=100mm, span=500mm, thickness=10.2mm) - a clean, confident
+# match. A second, structurally more complex file (not a simple single
+# wing) had its best candidate at thickness/chord = 49% even after
+# trying every possible axis assignment - nowhere near as confident,
+# and real airfoils are typically 6-18% thick. 0.3 sits between the
+# two observed real cases; still an Annahme/Richtwert, not a physical
+# law, since a genuinely unusual but correctly-oriented thick body
+# could exceed it.
+_PLAUSIBLE_THICKNESS_RATIO = 0.3
+# The best candidate must beat the next-best plausible one by at least
+# this factor, or the choice is not confident enough to apply silently
+# (the real ambiguous file above had 4 of 6 candidates "plausible" by
+# the loose chord/span/thickness bound alone - thickness_ratio alone
+# is the real discriminator, this margin guards against two candidates
+# scoring close enough that picking either would be a guess).
+_CONFIDENCE_MARGIN = 2.0
+
+
+@dataclass(frozen=True)
+class OrientationCandidate:
+    """One of the 6 possible ways to assign a shape's own three
+    bounding-box extents to FOSAS's (chord=X, span=Y, thickness=Z)
+    convention. Confirmed exhaustive by direct test against the two
+    real files mentioned above: every possible axis assignment is
+    reachable via the identity, a single 90-degree rotation about one
+    of the three axes, or one of the two genuine 3-axis-cycle
+    combinations - there is no 7th distinct assignment.
+    """
+
+    label: str
+    chord: float
+    span: float
+    thickness: float
+    plausible: bool  # same bounds as pipeline.run_case's own sanity check
+    thickness_ratio: float  # thickness / chord; lower = more airfoil-like
+
+
+@dataclass(frozen=True)
+class OrientationResult:
+    shape: Shape
+    applied_label: str | None  # None: used as given, either because it already fit or because no candidate was confident
+    confident: bool
+    candidates: tuple[OrientationCandidate, ...]  # all 6, for diagnostics/error messages/the manual preview tool
+
+
+def detect_axis_orientation(shape: Shape) -> OrientationResult:
+    """Looks for a confident 90-degree-multiple rotation that fixes a
+    chord/span/thickness axis mix-up, without ever second-guessing a
+    shape that is already plausibly oriented: if the shape as given
+    already satisfies the same bounds pipeline.run_case checks itself,
+    it is always returned unchanged, regardless of whether some other
+    rotation would score "better" by the thickness-ratio heuristic -
+    that heuristic is a best-effort guess for the case where the shape
+    as given does NOT already pass, not a replacement for an
+    already-working orientation.
+
+    Does not replace pipeline.run_case's own sanity checks - those
+    still run afterwards on whatever shape comes back from here, this
+    only decides which (if any) rotation to try first.
+    """
+    rotations: dict[str, Shape] = {
+        "identity": shape,
+        "rot_x90": shape.rotate(Axis.X, 90),
+        "rot_y90": shape.rotate(Axis.Y, 90),
+        "rot_z90": shape.rotate(Axis.Z, 90),
+        "rot_x90_then_z90": shape.rotate(Axis.X, 90).rotate(Axis.Z, 90),
+        "rot_z90_then_x90": shape.rotate(Axis.Z, 90).rotate(Axis.X, 90),
+    }
+
+    def make_candidate(label: str, candidate_shape: Shape) -> OrientationCandidate:
+        bbox = candidate_shape.bounding_box()
+        chord = bbox.max.X - bbox.min.X
+        span = bbox.max.Y - bbox.min.Y
+        thickness = bbox.max.Z - bbox.min.Z
+        plausible = chord > 0 and span > 0 and span >= 0.5 * chord and thickness <= 2 * span
+        thickness_ratio = thickness / chord if chord > 0 else float("inf")
+        return OrientationCandidate(
+            label=label, chord=chord, span=span, thickness=thickness,
+            plausible=plausible, thickness_ratio=thickness_ratio,
+        )
+
+    candidates = tuple(make_candidate(label, s) for label, s in rotations.items())
+
+    identity_candidate = candidates[0]
+    if identity_candidate.plausible:
+        return OrientationResult(shape=shape, applied_label=None, confident=True, candidates=candidates)
+
+    alternatives = sorted((c for c in candidates[1:] if c.plausible), key=lambda c: c.thickness_ratio)
+    confident = (
+        len(alternatives) >= 1
+        and alternatives[0].thickness_ratio <= _PLAUSIBLE_THICKNESS_RATIO
+        and (len(alternatives) == 1 or alternatives[1].thickness_ratio >= _CONFIDENCE_MARGIN * alternatives[0].thickness_ratio)
+    )
+    if confident:
+        best = alternatives[0]
+        return OrientationResult(shape=rotations[best.label], applied_label=best.label, confident=True, candidates=candidates)
+
+    return OrientationResult(shape=shape, applied_label=None, confident=False, candidates=candidates)

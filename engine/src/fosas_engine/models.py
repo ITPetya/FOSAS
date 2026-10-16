@@ -93,6 +93,7 @@ class CaseResultOut(BaseModel):
     node_count: int
     element_count: int
     markers: list[str]
+    geometry_rotation_applied: str | None
     aoa_deg: float
     sideslip_deg: float
     cl: float
@@ -194,6 +195,7 @@ class JobOut(BaseModel):
                 node_count=job.result.node_count,
                 element_count=job.result.element_count,
                 markers=list(job.result.markers),
+                geometry_rotation_applied=job.result.geometry_rotation_applied,
                 aoa_deg=job.result.aoa_deg,
                 sideslip_deg=job.result.sideslip_deg,
                 frontal_area=job.result.frontal_area,

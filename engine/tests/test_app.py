@@ -79,6 +79,7 @@ def _fake_case_result(work_dir):
         node_count=1234,
         element_count=5678,
         markers=("airfoil", "farfield"),
+        geometry_rotation_applied=None,
         aoa_deg=5.0,
         sideslip_deg=0.0,
         cl=1.29,

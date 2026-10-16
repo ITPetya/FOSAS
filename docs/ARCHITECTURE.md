@@ -146,6 +146,19 @@ und erklaert, warum die vom Nutzer per 3D-Vorschau zu bestaetigende
 Ausrichtung (Abschnitt 3 der urspruenglichen Anforderungen) architektonisch
 notwendig ist, nicht nur eine Komfortfunktion.
 
+**Teilweise umgesetzt (2026-10-16, siehe ADR-0020, RISKS.md R13):**
+`fosas_core.geometry.detect_axis_orientation` erkennt und korrigiert
+jetzt automatisch den eindeutigen Fall (Achsen um ein Vielfaches von 90
+Grad verwechselt, typisch bei unterschiedlichen CAD-Export-Konventionen),
+direkt gegen zwei echte, zuvor gescheiterte STEP-Dateien bestaetigt.
+Eine bereits plausible Geometrie wird nie angetastet. Eine mehrdeutige
+Geometrie (die Heuristik findet keine eindeutig beste Zuordnung) scheitert
+weiterhin, jetzt aber mit einer genauen Fehlermeldung (alle sechs
+moeglichen Zuordnungen mit echten Zahlen). Die eigentliche, urspruenglich
+vorgesehene manuelle "Ausrichtung per 3D-Vorschau bestaetigt" fuer genau
+diesen mehrdeutigen Rest ist zum jetzigen Zeitpunkt noch in Arbeit
+(neuer `/geometry/preview`-Endpunkt plus Dreh-UI, siehe ADR-0020).
+
 ## Geometrie- und Vernetzungspipeline
 
 1. STEP-Import per build123d. Wasserdichtheitspruefung nicht allein ueber

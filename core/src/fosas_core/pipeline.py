@@ -3,10 +3,13 @@
 V1 scope, explicit assumptions (see docs/ARCHITECTURE.md and
 docs/OPEN_QUESTIONS.md):
 
-- The geometry must already use the axis convention X chordwise
-  (downstream), Y spanwise, Z vertical. FOSAS does not yet reorient
-  arbitrary geometry (that needs the user-confirmed orientation step
-  from the original requirements, not implemented yet).
+- The geometry must end up using the axis convention X chordwise
+  (downstream), Y spanwise, Z vertical. Since 2026-10-16 (docs/RISKS.md
+  R13), run_case tries to detect and auto-correct a confident 90-degree-
+  multiple axis mix-up by itself (see geometry.detect_axis_orientation);
+  an arbitrary/low-confidence misorientation still needs either manual
+  re-export or the interactive rotation preview (the user-confirmed
+  orientation step from the original requirements), not a silent guess.
 - The body must have a constant cross-section along Y (ADR-0007). A
   single cross-section is taken at mid-span; tapered/swept bodies are
   out of scope for now (see docs/RISKS.md R12).
@@ -22,7 +25,7 @@ raised as an error, with converged=False and an honest message.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from build123d import CenterOf, Plane, Shape
@@ -35,7 +38,7 @@ from .forces import (
     compute_moment_system,
     rescale_coefficient_to_frontal_area,
 )
-from .geometry import GeometryError, import_step
+from .geometry import GeometryError, detect_axis_orientation, import_step
 from .materials import MATERIAL_DENSITIES_KG_M3, STANDARD_GRAVITY
 from .meshing import (
     BoundaryLayerMeshParams,
@@ -169,6 +172,13 @@ class CaseResult:
     node_count: int
     element_count: int
     markers: tuple[str, ...]
+    # None: the uploaded geometry was used as given (either already
+    # plausibly oriented, or no confident automatic fix was found and
+    # the pipeline still somehow proceeded - see detect_axis_orientation
+    # in geometry.py, docs/RISKS.md R13). Otherwise the label of the
+    # 90-degree-multiple rotation that was actually applied, always
+    # disclosed here rather than silently changing the input geometry.
+    geometry_rotation_applied: str | None
     # Echoed straight from the input, not a solver output: needed so a
     # client can draw the wind-axis direction relative to the body axes
     # (see docs/ARCHITECTURE.md "Technische-Mechanik-Visualisierung",
@@ -285,6 +295,16 @@ def run_case(
     except GeometryError as exc:
         raise PipelineError("geometry", str(exc)) from exc
 
+    # Automatic axis-orientation correction (docs/RISKS.md R13): tries a
+    # confident 90-degree-multiple fix first; never touches a shape
+    # that is already plausibly oriented (see detect_axis_orientation's
+    # own docstring for why). geometry_rotation_applied is surfaced in
+    # CaseResult, never a silent change (CLAUDE.md).
+    orientation = detect_axis_orientation(geometry.shape)
+    geometry_rotation_applied = orientation.applied_label
+    if orientation.applied_label is not None:
+        geometry = replace(geometry, shape=orientation.shape)
+
     bbox = geometry.shape.bounding_box()
     chord = bbox.max.X - bbox.min.X
     span = bbox.max.Y - bbox.min.Y
@@ -304,16 +324,28 @@ def run_case(
     # A real wing's span is essentially always larger than its chord,
     # and its Y-extent (assumed thickness-free span) should not be
     # dramatically smaller than its Z-extent if Z really is vertical.
+    # By this point detect_axis_orientation has already tried to fix a
+    # confident 90-degree mix-up, so reaching here with a failure means
+    # either no rotation helped enough to be confident, or (rarely) the
+    # unrotated shape was already implausible in a way that is not a
+    # simple axis assignment problem at all.
     if span < 0.5 * chord or thickness > 2 * span:
+        candidate_lines = "\n".join(
+            f"  - {c.label}: chord={c.chord:.4g}, span={c.span:.4g}, thickness={c.thickness:.4g}, "
+            f"thickness/chord={c.thickness_ratio:.2f}"
+            + ("" if c.plausible else " (does not even pass the loose bound)")
+            for c in orientation.candidates
+        )
         raise PipelineError(
             "geometry",
             f"Bounding box looks implausible for the assumed axis convention "
             f"(X chordwise={chord:.4g}, Y spanwise={span:.4g}, Z vertical="
-            f"{thickness:.4g}). A real wing's span is normally larger than its "
-            "chord, and clearly larger than its thickness. This usually means "
-            "the geometry's span is actually along a different axis (often Z). "
-            "Re-export or rotate the geometry so X is chordwise, Y is "
-            "spanwise, and Z is vertical, see docs/ARCHITECTURE.md.",
+            f"{thickness:.4g}). Tried every 90-degree axis reassignment "
+            "automatically, none was confident enough to apply by itself "
+            f"(see docs/RISKS.md R13):\n{candidate_lines}\n"
+            "Re-export the geometry with X chordwise, Y spanwise, Z vertical, "
+            "or use the geometry preview/rotate tool to orient it manually "
+            "before submitting, see docs/ARCHITECTURE.md.",
         )
     mid_y = (bbox.min.Y + bbox.max.Y) / 2
 
@@ -529,6 +561,7 @@ def run_case(
         node_count=mesh_info.node_count,
         element_count=mesh_info.element_count,
         markers=mesh_info.markers,
+        geometry_rotation_applied=geometry_rotation_applied,
         aoa_deg=params.aoa_deg,
         sideslip_deg=params.sideslip_deg,
         cl=final_cl,
