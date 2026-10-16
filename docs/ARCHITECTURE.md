@@ -42,6 +42,22 @@ gegen ein privates statt ein oeffentliches Netz. `--host` ohne Angabe
 bleibt beim sicheren Standard `127.0.0.1`, ein Aufruf ohne Tailscale
 aendert also nichts am bisherigen Verhalten.
 
+**Zugriff ohne Tailscale, nur per Browser (seit 2026-10-16, siehe
+RISKS.md R23).** Auf Wunsch des Projektinhabers: `tailscale funnel`
+macht den lokalen Port unter einer echten, oeffentlichen HTTPS-Adresse
+erreichbar (`--host` bleibt `127.0.0.1`, Funnel proxyt selbst dorthin),
+aber dafuer muss zuerst `Settings.public_password` gesetzt werden
+(`FOSAS_PUBLIC_PASSWORD`-Umgebungsvariable bevorzugt), sonst wuerde
+Funnel den Bearer-Token jedem im Internet schenken, der die URL findet
+(`/`, `/viewer`, `/app.js` liefern ihn sonst ungeprueft mit aus, siehe
+R23). Mit gesetztem Passwort verlangen diese Routen zusaetzlich eine
+`/login`-Sitzung, bevor sie den Token ausliefern; alle echten
+API-Routen bleiben unveraendert beim Bearer-Token. Einmalige, ausserhalb
+des Codes liegende Einrichtung: Funnel in der Tailscale-Admin-Konsole
+fuer den Tailnet freigeben, danach `sudo tailscale set
+--operator=<user>` auf dem Server (einmalig), danach
+`tailscale funnel --bg <port>`.
+
 **Job-Persistenz und geteilte Sitzung (seit Phase 1, siehe RISKS.md R14).**
 Es gibt bewusst kein Nutzerkonto und keine Browser-Sitzung im ueblichen
 Sinn: Ein Auftrag gehoert nicht einem Tab oder Geraet, sondern ist ueber
