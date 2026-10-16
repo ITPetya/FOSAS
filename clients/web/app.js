@@ -2049,11 +2049,24 @@ function expandConsole() {
   document.getElementById("console-toggle-icon").innerHTML = "&#9662;";
 }
 
+// Custom-styled STEP-file picker (see the .file-input-* CSS): the
+// native input stays functional and focusable, just visually hidden,
+// with this label mirroring the chosen filename - form.reset() below
+// clears the input itself but does not reliably fire "change" for a
+// file input in every browser, so the label is also reset explicitly.
+function updateFileInputName() {
+  const files = document.getElementById("step_file").files;
+  document.getElementById("step_file-name").textContent =
+    files.length ? files[0].name : "Keine Datei gewaehlt";
+}
+document.getElementById("step_file").addEventListener("change", updateFileInputName);
+
 // "Neue Berechnung" (topbar): resets the one unified form back to its
 // defaults and clears the current result, same as reloading used to
 // implicitly do before there was a persistent single-window shell.
 document.getElementById("topbar-new-btn").addEventListener("click", () => {
   document.getElementById("case-form").reset();
+  updateFileInputName();
   updateGciCheckAvailability();
   history.replaceState(null, "", window.location.pathname);
   document.getElementById("result-panel").hidden = true;
@@ -2210,6 +2223,7 @@ async function submitGciStudy(fileInput, aoaDeg) {
   document.getElementById("status").textContent =
     "Netzqualitaetspruefung gestartet (3 Aufloesungen, dauert deutlich laenger als eine Einzelrechnung) - Fortschritt im Archiv.";
   fileInput.value = "";
+  updateFileInputName(); // programmatic .value reset fires no "change" event
   expandedArchiveEntries.add("gci:" + study.id);
   openArchive();
 }
@@ -2235,6 +2249,7 @@ async function submitPolarStudy(fileInput, aoaValues) {
   document.getElementById("status").textContent =
     "Polare gestartet (" + aoaValues.length + " Winkel) - Fortschritt im Archiv.";
   fileInput.value = "";
+  updateFileInputName(); // programmatic .value reset fires no "change" event
   expandedArchiveEntries.add("polar:" + study.id);
   openArchive();
 }
