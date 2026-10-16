@@ -239,6 +239,15 @@
   #console-panel { padding: 0 16px 16px; }
   #archive-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+  }
+  /* Same [hidden]-override bug fixed earlier for .viewer3d-note/
+     .colorbar-row (see their comments): an unconditional "display: flex"
+     here beats the browser's own [hidden] rule regardless of selector
+     specificity, so the overlay stayed visible (and unclosable, since
+     closeArchive() only ever sets the hidden attribute) even when JS
+     set hidden = true. Scoping to :not([hidden]) lets the attribute's
+     own display:none apply again once it is present. */
+  #archive-overlay:not([hidden]) {
     display: flex; align-items: center; justify-content: center;
   }
   #archive-panel {
