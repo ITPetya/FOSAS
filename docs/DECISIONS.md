@@ -714,3 +714,76 @@ Alternativen: Installer-Entwicklung trotzdem parallel vorbereiten
 Nutzungsaussicht gebunden). Phase 5 komplett aus der Planung streichen
 (verworfen, der Projektinhaber will die Option bewusst offen halten,
 nicht endgueltig verwerfen).
+
+## ADR-0019: FOSAS ist ein Arbeitsablauf ("virtueller Windkanal"), nicht drei Tools - ein Fenster statt Panel-Stapel
+
+**Kontext:** Der Projektinhaber hatte die Web-UI lange nicht benutzt
+und fand sie beim Wiedersehen zu komplex geworden: eine lange,
+einspaltige Seite mit acht getrennten Panels (Auftragsliste,
+Polarstudien-Liste+Formular, GCI-Studien-Liste+Formular, Kombinierter-
+Bericht, Einzelauftrags-Formular, Ergebnis-Panel). Gewuenscht: ein
+Fenster wie bei etablierter Profi-Software (Inventor, AutoCAD,
+Photoshop, After Effects) - Menueband oben, Seitenpanels links/rechts,
+zentraler Arbeitsbereich, ausklappbare Konsole unten.
+
+Im Gespraech ging das ueber reine Fensteranordnung hinaus: eine
+Korrektur des Produktverstaendnisses. FOSAS soll ein Arbeitsablauf
+sein (Geometrie hochladen, Bedingungen einstellen, Ergebnis bekommen),
+nicht drei gleichrangige "Tools" (Einzelauftrag/Polarstudie/GCI-
+Netzstudie) zur Auswahl. Eine GCI-Netzstudie ist aus seiner Sicht ein
+internes Verifikationsmittel ("ist das Netz fein genug?"), kein
+Feature, das ein Nutzer ohne CFD-Hintergrund bewusst anwaehlen sollte.
+Leitsatz (wortwoertlich): "so wenig Entscheidungen wie moeglich, aber
+so viele wie noetig", mit sinnvollem Standardwert ueberall dort, wo
+eine Entscheidung bleibt.
+
+**Entscheidung:**
+1. Ein Fenster (CSS-Grid-Rahmen, kein Framework/Build-Schritt, siehe
+   ADR-0005-aehnliche Linie): Menueband oben (Neue Berechnung/Archiv/
+   Bericht), linkes Panel (ein einziges Eingabeformular), zentraler
+   Bereich (3D-Ansicht/Freikoerperbild/cp-Verteilung als Reiter statt
+   untereinander gestapelt), rechtes Panel (alle Ergebnis-Kacheln),
+   Konsole unten (die bestehende 3-Phasen-Fortschrittsanzeige,
+   eingeklappt per Standard, ausklappbar).
+2. Die drei bisherigen Formulare (Einzelauftrag/Polarstudie/GCI-Studie)
+   werden zu einem zusammengefuehrt. Ein Anstellwinkel-Feld akzeptiert
+   sowohl einen einzelnen Wert als auch eine kommagetrennte Liste;
+   clientseitig entscheidet die Anzahl der Werte plus ein neues
+   Kontrollkaestchen "Netzqualitaet pruefen (GCI)", welcher der drei
+   unveraenderten Endpunkte (`/jobs`, `/polar-studies`, `/gci-studies`)
+   angesprochen wird - reine Weiterleitung, keine neue Server-Logik,
+   keine Aenderung an `fosas_core`/`fosas_engine`.
+3. Das GCI-Kaestchen ist **standardmaessig angehaekt** (Projektinhaber:
+   "vermutlich an" als sinnvollster Standard - Ergebnisvertrauen vor
+   Rechenzeit, da die Zielgruppe nicht selbst einschaetzen kann, ob ein
+   Netz fein genug ist) und wird automatisch deaktiviert, sobald mehr
+   als ein Anstellwinkel eingegeben wird (kein Endpunkt fuer "GCI bei
+   mehreren Winkeln" vorhanden) - mit sichtbarem Hinweistext, nicht
+   stillschweigend ignoriert (CLAUDE.md: keine stillen Fallbacks).
+4. Die drei bisherigen getrennten Listen-Panels (Auftraege/Polarstudien/
+   GCI-Studien) werden zu einem einzigen, nach Datum sortierten
+   Archiv zusammengefuehrt (Topbar-Knopf, modales Overlay), mit einem
+   kurzen Typ-Hinweis pro Zeile statt harter Tab-Trennung.
+5. `viewer.html` (Vollbild-3D-Ansicht) bleibt bewusst unangetastet.
+
+**Bewusst zurueckgestellt, eigener spaeterer Schritt:** Die
+vollautomatische, kostenbewusste GCI-Entscheidungslogik (wann eine
+Netzstudie tatsaechlich noetig ist statt standardmaessig immer alle
+drei Aufloesungen zu rechnen, Zwischenspeicherung/Wiederverwendung
+ueber mehrere Auftraege hinweg) - das braucht echte Aenderungen in
+`fosas_core`/`fosas_engine`, nicht nur im Web-Client, und ein eigenes
+Abwaegen von Rechenkosten gegen Ergebnisvertrauen. Reihenfolge (erst
+UI, dann Pipeline) war die Entscheidung des Assistenten, vom
+Projektinhaber ausdruecklich delegiert ("ob du das in zwei oder einem
+Schritt machst, ist deine Entscheidung").
+
+**Verifikation:** Kein echter Browser verfuegbar (wie bei jeder
+GUI-Aenderung in diesem Projekt). `node --check` auf `app.js`;
+Node-Simulation der neuen Winkel-Parsing-/GCI-Haken-Logik mit einem
+minimalen DOM-Stub (12 Faelle, u. a. dass ein manuelles Abhaken bei
+einem einzelnen Winkel nicht durch die Automatik ueberschrieben wird);
+echte `curl`-Anfragen gegen eine lokale Engine fuer alle drei
+Anfragepfade (Einzelwinkel ohne GCI, Einzelwinkel mit GCI, mehrere
+Winkel), jeweils mit genau den Feldern, die das neue Formular senden
+wuerde - alle drei vom unveraenderten Server akzeptiert. Echter
+Klicktest im Browser durch den Projektinhaber steht noch aus.

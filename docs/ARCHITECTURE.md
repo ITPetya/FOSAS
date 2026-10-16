@@ -98,6 +98,30 @@ OpenAPI). Regel: Die UI darf nichts koennen, was die API nicht auch kann.
 Lokal laeuft die Web-UI in einem eigenen Fenster (WebView2), auf einem
 Server im Browser.
 
+**Web-UI-Rahmen, seit 2026-10-16 (siehe ADR-0019).** `clients/web/
+index.html`/`app.js` sind EIN Fenster (CSS-Grid, kein Framework/Build-
+Schritt), nicht mehr ein Stapel einzelner Panels: Menueband oben
+(`#topbar`, Knoepfe "Neue Berechnung"/"Archiv"/"Bericht"), linkes
+Panel (`#left-panel`, EIN Eingabeformular fuer alle drei Anfragearten),
+zentraler Bereich (`#center-panel`, 3D-Ansicht/Freikoerperbild/cp-
+Verteilung als Reiter), rechtes Panel (`#result-panel`, alle Ergebnis-
+Kacheln, trotz des Namens inhaltlich unveraendert aus der fruehreren
+"Ergebnis"-Panel-Logik), Konsole unten (`#console-wrap`, die
+3-Phasen-Fortschrittsanzeige, eingeklappt per Standard). Das Archiv
+(Topbar-Knopf, `#archive-overlay`) fasst die drei fruehreren getrennten
+Listen (Auftraege/Polarstudien/GCI-Studien) zu einer einzigen,
+Datums-sortierten Liste zusammen. Die drei Backend-Endpunkte (`/jobs`,
+`/polar-studies`, `/gci-studies`) sind dabei unveraendert; welcher
+angesprochen wird, entscheidet das Formular selbst (Anzahl
+Anstellwinkel, GCI-Kontrollkaestchen), siehe ADR-0019 fuer die
+Begruendung ("virtueller Windkanal, nicht drei Tools"). Spaetere
+Backlog-Eintraege in diesem Dokument, die noch von einzelnen
+getrennten Formular-/Listen-Panels sprechen (z. B. in der
+"Technische-Mechanik-Visualisierung"-Historie unten), beschreiben den
+damaligen Stand zum jeweiligen Zeitpunkt, nicht die heutige Struktur -
+bewusst nicht rueckwirkend umgeschrieben, nur hier an einer Stelle
+klargestellt. `viewer.html` ist von diesem Umbau unberuehrt.
+
 ## Koordinatenkonvention (wichtig, empirisch bestaetigt)
 
 SU2 erwartet fuer Kraft-/Momentenbeiwerte und die automatische Berechnung

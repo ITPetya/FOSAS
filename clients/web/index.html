@@ -16,14 +16,12 @@
     --bad: #e05252;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; }
   body {
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-    margin: 0;
-    padding: 24px;
   }
-  .wrap { max-width: 760px; margin: 0 auto; }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 24px; font-size: 0.9rem; }
   .panel {
@@ -71,10 +69,10 @@
   .badge.ok { background: var(--ok); color: #06240f; }
   .badge.warn { background: var(--warn); color: #2a1d00; }
   .badge.bad { background: var(--bad); color: #2a0000; }
-  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 10px 0 16px; }
-  .metric { background: #0d0f13; border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
-  .metric .value { font-size: 1.3rem; font-weight: 600; }
-  .metric .label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 10px 0 16px; }
+  .metric { background: #0d0f13; border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+  .metric .value { font-size: 1.15rem; font-weight: 600; }
+  .metric .label { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
   .metrics-group-title { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin: 18px 0 2px; }
   .metrics-group-title:first-of-type { margin-top: 10px; }
   .msg { font-size: 0.9rem; margin-top: 8px; line-height: 1.4; }
@@ -194,340 +192,213 @@
   }
   .info-popover .tag.gesichert { background: rgba(47,191,113,0.18); color: var(--ok); }
   .info-popover .tag.annahme { background: rgba(224,167,47,0.18); color: var(--warn); }
+
+  /* --- App-Rahmen: ein Fenster statt Panel-Stapel, Menueband + Seiten-
+     panels + Konsole, wie bei Inventor/AutoCAD/Photoshop. */
+  #app-shell {
+    display: grid;
+    grid-template-areas: "topbar topbar topbar" "left center right" "console console console";
+    grid-template-rows: 56px 1fr auto;
+    grid-template-columns: 320px 1fr 320px;
+    height: 100vh;
+  }
+  #topbar {
+    grid-area: topbar; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  #topbar .topbar-title { font-size: 1.05rem; font-weight: 600; }
+  #topbar .topbar-title .topbar-sub { color: var(--muted); font-weight: 400; font-size: 0.82rem; margin-left: 8px; }
+  #topbar .topbar-actions { display: flex; gap: 8px; }
+  .topbar-btn {
+    margin: 0; width: auto; background: transparent; border: 1px solid var(--border);
+    color: var(--text); padding: 8px 16px; font-size: 0.88rem; border-radius: 6px;
+  }
+  .topbar-btn:hover { border-color: var(--accent); }
+  #left-panel, #result-panel {
+    overflow-y: auto; padding: 16px; background: var(--panel);
+  }
+  #left-panel { grid-area: left; border-right: 1px solid var(--border); }
+  #result-panel { grid-area: right; border-left: 1px solid var(--border); }
+  #center-panel {
+    grid-area: center; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column;
+  }
+  .center-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .center-tab-btn {
+    margin: 0; width: auto; background: transparent; border: none; border-bottom: 2px solid transparent;
+    color: var(--muted); padding: 8px 14px; font-size: 0.88rem; border-radius: 0;
+  }
+  .center-tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+  .center-tab-content { flex: 1; }
+  #console-wrap { grid-area: console; border-top: 1px solid var(--border); background: var(--panel); }
+  #console-bar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+    cursor: pointer; font-size: 0.85rem; color: var(--muted);
+  }
+  #console-bar:hover { color: var(--text); }
+  #console-panel { padding: 0 16px 16px; }
+  #archive-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #archive-panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; width: min(820px, 92vw); max-height: 82vh; overflow-y: auto;
+  }
+  .archive-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
+  .archive-header h2 { margin: 0; font-size: 1.1rem; flex: 1; }
+  #archive-close-btn {
+    margin: 0; width: auto; background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 6px 12px; font-size: 1rem; border-radius: 6px; line-height: 1;
+  }
+  #report-popover {
+    position: fixed; top: 64px; right: 16px; z-index: 90; width: 320px;
+    background: var(--panel); border: 1px solid var(--accent); border-radius: 10px;
+    padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  #report-popover h3 { margin: 0 0 8px; font-size: 0.95rem; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
-<div class="wrap">
-  <h1>FOSAS, virtueller Windkanal</h1>
-  <p class="sub">
-    Einzelrechnungen, Polaren und GCI-Netzstudien direkt ueber diese Seite
-    erstellen und verfolgen (Phase 3). Geometrie muss bereits in der
-    Achsenkonvention X stromab, Y spannweitig, Z vertikal vorliegen und
-    einen konstanten Querschnitt haben, siehe docs/ARCHITECTURE.md.
-  </p>
-
-  <div class="panel">
-    <div class="jobs-header">
-      <h2 id="jobs-title" style="margin:0;font-size:1.1rem;">Auftraege</h2>
-      <button type="button" class="archive-toggle-btn" id="archive-toggle-btn">Archiv</button>
-    </div>
-    <p class="hint" style="margin:6px 0 10px;">
-      Alle Auftraege auf diesem Server, fuer jeden mit dem Zugangslink
-      sichtbar (kein Login pro Person, siehe docs/ARCHITECTURE.md).
-      Anklicken oeffnet den Status. Erfolgreiche werden nach 5h, fehlgeschlagene
-      nach 1,5h automatisch ins Archiv verschoben, fehlgeschlagene nach 24h
-      endgueltig geloescht.
-    </p>
-    <div id="jobs-list"></div>
-  </div>
-
-  <div class="panel">
-    <h2 style="margin:0 0 6px;font-size:1.1rem;">Polarstudien</h2>
-    <p class="hint" style="margin:6px 0 10px;">
-      Jeder Anstellwinkel ist ein eigenstaendiger, unabhaengiger Auftrag
-      (siehe docs/DECISIONS.md ADR-0017); Loeschen einer Studie loescht
-      nicht die zugehoerigen Auftraege.
-    </p>
-    <div id="polar-studies-list"></div>
-  </div>
-
-  <div class="panel">
-    <h2 style="margin:0 0 6px;font-size:1.1rem;">Polarstudie erstellen</h2>
-    <form id="polar-form">
-      <label class="first" data-info="step_file">STEP-Datei</label>
-      <input type="file" id="polar-step_file" accept=".step,.stp" required>
-
-      <div class="row">
-        <div>
-          <label data-info="velocity">Anstroemgeschwindigkeit (m/s)</label>
-          <input type="number" id="polar-velocity" value="30" step="any" required>
-        </div>
-        <div>
-          <label data-info="aoa_values">Anstellwinkel-Liste (Grad, kommagetrennt)</label>
-          <input type="text" id="polar-aoa_values" value="0, 5, 10" required>
-        </div>
-      </div>
-      <div class="row">
-        <div>
-          <label data-info="sideslip_deg">Schiebewinkel (Grad, Seitenwind, fest fuer die ganze Reihe)</label>
-          <input type="number" id="polar-sideslip_deg" value="0" step="any">
-        </div>
-        <div></div>
-      </div>
-
-      <details>
-        <summary>Erweiterte Einstellungen</summary>
-        <div class="row">
-          <div><label data-info="density">Luftdichte (kg/m^3)</label><input type="number" id="polar-density" value="1.225" step="any"></div>
-          <div><label data-info="dynamic_viscosity">Dynamische Viskositaet (Pa*s)</label><input type="number" id="polar-dynamic_viscosity" value="0.0000181" step="any"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="temperature">Temperatur (K)</label><input type="number" id="polar-temperature" value="288.15" step="any"></div>
-          <div><label data-info="target_y_plus">Ziel y+</label><input type="number" id="polar-target_y_plus" value="1.0" step="any"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="growth_ratio">Wachstumsrate Grenzschicht</label><input type="number" id="polar-growth_ratio" value="1.2" step="any"></div>
-          <div><label data-info="bl_thickness_factor">Grenzschichtdicke (Faktor mal Sehnenlaenge)</label><input type="number" id="polar-bl_thickness_factor" value="0.05" step="any"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="span_layers">Spannweiten-Schichten</label><input type="number" id="polar-span_layers" value="24" step="1"></div>
-          <div><label data-info="n_profile_points">Profilpunkte</label><input type="number" id="polar-n_profile_points" value="60" step="1"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="max_iterations">Max. Iterationen</label><input type="number" id="polar-max_iterations" value="500" step="1"></div>
-          <div><label data-info="mpi_ranks">MPI-Prozesse</label><input type="number" id="polar-mpi_ranks" value="1" step="1"></div>
-        </div>
-        <div class="row">
-          <div>
-            <label data-info="time_discretization">Zeitintegration</label>
-            <select id="polar-time_discretization">
-              <option value="EULER_IMPLICIT">Implizit (schneller pro Iteration, mehr Speicher)</option>
-              <option value="RUNGE-KUTTA_EXPLICIT">Explizit (weniger Speicher, mehr Iterationen noetig)</option>
-            </select>
-          </div>
-          <div><label data-info="residual_threshold">Konvergenzziel (Restfehler)</label><input type="number" id="polar-residual_threshold" value="-8" step="any"></div>
-        </div>
-        <div class="row">
-          <div>
-            <label data-info="material">Material (optional, fuer Gewichtskraft)</label>
-            <select id="polar-material">
-              <option value="">(kein Material, keine Gewichtskraft)</option>
-              <option value="aluminium">Aluminium</option>
-              <option value="stahl">Stahl</option>
-              <option value="titan">Titan</option>
-              <option value="cfk">CFK (Kohlefaser-Verbund)</option>
-              <option value="gfk">GFK (Glasfaser-Verbund)</option>
-              <option value="abs">ABS (Kunststoff)</option>
-              <option value="pla">PLA (Kunststoff, 3D-Druck)</option>
-              <option value="balsaholz">Balsaholz</option>
-            </select>
-          </div>
-          <div></div>
-        </div>
-        <p class="hint">Dieselben erweiterten Einstellungen wie bei einer Einzelrechnung, gelten hier fuer alle Anstellwinkel der Liste gleich.</p>
-      </details>
-
-      <button type="submit" id="polar-submit-btn">Polarstudie starten</button>
-    </form>
-    <div class="status" id="polar-status"></div>
-    <div class="error" id="polar-error" hidden></div>
-  </div>
-
-  <div class="panel">
-    <h2 style="margin:0 0 6px;font-size:1.1rem;">GCI-Netzstudien</h2>
-    <p class="hint" style="margin:6px 0 10px;">
-      Drei Netzaufloesungen (fein/mittel/grob), Ergebnis erscheint erst
-      wenn alle drei fertig sind, siehe docs/RISKS.md R20 zur
-      Interpretierbarkeit bei nahe-Null-Kraftbeiwerten.
-    </p>
-    <div id="gci-studies-list"></div>
-  </div>
-
-  <div class="panel">
-    <h2 style="margin:0 0 6px;font-size:1.1rem;">GCI-Netzstudie erstellen</h2>
-    <form id="gci-form">
-      <label class="first" data-info="step_file">STEP-Datei</label>
-      <input type="file" id="gci-step_file" accept=".step,.stp" required>
-
-      <div class="row">
-        <div>
-          <label data-info="velocity">Anstroemgeschwindigkeit (m/s)</label>
-          <input type="number" id="gci-velocity" value="30" step="any" required>
-        </div>
-        <div>
-          <label data-info="aoa_deg">Anstellwinkel (Grad)</label>
-          <input type="number" id="gci-aoa_deg" value="5" step="any" required>
-        </div>
-      </div>
-      <div class="row">
-        <div>
-          <label data-info="refinement_ratio">Verfeinerungsverhaeltnis</label>
-          <input type="number" id="gci-refinement_ratio" value="1.5" step="any" required>
-        </div>
-        <div>
-          <label data-info="sideslip_deg">Schiebewinkel (Grad, Seitenwind)</label>
-          <input type="number" id="gci-sideslip_deg" value="0" step="any">
-        </div>
-      </div>
-      <p class="hint" style="margin:0 0 10px;">
-        Moderat bleiben (z. B. 1,2 bis 1,5): ein zu hohes Verhaeltnis kann
-        bei wenig verfuegbarem Arbeitsspeicher zu einem Speicherueberlauf
-        beim feinsten Netz fuehren (eigener Vorfall, siehe
-        docs/OPEN_QUESTIONS.md).
-      </p>
-
-      <details>
-        <summary>Erweiterte Einstellungen</summary>
-        <div class="row">
-          <div><label data-info="density">Luftdichte (kg/m^3)</label><input type="number" id="gci-density" value="1.225" step="any"></div>
-          <div><label data-info="dynamic_viscosity">Dynamische Viskositaet (Pa*s)</label><input type="number" id="gci-dynamic_viscosity" value="0.0000181" step="any"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="temperature">Temperatur (K)</label><input type="number" id="gci-temperature" value="288.15" step="any"></div>
-          <div><label data-info="target_y_plus">Ziel y+</label><input type="number" id="gci-target_y_plus" value="1.0" step="any"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="growth_ratio">Wachstumsrate Grenzschicht</label><input type="number" id="gci-growth_ratio" value="1.2" step="any"></div>
-          <div><label data-info="bl_thickness_factor">Grenzschichtdicke (Faktor mal Sehnenlaenge)</label><input type="number" id="gci-bl_thickness_factor" value="0.05" step="any"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="span_layers">Spannweiten-Schichten</label><input type="number" id="gci-span_layers" value="24" step="1"></div>
-          <div><label data-info="n_profile_points">Profilpunkte</label><input type="number" id="gci-n_profile_points" value="60" step="1"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="max_iterations">Max. Iterationen</label><input type="number" id="gci-max_iterations" value="500" step="1"></div>
-          <div><label data-info="mpi_ranks">MPI-Prozesse</label><input type="number" id="gci-mpi_ranks" value="1" step="1"></div>
-        </div>
-        <div class="row">
-          <div>
-            <label data-info="time_discretization">Zeitintegration</label>
-            <select id="gci-time_discretization">
-              <option value="EULER_IMPLICIT">Implizit (schneller pro Iteration, mehr Speicher)</option>
-              <option value="RUNGE-KUTTA_EXPLICIT">Explizit (weniger Speicher, mehr Iterationen noetig)</option>
-            </select>
-          </div>
-          <div><label data-info="residual_threshold">Konvergenzziel (Restfehler)</label><input type="number" id="gci-residual_threshold" value="-8" step="any"></div>
-        </div>
-        <div class="row">
-          <div>
-            <label data-info="material">Material (optional, fuer Gewichtskraft)</label>
-            <select id="gci-material">
-              <option value="">(kein Material, keine Gewichtskraft)</option>
-              <option value="aluminium">Aluminium</option>
-              <option value="stahl">Stahl</option>
-              <option value="titan">Titan</option>
-              <option value="cfk">CFK (Kohlefaser-Verbund)</option>
-              <option value="gfk">GFK (Glasfaser-Verbund)</option>
-              <option value="abs">ABS (Kunststoff)</option>
-              <option value="pla">PLA (Kunststoff, 3D-Druck)</option>
-              <option value="balsaholz">Balsaholz</option>
-            </select>
-          </div>
-          <div></div>
-        </div>
-        <p class="hint">Dieselben erweiterten Einstellungen wie bei einer Einzelrechnung, gelten hier fuer alle drei Netzaufloesungen gleich.</p>
-      </details>
-
-      <button type="submit" id="gci-submit-btn">GCI-Studie starten</button>
-    </form>
-    <div class="status" id="gci-status"></div>
-    <div class="error" id="gci-error" hidden></div>
-  </div>
-
-  <div class="panel">
-    <h2 style="margin:0 0 6px;font-size:1.1rem;">Kombinierter Bericht</h2>
-    <p class="hint" style="margin:6px 0 10px;">
-      Polare und GCI-Netzstudie derselben Geometrie in einem PDF. Keine
-      automatische Zuordnung, bewusst eine explizite Auswahl (siehe
-      docs/DECISIONS.md): pruefen, ob beide Studien tatsaechlich
-      zusammengehoeren, bevor der Bericht als zusammenhaengende Aussage
-      verwendet wird.
-    </p>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-      <select id="combined-report-polar-select" style="flex:1;min-width:200px;"></select>
-      <select id="combined-report-gci-select" style="flex:1;min-width:200px;"></select>
-      <button type="button" class="job-action-btn" id="combined-report-btn">Bericht (PDF)</button>
+<div id="app-shell">
+  <div id="topbar">
+    <div class="topbar-title">FOSAS <span class="topbar-sub">virtueller Windkanal</span></div>
+    <div class="topbar-actions">
+      <button type="button" class="topbar-btn" id="topbar-new-btn">Neue Berechnung</button>
+      <button type="button" class="topbar-btn" id="topbar-archive-btn">Archiv</button>
+      <button type="button" class="topbar-btn" id="topbar-report-btn">Bericht</button>
     </div>
   </div>
 
-  <div class="panel">
+  <div id="left-panel">
     <form id="case-form">
       <label class="first" data-info="step_file">STEP-Datei</label>
       <input type="file" id="step_file" accept=".step,.stp" required>
 
-      <div class="row">
-        <div>
-          <label data-info="velocity">Anstroemgeschwindigkeit (m/s)</label>
-          <input type="number" id="velocity" value="30" step="any" required>
-        </div>
-        <div>
-          <label data-info="aoa_deg">Anstellwinkel (Grad)</label>
-          <input type="number" id="aoa_deg" value="5" step="any" required>
-        </div>
-      </div>
-      <div class="row">
-        <div>
-          <label data-info="sideslip_deg">Schiebewinkel (Grad, Seitenwind)</label>
-          <input type="number" id="sideslip_deg" value="0" step="any">
-        </div>
-        <div></div>
-      </div>
+      <label data-info="velocity">Anstroemgeschwindigkeit (m/s)</label>
+      <input type="number" id="velocity" value="30" step="any" required>
 
-      <details>
+      <label data-info="aoa_input">Anstellwinkel (Grad)</label>
+      <input type="text" id="aoa_input" value="5" required>
+      <p class="hint">Ein Wert ("5") fuer eine einzelne Rechnung, mehrere
+        kommagetrennt ("0, 5, 10, 15") fuer eine Polare ueber mehrere
+        Winkel.</p>
+
+      <label data-info="sideslip_deg">Schiebewinkel (Grad, Seitenwind)</label>
+      <input type="number" id="sideslip_deg" value="0" step="any">
+
+      <details open>
         <summary>Erweiterte Einstellungen</summary>
-        <div class="row">
-          <div><label data-info="density">Luftdichte (kg/m^3)</label><input type="number" id="density" value="1.225" step="any"></div>
-          <div><label data-info="dynamic_viscosity">Dynamische Viskositaet (Pa*s)</label><input type="number" id="dynamic_viscosity" value="0.0000181" step="any"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="temperature">Temperatur (K)</label><input type="number" id="temperature" value="288.15" step="any"></div>
-          <div><label data-info="target_y_plus">Ziel y+</label><input type="number" id="target_y_plus" value="1.0" step="any"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="growth_ratio">Wachstumsrate Grenzschicht</label><input type="number" id="growth_ratio" value="1.2" step="any"></div>
-          <div><label data-info="bl_thickness_factor">Grenzschichtdicke (Faktor mal Sehnenlaenge)</label><input type="number" id="bl_thickness_factor" value="0.05" step="any"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="span_layers">Spannweiten-Schichten</label><input type="number" id="span_layers" value="24" step="1"></div>
-          <div><label data-info="n_profile_points">Profilpunkte</label><input type="number" id="n_profile_points" value="60" step="1"></div>
-        </div>
-        <div class="row">
-          <div><label data-info="max_iterations">Max. Iterationen</label><input type="number" id="max_iterations" value="500" step="1"></div>
-          <div><label data-info="mpi_ranks">MPI-Prozesse</label><input type="number" id="mpi_ranks" value="1" step="1"></div>
-        </div>
-        <div class="row">
-          <div>
-            <label data-info="time_discretization">Zeitintegration</label>
-            <select id="time_discretization">
-              <option value="EULER_IMPLICIT">Implizit (schneller pro Iteration, mehr Speicher)</option>
-              <option value="RUNGE-KUTTA_EXPLICIT">Explizit (weniger Speicher, mehr Iterationen noetig)</option>
-            </select>
-          </div>
-          <div><label data-info="residual_threshold">Konvergenzziel (Restfehler)</label><input type="number" id="residual_threshold" value="-8" step="any"></div>
-        </div>
-        <div class="row">
-          <div>
-            <label data-info="material">Material (optional, fuer Gewichtskraft)</label>
-            <select id="material">
-              <option value="">(kein Material, keine Gewichtskraft)</option>
-              <option value="aluminium">Aluminium</option>
-              <option value="stahl">Stahl</option>
-              <option value="titan">Titan</option>
-              <option value="cfk">CFK (Kohlefaser-Verbund)</option>
-              <option value="gfk">GFK (Glasfaser-Verbund)</option>
-              <option value="abs">ABS (Kunststoff)</option>
-              <option value="pla">PLA (Kunststoff, 3D-Druck)</option>
-              <option value="balsaholz">Balsaholz</option>
-            </select>
-          </div>
-          <div></div>
-        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;">
+          <input type="checkbox" id="gci_check" checked style="width:auto;margin:0;">
+          <span data-info="gci_check" style="color:var(--text);font-size:0.9rem;">Netzqualitaet pruefen (empfohlen)</span>
+        </label>
+        <p class="hint" id="gci-disabled-hint" hidden>Netzqualitaetspruefung derzeit nur fuer einen einzelnen Anstellwinkel verfuegbar.</p>
+        <label data-info="refinement_ratio">Verfeinerungsverhaeltnis (fuer Netzqualitaetspruefung)</label>
+        <input type="number" id="refinement_ratio" value="1.5" step="any">
+
+        <label data-info="density">Luftdichte (kg/m^3)</label>
+        <input type="number" id="density" value="1.225" step="any">
+        <label data-info="dynamic_viscosity">Dynamische Viskositaet (Pa*s)</label>
+        <input type="number" id="dynamic_viscosity" value="0.0000181" step="any">
+        <label data-info="temperature">Temperatur (K)</label>
+        <input type="number" id="temperature" value="288.15" step="any">
+        <label data-info="target_y_plus">Ziel y+</label>
+        <input type="number" id="target_y_plus" value="1.0" step="any">
+        <label data-info="growth_ratio">Wachstumsrate Grenzschicht</label>
+        <input type="number" id="growth_ratio" value="1.2" step="any">
+        <label data-info="bl_thickness_factor">Grenzschichtdicke (Faktor mal Sehnenlaenge)</label>
+        <input type="number" id="bl_thickness_factor" value="0.05" step="any">
+        <label data-info="span_layers">Spannweiten-Schichten</label>
+        <input type="number" id="span_layers" value="24" step="1">
+        <label data-info="n_profile_points">Profilpunkte</label>
+        <input type="number" id="n_profile_points" value="60" step="1">
+        <label data-info="max_iterations">Max. Iterationen</label>
+        <input type="number" id="max_iterations" value="500" step="1">
+        <label data-info="mpi_ranks">MPI-Prozesse</label>
+        <input type="number" id="mpi_ranks" value="1" step="1">
+        <label data-info="time_discretization">Zeitintegration</label>
+        <select id="time_discretization">
+          <option value="EULER_IMPLICIT">Implizit (schneller pro Iteration, mehr Speicher)</option>
+          <option value="RUNGE-KUTTA_EXPLICIT">Explizit (weniger Speicher, mehr Iterationen noetig)</option>
+        </select>
+        <label data-info="residual_threshold">Konvergenzziel (Restfehler)</label>
+        <input type="number" id="residual_threshold" value="-8" step="any">
+        <label data-info="material">Material (optional, fuer Gewichtskraft)</label>
+        <select id="material">
+          <option value="">(kein Material, keine Gewichtskraft)</option>
+          <option value="aluminium">Aluminium</option>
+          <option value="stahl">Stahl</option>
+          <option value="titan">Titan</option>
+          <option value="cfk">CFK (Kohlefaser-Verbund)</option>
+          <option value="gfk">GFK (Glasfaser-Verbund)</option>
+          <option value="abs">ABS (Kunststoff)</option>
+          <option value="pla">PLA (Kunststoff, 3D-Druck)</option>
+          <option value="balsaholz">Balsaholz</option>
+        </select>
         <p class="hint">Voreinstellungen passen fuer einen kleinen Testfall. Bei eigenen Geometrien Sehnenlaenge/Reynolds-Zahl im Kopf behalten, siehe docs/RISKS.md R10 zur bekannten Konvergenzfrage.</p>
       </details>
 
-      <button type="submit" id="submit-btn">Rechnung starten</button>
+      <button type="submit" id="submit-btn">Berechnen</button>
     </form>
     <div class="status" id="status"></div>
-    <div id="progress-panel" hidden>
-      <ul class="steps" id="steps-list">
-        <li id="step-geometry"><span class="dot"></span><span>Geometrie pruefen</span></li>
-        <li id="step-meshing"><span class="dot"></span><span>Vernetzen</span></li>
-        <li id="step-solving"><span class="dot"></span><span>Stroemung berechnen</span></li>
-      </ul>
-      <div class="progress-track">
-        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
-      </div>
-      <div class="progress-meta">
-        <span id="progress-label"></span>
-        <span id="progress-eta"></span>
-      </div>
-    </div>
     <div class="error" id="error" hidden></div>
   </div>
 
-  <div class="panel" id="result-panel" hidden>
+  <div id="center-panel">
+    <div class="center-tabs">
+      <button type="button" class="center-tab-btn active" data-tab="3d">3D-Ansicht</button>
+      <button type="button" class="center-tab-btn" data-tab="fbd">Freikoerperbild</button>
+      <button type="button" class="center-tab-btn" data-tab="cp">cp-Verteilung</button>
+    </div>
+
+    <div class="center-tab-content" id="center-tab-3d">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <h3 style="font-size:0.95rem;margin:0;" data-info="viewer3d">3D-Ansicht (cp auf der Oberflaeche)</h3>
+        <a id="fullscreen-link" href="#" target="_blank" rel="noopener" class="archive-toggle-btn" style="text-decoration:none;">Vollbild &#8599;</a>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0;font-size:0.85rem;color:var(--muted);">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+          <input type="checkbox" id="layer-toggle-coord" checked>
+          <span data-info="viewer_layer_coord">Ebene: Koerper-/Windachsen, Winkel α</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+          <input type="checkbox" id="layer-toggle-forces" checked>
+          <span data-info="viewer_layer_forces">Ebene: Kraftpfeile (L, D, R)</span>
+        </label>
+      </div>
+      <div id="viewer3d-wrap">
+        <div id="viewer3d"></div>
+        <p class="viewer3d-note" id="viewer3d-note" hidden></p>
+      </div>
+      <div class="colorbar-row" id="colorbar-row" hidden>
+        <span id="cp-min-label"></span>
+        <div class="colorbar"></div>
+        <span id="cp-max-label"></span>
+      </div>
+      <p class="hint">Ziehen zum Drehen, Scrollen zum Zoomen. Jeder Punkt ist ein echter Netzknoten der Oberflaeche, keine geglaettete Flaeche.</p>
+      <p class="hint" id="viewer3d-overlay-legend" style="margin-top:2px;"></p>
+    </div>
+
+    <div class="center-tab-content" id="center-tab-fbd" hidden>
+      <h3 style="font-size:0.95rem;margin:0 0 6px;" data-info="free_body_diagram">Freikoerperbild (2D-Schnittansicht)</h3>
+      <svg id="fbd-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
+      <p class="hint" id="fbd-legend" style="margin-top:2px;"></p>
+    </div>
+
+    <div class="center-tab-content" id="center-tab-cp" hidden>
+      <h3 style="font-size:0.95rem;margin:0 0 6px;" data-info="cp_chart">cp-Verteilung (Sehnenschnitt)</h3>
+      <svg id="cp-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend">
+        <span><span class="dot" style="background:#4f8cff"></span>Oberseite</span>
+        <span><span class="dot" style="background:#e0a72f"></span>Unterseite</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="result-panel" hidden>
     <div style="display:flex;align-items:center;justify-content:space-between;">
       <h2 style="margin:0;font-size:1.1rem;">Ergebnis</h2>
       <button type="button" class="job-action-btn" id="job-report-btn">Bericht (PDF)</button>
@@ -608,44 +479,60 @@
         <tr><td>Pkw (moderner Durchschnitt)</td><td>0,25-0,35</td><td>Wikipedia "Automobile drag coefficient"</td></tr>
       </table>
     </details>
+  </div>
 
-    <div style="display:flex;align-items:center;justify-content:space-between;">
-      <h3 style="font-size:0.95rem;margin:0;" data-info="viewer3d">3D-Ansicht (cp auf der Oberflaeche)</h3>
-      <a id="fullscreen-link" href="#" target="_blank" rel="noopener" class="archive-toggle-btn" style="text-decoration:none;">Vollbild &#8599;</a>
+  <div id="console-wrap">
+    <div id="console-bar">
+      <span id="console-toggle-icon">&#9662;</span>
+      <span>Konsole</span>
+      <span id="console-summary"></span>
     </div>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0;font-size:0.85rem;color:var(--muted);">
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-        <input type="checkbox" id="layer-toggle-coord" checked>
-        <span data-info="viewer_layer_coord">Ebene: Koerper-/Windachsen, Winkel α</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-        <input type="checkbox" id="layer-toggle-forces" checked>
-        <span data-info="viewer_layer_forces">Ebene: Kraftpfeile (L, D, R)</span>
-      </label>
-    </div>
-    <div id="viewer3d-wrap">
-      <div id="viewer3d"></div>
-      <p class="viewer3d-note" id="viewer3d-note" hidden></p>
-    </div>
-    <div class="colorbar-row" id="colorbar-row" hidden>
-      <span id="cp-min-label"></span>
-      <div class="colorbar"></div>
-      <span id="cp-max-label"></span>
-    </div>
-    <p class="hint">Ziehen zum Drehen, Scrollen zum Zoomen. Jeder Punkt ist ein echter Netzknoten der Oberflaeche, keine geglaettete Flaeche.</p>
-    <p class="hint" id="viewer3d-overlay-legend" style="margin-top:2px;"></p>
-
-    <h3 style="font-size:0.95rem;" data-info="free_body_diagram">Freikoerperbild (2D-Schnittansicht)</h3>
-    <svg id="fbd-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
-    <p class="hint" id="fbd-legend" style="margin-top:2px;"></p>
-
-    <h3 style="font-size:0.95rem;" data-info="cp_chart">cp-Verteilung (Sehnenschnitt)</h3>
-    <svg id="cp-chart" viewBox="0 0 600 320" preserveAspectRatio="xMidYMid meet"></svg>
-    <div class="legend">
-      <span><span class="dot" style="background:#4f8cff"></span>Oberseite</span>
-      <span><span class="dot" style="background:#e0a72f"></span>Unterseite</span>
+    <div id="console-panel" hidden>
+      <ul class="steps" id="steps-list">
+        <li id="step-geometry"><span class="dot"></span><span>Geometrie pruefen</span></li>
+        <li id="step-meshing"><span class="dot"></span><span>Vernetzen</span></li>
+        <li id="step-solving"><span class="dot"></span><span>Stroemung berechnen</span></li>
+      </ul>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-meta">
+        <span id="progress-label"></span>
+        <span id="progress-eta"></span>
+      </div>
     </div>
   </div>
+</div>
+
+<div id="archive-overlay" hidden>
+  <div id="archive-panel">
+    <div class="archive-header">
+      <h2>Archiv</h2>
+      <button type="button" class="archive-toggle-btn" id="archive-toggle-btn">Archivierte anzeigen</button>
+      <button type="button" id="archive-close-btn">&times;</button>
+    </div>
+    <p class="hint" style="margin:0 0 10px;">
+      Alle Berechnungen auf diesem Server, fuer jeden mit dem Zugangslink
+      sichtbar (kein Login pro Person, siehe docs/ARCHITECTURE.md).
+      Erfolgreiche werden nach 5h, fehlgeschlagene nach 1,5h automatisch
+      ins Archiv verschoben, fehlgeschlagene nach 24h endgueltig geloescht.
+    </p>
+    <div id="archive-list"></div>
+  </div>
+</div>
+
+<div id="report-popover" hidden>
+  <h3>Kombinierter Bericht</h3>
+  <p class="hint" style="margin:0 0 10px;">
+    Polare und GCI-Netzstudie derselben Geometrie in einem PDF. Keine
+    automatische Zuordnung, bewusst eine explizite Auswahl (siehe
+    docs/DECISIONS.md): pruefen, ob beide Studien tatsaechlich
+    zusammengehoeren, bevor der Bericht als zusammenhaengende Aussage
+    verwendet wird.
+  </p>
+  <select id="combined-report-polar-select" style="margin-bottom:10px;"></select>
+  <select id="combined-report-gci-select" style="margin-bottom:10px;"></select>
+  <button type="button" id="combined-report-btn">Bericht erstellen</button>
 </div>
 
 <script src="app.js"></script>

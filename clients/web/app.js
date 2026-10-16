@@ -43,7 +43,7 @@ const INFO_TEXT = {
     Autobahntempo. 86,9 m/s = 313 km/h, typische kleine Flugzeug-
     Reisegeschwindigkeit.</p>
   `,
-  aoa_deg: `
+  aoa_input: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Anstellwinkel (Angle of Attack)</h4>
     <p>Der Winkel zwischen der Sehnenlinie des Profils (gerade Linie von
@@ -53,6 +53,24 @@ const INFO_TEXT = {
     ab dem der Auftrieb einbricht. FOSAS erkennt einen Stall nicht
     automatisch, ein stationaerer Loeser wie dieser kann in der Naehe
     eines Stalls zusaetzlich schlechter konvergieren.</p>
+    <p>Ein einzelner Wert ("5") startet eine einzelne Berechnung; mehrere
+    kommagetrennte Werte ("0, 5, 10, 15") starten eine Polare - fuer
+    jeden Wert einen eigenstaendigen, unabhaengigen Auftrag (siehe
+    docs/DECISIONS.md ADR-0017), danach gemeinsam als cl/cd-ueber-
+    Anstellwinkel-Kurve im Archiv dargestellt.</p>
+  `,
+  gci_check: `
+    <span class="tag gesichert">Gesichert</span>
+    <h4>Netzqualitaet pruefen (GCI)</h4>
+    <p>Rechnet zusaetzlich auf zwei groeberen Netzaufloesungen, um zu
+    pruefen, ob die eigentliche (feine) Aufloesung tatsaechlich fein
+    genug ist (Grid Convergence Index, GCI) - eine Verifikation des
+    Werkzeugs selbst, keine zusaetzliche aerodynamische Information.
+    Ohne diese Pruefung bleibt unklar, ob ein Ergebnis am Netz haengt
+    oder an der Physik liegt.</p>
+    <p>Dauert dafuer etwa dreimal so lange wie eine einzelne Berechnung.
+    Nur fuer einen einzelnen Anstellwinkel verfuegbar (nicht kombinierbar
+    mit einer Winkel-Liste). Ergebnis und Diagramm erscheinen im Archiv.</p>
   `,
   sideslip_deg: `
     <span class="tag gesichert">Gesichert</span>
@@ -65,14 +83,6 @@ const INFO_TEXT = {
     Anstellwinkel geneigt), kein Seitenanteil.</p>
     <p>Erzeugt eine Seitenkraft S (siehe Kraeftesystem unten), die bei
     0 Grad Schiebewinkel immer null ist.</p>
-  `,
-  aoa_values: `
-    <span class="tag gesichert">Gesichert</span>
-    <h4>Anstellwinkel-Liste</h4>
-    <p>Mehrere Anstellwinkel durch Komma getrennt, z. B. "0, 5, 10, 15".
-    Fuer jeden Wert wird ein eigenstaendiger, unabhaengiger Auftrag
-    gestartet (siehe docs/DECISIONS.md ADR-0017); die Ergebnisse werden
-    danach gemeinsam als Polare (cl/cd ueber Anstellwinkel) dargestellt.</p>
   `,
   refinement_ratio: `
     <span class="tag annahme">Annahme (Richtwert)</span>
@@ -647,21 +657,11 @@ function authHeaders() {
   return { "Authorization": "Bearer " + TOKEN };
 }
 
-function paramFields() {
-  return [
-    "velocity", "aoa_deg", "sideslip_deg", "density", "dynamic_viscosity", "temperature",
-    "target_y_plus", "growth_ratio", "bl_thickness_factor", "span_layers",
-    "n_profile_points", "max_iterations", "mpi_ranks", "time_discretization",
-    "residual_threshold", "material",
-  ];
-}
-
-// The "Erweiterte Einstellungen" field set shared by all three forms
-// (single job, polar study, GCI study) - everything except the fields
-// each form handles on its own (velocity, aoa_deg/aoa_values,
-// refinement_ratio). Used with an id prefix ("polar-"/"gci-") on the
-// two new study forms to avoid id collisions with the original,
-// unprefixed #case-form fields.
+// The "Erweiterte Einstellungen" field set, shared by all three request
+// kinds (single job, polar study, GCI study) FOSAS can send - one
+// unified form now covers all three (see docs/ARCHITECTURE.md
+// "virtueller Windkanal, nicht drei Tools"), so there is only ever one
+// copy of these fields, no id-prefix juggling needed any more.
 function advancedParamFieldNames() {
   return [
     "density", "dynamic_viscosity", "temperature", "target_y_plus",
@@ -671,9 +671,9 @@ function advancedParamFieldNames() {
   ];
 }
 
-function appendAdvancedParams(form, idPrefix) {
+function appendAdvancedParams(form) {
   for (const name of advancedParamFieldNames()) {
-    form.append(name, document.getElementById(idPrefix + name).value);
+    form.append(name, document.getElementById(name).value);
   }
 }
 
@@ -1427,13 +1427,14 @@ function setStep(id, state) {
 }
 
 function renderProgress(job) {
-  const panel = document.getElementById("progress-panel");
+  const panel = document.getElementById("console-panel");
   const fill = document.getElementById("progress-fill");
   const label = document.getElementById("progress-label");
   const etaEl = document.getElementById("progress-eta");
 
   if (job.status === "done") {
     panel.hidden = true;
+    document.getElementById("console-toggle-icon").innerHTML = "&#9656;";
     return;
   }
 
@@ -1528,6 +1529,7 @@ async function pollJob(jobId) {
   // quietly stops instead of continuing to render.
   const myToken = ++activePollToken;
   const statusEl = document.getElementById("status");
+  expandConsole(); // the console is where the step-by-step progress lives now, see the shell redesign
   while (true) {
     const res = await fetch("/jobs/" + jobId, { headers: authHeaders() });
     if (myToken !== activePollToken) return;
@@ -1578,6 +1580,7 @@ function statusLabel(job) {
 }
 
 function selectJob(jobId) {
+  closeArchive();
   history.replaceState(null, "", "?job=" + jobId);
   document.getElementById("result-panel").hidden = true;
   // Without this, switching away from a finished job (which has a live
@@ -1603,12 +1606,12 @@ async function resumeJob(jobId) {
 
 async function archiveJob(jobId) {
   await fetch("/jobs/" + jobId + "/archive", { method: "POST", headers: authHeaders() });
-  loadJobsList();
+  loadArchiveList();
 }
 
 async function unarchiveJob(jobId) {
   await fetch("/jobs/" + jobId + "/unarchive", { method: "POST", headers: authHeaders() });
-  loadJobsList();
+  loadArchiveList();
 }
 
 async function deleteJobPrompt(jobId, filename) {
@@ -1616,103 +1619,90 @@ async function deleteJobPrompt(jobId, filename) {
     return;
   }
   await fetch("/jobs/" + jobId, { method: "DELETE", headers: authHeaders() });
-  loadJobsList();
+  loadArchiveList();
 }
 
 document.getElementById("archive-toggle-btn").addEventListener("click", () => {
   showingArchived = !showingArchived;
   document.getElementById("archive-toggle-btn").className = "archive-toggle-btn" + (showingArchived ? " active" : "");
-  document.getElementById("jobs-title").textContent = showingArchived ? "Archiv" : "Auftraege";
-  loadJobsList();
+  document.getElementById("archive-toggle-btn").textContent = showingArchived ? "Aktuelle anzeigen" : "Archivierte anzeigen";
+  loadArchiveList();
 });
 
-async function loadJobsList() {
-  const listEl = document.getElementById("jobs-list");
-  let jobs;
-  try {
-    const url = showingArchived ? "/jobs?archived=true" : "/jobs";
-    const res = await fetch(url, { headers: authHeaders() });
-    if (res.status === 401) { reloadToRefreshToken(); return; }
-    if (!res.ok) return; // transient hiccup: leave the previously shown list as-is
-    jobs = await res.json();
-  } catch (err) {
-    return; // offline for a moment: same, do not clobber the visible list
-  }
-
-  if (jobs.length === 0) {
-    listEl.innerHTML = "";
-    const empty = document.createElement("p");
-    empty.className = "jobs-empty";
-    empty.textContent = showingArchived ? "Archiv ist leer." : "Noch keine Auftraege.";
-    listEl.appendChild(empty);
-    return;
-  }
-
-  jobs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  listEl.innerHTML = "";
-  for (const job of jobs) {
-    const row = document.createElement("div");
-    row.className = "job-row";
-
-    const dot = document.createElement("span");
-    dot.className = "job-status-dot " + job.status;
-
-    const main = document.createElement("div");
-    main.className = "job-main";
-    const fileEl = document.createElement("div");
-    fileEl.className = "job-file";
-    fileEl.textContent = job.step_filename; // textContent, not innerHTML: this is a user-supplied filename
-    const metaEl = document.createElement("div");
-    metaEl.className = "job-meta";
-    metaEl.textContent = statusLabel(job) + " · " + formatRelativeTime(job.created_at);
-    main.appendChild(fileEl);
-    main.appendChild(metaEl);
-
-    const actions = document.createElement("div");
-    actions.className = "job-actions";
-    const canModify = job.status === "done" || job.status === "failed";
-    if (canModify) {
-      if (job.status === "failed") {
-        const resumeBtn = document.createElement("button");
-        resumeBtn.type = "button";
-        resumeBtn.className = "job-action-btn";
-        resumeBtn.textContent = "Fortsetzen";
-        resumeBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          resumeJob(job.id);
-        });
-        actions.appendChild(resumeBtn);
-      }
-      const toggleBtn = document.createElement("button");
-      toggleBtn.type = "button";
-      toggleBtn.className = "job-action-btn";
-      toggleBtn.textContent = showingArchived ? "Wiederherstellen" : "Archivieren";
-      toggleBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        showingArchived ? unarchiveJob(job.id) : archiveJob(job.id);
-      });
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "job-action-btn danger";
-      deleteBtn.textContent = "Loeschen";
-      deleteBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        deleteJobPrompt(job.id, job.step_filename);
-      });
-      actions.appendChild(toggleBtn);
-      actions.appendChild(deleteBtn);
-    }
-
-    row.appendChild(dot);
-    row.appendChild(main);
-    row.appendChild(actions);
-    row.addEventListener("click", () => selectJob(job.id));
-    listEl.appendChild(row);
-  }
+function openArchive() {
+  document.getElementById("archive-overlay").hidden = false;
+  loadArchiveList();
 }
 
-loadJobsList();
-setInterval(loadJobsList, 4000);
+function closeArchive() {
+  document.getElementById("archive-overlay").hidden = true;
+}
+
+document.getElementById("topbar-archive-btn").addEventListener("click", openArchive);
+document.getElementById("archive-close-btn").addEventListener("click", closeArchive);
+document.getElementById("archive-overlay").addEventListener("click", (e) => {
+  if (e.target.id === "archive-overlay") closeArchive(); // click on the dim backdrop, not the panel itself
+});
+
+function buildJobArchiveRow(job) {
+  const row = document.createElement("div");
+  row.className = "job-row";
+
+  const dot = document.createElement("span");
+  dot.className = "job-status-dot " + job.status;
+
+  const main = document.createElement("div");
+  main.className = "job-main";
+  const fileEl = document.createElement("div");
+  fileEl.className = "job-file";
+  fileEl.textContent = job.step_filename; // textContent, not innerHTML: this is a user-supplied filename
+  const metaEl = document.createElement("div");
+  metaEl.className = "job-meta";
+  metaEl.textContent = "Einzelpunkt · " + statusLabel(job) + " · " + formatRelativeTime(job.created_at);
+  main.appendChild(fileEl);
+  main.appendChild(metaEl);
+
+  const actions = document.createElement("div");
+  actions.className = "job-actions";
+  const canModify = job.status === "done" || job.status === "failed";
+  if (canModify) {
+    if (job.status === "failed") {
+      const resumeBtn = document.createElement("button");
+      resumeBtn.type = "button";
+      resumeBtn.className = "job-action-btn";
+      resumeBtn.textContent = "Fortsetzen";
+      resumeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        resumeJob(job.id);
+      });
+      actions.appendChild(resumeBtn);
+    }
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "job-action-btn";
+    toggleBtn.textContent = showingArchived ? "Wiederherstellen" : "Archivieren";
+    toggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showingArchived ? unarchiveJob(job.id) : archiveJob(job.id);
+    });
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "job-action-btn danger";
+    deleteBtn.textContent = "Loeschen";
+    deleteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteJobPrompt(job.id, job.step_filename);
+    });
+    actions.appendChild(toggleBtn);
+    actions.appendChild(deleteBtn);
+  }
+
+  row.appendChild(dot);
+  row.appendChild(main);
+  row.appendChild(actions);
+  row.addEventListener("click", () => selectJob(job.id)); // selectJob itself closes the archive overlay
+  return row;
+}
 
 function statusDotClass(status) {
   // Same four-value status space as a Job (see jobs.JobStatus), reused
@@ -1771,72 +1761,54 @@ function populateStudySelect(selectId, studies) {
   }
 }
 
-async function loadPolarStudiesList() {
-  const listEl = document.getElementById("polar-studies-list");
-  let studies;
-  try {
-    const res = await fetch("/polar-studies", { headers: authHeaders() });
-    if (res.status === 401) { reloadToRefreshToken(); return; }
-    if (!res.ok) return;
-    studies = await res.json();
-  } catch (err) {
-    return;
-  }
-
-  populateStudySelect("combined-report-polar-select", studies);
-
-  if (studies.length === 0) {
-    listEl.innerHTML = "";
-    const empty = document.createElement("p");
-    empty.className = "jobs-empty";
-    empty.textContent = "Noch keine Polarstudien.";
-    listEl.appendChild(empty);
-    return;
-  }
-
-  studies.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  listEl.innerHTML = "";
-  for (const study of studies) {
-    const expanded = expandedStudies.has(study.id);
-    const row = formatStudyRow(study.step_filename, study.status, formatStudyDetail(study, "points"), () => {
-      expandedStudies.has(study.id) ? expandedStudies.delete(study.id) : expandedStudies.add(study.id);
-      loadPolarStudiesList();
-    });
-    listEl.appendChild(row);
-    if (expanded) {
-      const anyPlotted = study.points.some((p) => p.cl != null && p.cd != null);
-      if (anyPlotted) {
-        const { wrap, svgCl, svgCd } = buildDualChartPair();
-        listEl.appendChild(wrap);
-        drawXYChart(svgCl, study.points, "aoa_deg", "cl", "Anstellwinkel (Grad)", "cl", "#4f8cff");
-        drawXYChart(svgCd, study.points, "aoa_deg", "cd", "Anstellwinkel (Grad)", "cd", "#e0a72f");
-      }
-
-      const table = document.createElement("table");
-      table.className = "study-detail-table";
-      const header = table.insertRow();
-      ["AoA (Grad)", "Status", "cl", "cd"].forEach((text) => {
-        const th = document.createElement("th");
-        th.textContent = text;
-        header.appendChild(th);
-      });
-      for (const point of study.points) {
-        const tr = table.insertRow();
-        [point.aoa_deg, statusLabelText(point.status), point.cl, point.cd].forEach((value) => {
-          const td = tr.insertCell();
-          td.textContent = value === null || value === undefined ? "-" : value;
-        });
-      }
-      listEl.appendChild(table);
-
-      const reportBtn = document.createElement("button");
-      reportBtn.type = "button";
-      reportBtn.className = "job-action-btn";
-      reportBtn.textContent = "Bericht (PDF)";
-      reportBtn.addEventListener("click", () => downloadPolarReport(study.id, study.step_filename));
-      listEl.appendChild(reportBtn);
+// Builds the archive rows for one polar study (the row itself, plus,
+// if expanded, the cl/cd-over-AoA charts, the per-point table, and the
+// report button) - appended directly into the shared #archive-list by
+// loadArchiveList below, same rendering as before the UI unification,
+// just no longer its own permanently-visible page panel.
+function buildPolarArchiveRows(study) {
+  const nodes = [];
+  const key = "polar:" + study.id;
+  const expanded = expandedArchiveEntries.has(key);
+  const row = formatStudyRow(study.step_filename, study.status, "Polare · " + formatStudyDetail(study, "points"), () => {
+    expandedArchiveEntries.has(key) ? expandedArchiveEntries.delete(key) : expandedArchiveEntries.add(key);
+    loadArchiveList();
+  });
+  nodes.push(row);
+  if (expanded) {
+    const anyPlotted = study.points.some((p) => p.cl != null && p.cd != null);
+    if (anyPlotted) {
+      const { wrap, svgCl, svgCd } = buildDualChartPair();
+      nodes.push(wrap);
+      drawXYChart(svgCl, study.points, "aoa_deg", "cl", "Anstellwinkel (Grad)", "cl", "#4f8cff");
+      drawXYChart(svgCd, study.points, "aoa_deg", "cd", "Anstellwinkel (Grad)", "cd", "#e0a72f");
     }
+
+    const table = document.createElement("table");
+    table.className = "study-detail-table";
+    const header = table.insertRow();
+    ["AoA (Grad)", "Status", "cl", "cd"].forEach((text) => {
+      const th = document.createElement("th");
+      th.textContent = text;
+      header.appendChild(th);
+    });
+    for (const point of study.points) {
+      const tr = table.insertRow();
+      [point.aoa_deg, statusLabelText(point.status), point.cl, point.cd].forEach((value) => {
+        const td = tr.insertCell();
+        td.textContent = value === null || value === undefined ? "-" : value;
+      });
+    }
+    nodes.push(table);
+
+    const reportBtn = document.createElement("button");
+    reportBtn.type = "button";
+    reportBtn.className = "job-action-btn";
+    reportBtn.textContent = "Bericht (PDF)";
+    reportBtn.addEventListener("click", () => downloadPolarReport(study.id, study.step_filename));
+    nodes.push(reportBtn);
   }
+  return nodes;
 }
 
 async function downloadPolarReport(studyId, stepFilename) {
@@ -1861,83 +1833,64 @@ async function downloadPolarReport(studyId, stepFilename) {
   }
 }
 
-async function loadGciStudiesList() {
-  const listEl = document.getElementById("gci-studies-list");
-  let studies;
-  try {
-    const res = await fetch("/gci-studies", { headers: authHeaders() });
-    if (res.status === 401) { reloadToRefreshToken(); return; }
-    if (!res.ok) return;
-    studies = await res.json();
-  } catch (err) {
-    return;
-  }
-
-  populateStudySelect("combined-report-gci-select", studies);
-
-  if (studies.length === 0) {
-    listEl.innerHTML = "";
-    const empty = document.createElement("p");
-    empty.className = "jobs-empty";
-    empty.textContent = "Noch keine GCI-Netzstudien.";
-    listEl.appendChild(empty);
-    return;
-  }
-
-  studies.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  listEl.innerHTML = "";
-  for (const study of studies) {
-    const expanded = expandedStudies.has(study.id);
-    const row = formatStudyRow(study.step_filename, study.status, formatStudyDetail(study, "levels"), () => {
-      expandedStudies.has(study.id) ? expandedStudies.delete(study.id) : expandedStudies.add(study.id);
-      loadGciStudiesList();
-    });
-    listEl.appendChild(row);
-    if (expanded) {
-      const anyPlotted = study.levels.some((l) => l.element_count != null && l.cl != null);
-      if (anyPlotted) {
-        const { wrap, svgCl, svgCd } = buildDualChartPair();
-        listEl.appendChild(wrap);
-        drawXYChart(svgCl, study.levels, "element_count", "cl", "Elementanzahl", "cl", "#4f8cff");
-        drawXYChart(svgCd, study.levels, "element_count", "cd", "Elementanzahl", "cd", "#e0a72f");
-      }
-
-      const table = document.createElement("table");
-      table.className = "study-detail-table";
-      const header = table.insertRow();
-      ["Aufloesung", "Status", "Elemente", "cl", "cd"].forEach((text) => {
-        const th = document.createElement("th");
-        th.textContent = text;
-        header.appendChild(th);
-      });
-      for (const level of study.levels) {
-        const tr = table.insertRow();
-        [level.resolution, statusLabelText(level.status), level.element_count, level.cl, level.cd].forEach((value) => {
-          const td = tr.insertCell();
-          td.textContent = value === null || value === undefined ? "-" : value;
-        });
-      }
-      listEl.appendChild(table);
-      if (study.result) {
-        const resultEl = document.createElement("p");
-        resultEl.className = "hint";
-        resultEl.textContent = "cl: " + study.result.cl.message + " / cd: " + study.result.cd.message;
-        listEl.appendChild(resultEl);
-      } else if (study.result_error) {
-        const errEl = document.createElement("p");
-        errEl.className = "hint";
-        errEl.textContent = "GCI konnte nicht berechnet werden: " + study.result_error;
-        listEl.appendChild(errEl);
-      }
-
-      const reportBtn = document.createElement("button");
-      reportBtn.type = "button";
-      reportBtn.className = "job-action-btn";
-      reportBtn.textContent = "Bericht (PDF)";
-      reportBtn.addEventListener("click", () => downloadGciReport(study.id, study.step_filename));
-      listEl.appendChild(reportBtn);
+// Same idea as buildPolarArchiveRows above, for a GCI mesh-quality
+// study: row plus, if expanded, the cl/cd-over-element-count charts,
+// the per-resolution table, the GCI result message, and the report
+// button.
+function buildGciArchiveRows(study) {
+  const nodes = [];
+  const key = "gci:" + study.id;
+  const expanded = expandedArchiveEntries.has(key);
+  const row = formatStudyRow(study.step_filename, study.status, "Netzqualitaet geprueft · " + formatStudyDetail(study, "levels"), () => {
+    expandedArchiveEntries.has(key) ? expandedArchiveEntries.delete(key) : expandedArchiveEntries.add(key);
+    loadArchiveList();
+  });
+  nodes.push(row);
+  if (expanded) {
+    const anyPlotted = study.levels.some((l) => l.element_count != null && l.cl != null);
+    if (anyPlotted) {
+      const { wrap, svgCl, svgCd } = buildDualChartPair();
+      nodes.push(wrap);
+      drawXYChart(svgCl, study.levels, "element_count", "cl", "Elementanzahl", "cl", "#4f8cff");
+      drawXYChart(svgCd, study.levels, "element_count", "cd", "Elementanzahl", "cd", "#e0a72f");
     }
+
+    const table = document.createElement("table");
+    table.className = "study-detail-table";
+    const header = table.insertRow();
+    ["Aufloesung", "Status", "Elemente", "cl", "cd"].forEach((text) => {
+      const th = document.createElement("th");
+      th.textContent = text;
+      header.appendChild(th);
+    });
+    for (const level of study.levels) {
+      const tr = table.insertRow();
+      [level.resolution, statusLabelText(level.status), level.element_count, level.cl, level.cd].forEach((value) => {
+        const td = tr.insertCell();
+        td.textContent = value === null || value === undefined ? "-" : value;
+      });
+    }
+    nodes.push(table);
+    if (study.result) {
+      const resultEl = document.createElement("p");
+      resultEl.className = "hint";
+      resultEl.textContent = "cl: " + study.result.cl.message + " / cd: " + study.result.cd.message;
+      nodes.push(resultEl);
+    } else if (study.result_error) {
+      const errEl = document.createElement("p");
+      errEl.className = "hint";
+      errEl.textContent = "GCI konnte nicht berechnet werden: " + study.result_error;
+      nodes.push(errEl);
+    }
+
+    const reportBtn = document.createElement("button");
+    reportBtn.type = "button";
+    reportBtn.className = "job-action-btn";
+    reportBtn.textContent = "Bericht (PDF)";
+    reportBtn.addEventListener("click", () => downloadGciReport(study.id, study.step_filename));
+    nodes.push(reportBtn);
   }
+  return nodes;
 }
 
 async function downloadGciReport(studyId, stepFilename) {
@@ -1959,11 +1912,85 @@ async function downloadGciReport(studyId, stepFilename) {
   }
 }
 
-const expandedStudies = new Set();
-loadPolarStudiesList();
-loadGciStudiesList();
-setInterval(loadPolarStudiesList, 4000);
-setInterval(loadGciStudiesList, 4000);
+const expandedArchiveEntries = new Set();
+
+// Unified archive (docs/ARCHITECTURE.md "virtueller Windkanal, nicht
+// drei Tools"): one list merging all three request kinds FOSAS can run
+// (single job, polar study, GCI mesh-quality study), sorted by
+// creation time, instead of three permanently-visible separate list
+// panels. Also keeps the combined-report dropdowns (in the report
+// popover) populated, same as the three old loaders did.
+async function loadArchiveList() {
+  const listEl = document.getElementById("archive-list");
+  let jobs = [], polarStudies = [], gciStudies = [];
+  try {
+    const archivedParam = "?archived=" + showingArchived;
+    const [jobsRes, polarRes, gciRes] = await Promise.all([
+      fetch("/jobs" + archivedParam, { headers: authHeaders() }),
+      fetch("/polar-studies" + archivedParam, { headers: authHeaders() }),
+      fetch("/gci-studies" + archivedParam, { headers: authHeaders() }),
+    ]);
+    if (jobsRes.status === 401 || polarRes.status === 401 || gciRes.status === 401) {
+      reloadToRefreshToken();
+      return;
+    }
+    if (jobsRes.ok) jobs = await jobsRes.json();
+    if (polarRes.ok) polarStudies = await polarRes.json();
+    if (gciRes.ok) gciStudies = await gciRes.json();
+  } catch (err) {
+    return; // offline for a moment: leave the previously shown list as-is
+  }
+
+  // Combined-report dropdowns always reflect the non-archived lists
+  // (same as before unification: archiving a study does not remove it
+  // from being reportable, but there is no reason to default-select an
+  // archived one either - keeps today's behaviour exactly).
+  if (!showingArchived) {
+    populateStudySelect("combined-report-polar-select", polarStudies);
+    populateStudySelect("combined-report-gci-select", gciStudies);
+  }
+
+  const entries = [
+    ...jobs.map((j) => ({ kind: "job", data: j })),
+    ...polarStudies.map((s) => ({ kind: "polar", data: s })),
+    ...gciStudies.map((s) => ({ kind: "gci", data: s })),
+  ];
+
+  if (entries.length === 0) {
+    listEl.innerHTML = "";
+    const empty = document.createElement("p");
+    empty.className = "jobs-empty";
+    empty.textContent = showingArchived ? "Archiv ist leer." : "Noch keine Berechnungen.";
+    listEl.appendChild(empty);
+    return;
+  }
+
+  entries.sort((a, b) => new Date(b.data.created_at) - new Date(a.data.created_at));
+  listEl.innerHTML = "";
+  for (const entry of entries) {
+    if (entry.kind === "job") {
+      listEl.appendChild(buildJobArchiveRow(entry.data));
+    } else if (entry.kind === "polar") {
+      for (const node of buildPolarArchiveRows(entry.data)) listEl.appendChild(node);
+    } else {
+      for (const node of buildGciArchiveRows(entry.data)) listEl.appendChild(node);
+    }
+  }
+}
+
+loadArchiveList();
+setInterval(loadArchiveList, 4000);
+
+document.getElementById("topbar-report-btn").addEventListener("click", () => {
+  const pop = document.getElementById("report-popover");
+  pop.hidden = !pop.hidden;
+});
+document.addEventListener("click", (e) => {
+  const pop = document.getElementById("report-popover");
+  if (!pop.hidden && !pop.contains(e.target) && e.target.id !== "topbar-report-btn") {
+    pop.hidden = true;
+  }
+});
 
 document.getElementById("combined-report-btn").addEventListener("click", async () => {
   const polarId = document.getElementById("combined-report-polar-select").value;
@@ -1990,6 +2017,80 @@ document.getElementById("combined-report-btn").addEventListener("click", async (
   }
 });
 
+// Center-panel tabs (3D-Ansicht/Freikoerperbild/cp-Verteilung): plain
+// show/hide, same content as before unification, just one visible at
+// a time instead of stacked one after another on a long page.
+document.querySelectorAll(".center-tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".center-tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".center-tab-content").forEach((c) => { c.hidden = true; });
+    btn.classList.add("active");
+    document.getElementById("center-tab-" + btn.dataset.tab).hidden = false;
+  });
+});
+
+// Console (bottom bar): collapsed by default, same progress-panel
+// content as before unification (steps list/progress bar/ETA), just
+// relocated and foldable instead of always taking up page space.
+document.getElementById("console-bar").addEventListener("click", () => {
+  const panel = document.getElementById("console-panel");
+  panel.hidden = !panel.hidden;
+  document.getElementById("console-toggle-icon").innerHTML = panel.hidden ? "&#9656;" : "&#9662;";
+});
+
+function expandConsole() {
+  document.getElementById("console-panel").hidden = false;
+  document.getElementById("console-toggle-icon").innerHTML = "&#9662;";
+}
+
+// "Neue Berechnung" (topbar): resets the one unified form back to its
+// defaults and clears the current result, same as reloading used to
+// implicitly do before there was a persistent single-window shell.
+document.getElementById("topbar-new-btn").addEventListener("click", () => {
+  document.getElementById("case-form").reset();
+  updateGciCheckAvailability();
+  history.replaceState(null, "", window.location.pathname);
+  document.getElementById("result-panel").hidden = true;
+  document.getElementById("console-panel").hidden = true;
+  document.getElementById("console-toggle-icon").innerHTML = "&#9656;";
+  setError(null);
+  document.getElementById("status").textContent = "";
+  disposeViewer3D();
+});
+
+// One text field accepts either a single angle ("5") or a comma-
+// separated list ("0, 5, 10") - see docs/ARCHITECTURE.md "virtueller
+// Windkanal, nicht drei Tools": which of the three existing endpoints
+// (/jobs, /polar-studies, /gci-studies) gets called is decided from
+// this plus the GCI checkbox below, the user never explicitly picks a
+// "tool". A GCI mesh-quality check only exists today for a single
+// angle (gci-studies has no aoa_values-list equivalent), so entering
+// more than one angle disables the checkbox rather than silently
+// ignoring it.
+function parseAoaValues() {
+  return document.getElementById("aoa_input").value
+    .split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
+let gciCheckWasAutoDisabled = false;
+
+function updateGciCheckAvailability() {
+  const multiple = parseAoaValues().length > 1;
+  const checkbox = document.getElementById("gci_check");
+  document.getElementById("gci-disabled-hint").hidden = !multiple;
+  if (multiple && !checkbox.disabled) {
+    checkbox.disabled = true;
+    checkbox.checked = false;
+    gciCheckWasAutoDisabled = true;
+  } else if (!multiple && checkbox.disabled) {
+    checkbox.disabled = false;
+    if (gciCheckWasAutoDisabled) checkbox.checked = true; // restore the sensible default, not a user choice
+    gciCheckWasAutoDisabled = false;
+  }
+}
+document.getElementById("aoa_input").addEventListener("input", updateGciCheckAvailability);
+updateGciCheckAvailability();
+
 function getJobIdFromUrl() {
   return new URLSearchParams(window.location.search).get("job");
 }
@@ -2003,44 +2104,44 @@ if (resumeJobId) {
   pollJob(resumeJobId);
 }
 
+// One unified submit handler replaces the three former form handlers
+// (single job / polar study / GCI study) - see docs/ARCHITECTURE.md
+// "virtueller Windkanal, nicht drei Tools": the user only fills in one
+// form, how many angles and whether the GCI checkbox is on (and
+// available at all) decide which of the three unchanged, existing
+// endpoints actually gets called. No backend change: this is a pure
+// client-side routing decision over /jobs, /polar-studies, /gci-studies.
 document.getElementById("case-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   setError(null);
-  document.getElementById("result-panel").hidden = true;
-  document.getElementById("progress-panel").hidden = true;
   const btn = document.getElementById("submit-btn");
   btn.disabled = true;
-  document.getElementById("status").textContent = "Lade Datei hoch und starte Job ...";
 
   try {
     const fileInput = document.getElementById("step_file");
     if (!fileInput.files.length) { setError("Bitte eine STEP-Datei waehlen."); return; }
 
-    const form = new FormData();
-    form.append("step_file", fileInput.files[0]);
-    for (const name of paramFields()) {
-      form.append(name, document.getElementById(name).value);
+    const aoaValues = parseAoaValues();
+    if (aoaValues.length === 0) { setError("Bitte mindestens einen Anstellwinkel angeben."); return; }
+
+    const gciCheckbox = document.getElementById("gci_check");
+    const gciChecked = gciCheckbox.checked && !gciCheckbox.disabled;
+    // Defensive, not just UI-prevented (CLAUDE.md: no silent fallbacks):
+    // there is no endpoint for "GCI at several angles at once" today, so
+    // this impossible combination is refused loudly rather than quietly
+    // picking one of the two meanings for the user.
+    if (gciChecked && aoaValues.length > 1) {
+      setError("Netzqualitaetspruefung ist nur fuer einen einzelnen Anstellwinkel verfuegbar. Bitte entweder nur einen Winkel angeben oder den Haken entfernen.");
+      return;
     }
 
-    const res = await fetch("/jobs", { method: "POST", headers: authHeaders(), body: form });
-    if (res.status === 401) {
-      document.getElementById("status").textContent = "Token abgelaufen (Engine wurde neu gestartet), lade Seite neu ...";
-      reloadToRefreshToken();
-      return;
+    if (aoaValues.length > 1) {
+      await submitPolarStudy(fileInput, aoaValues);
+    } else if (gciChecked) {
+      await submitGciStudy(fileInput, aoaValues[0]);
+    } else {
+      await submitSingleJob(fileInput, aoaValues[0]);
     }
-    if (!res.ok) {
-      const detail = await res.text();
-      setError("Konnte Job nicht starten (" + res.status + "): " + detail);
-      return;
-    }
-    const job = await res.json();
-    // Put the job id in the address bar so this exact status page can be
-    // reopened from any device by reusing the link, and survives closing
-    // this tab, see docs/RISKS.md R14.
-    history.replaceState(null, "", "?job=" + job.id);
-    document.getElementById("status").textContent = "Job " + job.id + " gestartet.";
-    loadJobsList();
-    await pollJob(job.id);
   } catch (err) {
     setError("Unerwarteter Fehler: " + err);
   } finally {
@@ -2048,80 +2149,86 @@ document.getElementById("case-form").addEventListener("submit", async (e) => {
   }
 });
 
-document.getElementById("polar-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  setFormError("polar-error", null);
-  const btn = document.getElementById("polar-submit-btn");
-  btn.disabled = true;
-  document.getElementById("polar-status").textContent = "Lade Datei hoch und starte Polarstudie ...";
+async function submitSingleJob(fileInput, aoaDeg) {
+  document.getElementById("result-panel").hidden = true;
+  document.getElementById("console-panel").hidden = true;
+  document.getElementById("status").textContent = "Lade Datei hoch und starte Berechnung ...";
 
-  try {
-    const fileInput = document.getElementById("polar-step_file");
-    if (!fileInput.files.length) { setFormError("polar-error", "Bitte eine STEP-Datei waehlen."); return; }
+  const form = new FormData();
+  form.append("step_file", fileInput.files[0]);
+  form.append("velocity", document.getElementById("velocity").value);
+  form.append("aoa_deg", aoaDeg);
+  form.append("sideslip_deg", document.getElementById("sideslip_deg").value);
+  appendAdvancedParams(form);
 
-    const aoaText = document.getElementById("polar-aoa_values").value;
-    const aoaValues = aoaText.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
-    if (aoaValues.length === 0) {
-      setFormError("polar-error", "Bitte mindestens einen Anstellwinkel angeben.");
-      return;
-    }
-
-    const form = new FormData();
-    form.append("step_file", fileInput.files[0]);
-    form.append("velocity", document.getElementById("polar-velocity").value);
-    form.append("sideslip_deg", document.getElementById("polar-sideslip_deg").value);
-    for (const v of aoaValues) form.append("aoa_values", v);
-    appendAdvancedParams(form, "polar-");
-
-    const res = await fetch("/polar-studies", { method: "POST", headers: authHeaders(), body: form });
-    if (res.status === 401) { reloadToRefreshToken(); return; }
-    if (!res.ok) {
-      const detail = await res.text();
-      setFormError("polar-error", "Konnte Polarstudie nicht starten (" + res.status + "): " + detail);
-      return;
-    }
-    document.getElementById("polar-status").textContent = "Polarstudie gestartet.";
-    fileInput.value = "";
-    loadPolarStudiesList();
-  } catch (err) {
-    setFormError("polar-error", "Unerwarteter Fehler: " + err);
-  } finally {
-    btn.disabled = false;
+  const res = await fetch("/jobs", { method: "POST", headers: authHeaders(), body: form });
+  if (res.status === 401) {
+    document.getElementById("status").textContent = "Token abgelaufen (Engine wurde neu gestartet), lade Seite neu ...";
+    reloadToRefreshToken();
+    return;
   }
-});
-
-document.getElementById("gci-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  setFormError("gci-error", null);
-  const btn = document.getElementById("gci-submit-btn");
-  btn.disabled = true;
-  document.getElementById("gci-status").textContent = "Lade Datei hoch und starte GCI-Studie ...";
-
-  try {
-    const fileInput = document.getElementById("gci-step_file");
-    if (!fileInput.files.length) { setFormError("gci-error", "Bitte eine STEP-Datei waehlen."); return; }
-
-    const form = new FormData();
-    form.append("step_file", fileInput.files[0]);
-    form.append("velocity", document.getElementById("gci-velocity").value);
-    form.append("aoa_deg", document.getElementById("gci-aoa_deg").value);
-    form.append("sideslip_deg", document.getElementById("gci-sideslip_deg").value);
-    form.append("refinement_ratio", document.getElementById("gci-refinement_ratio").value);
-    appendAdvancedParams(form, "gci-");
-
-    const res = await fetch("/gci-studies", { method: "POST", headers: authHeaders(), body: form });
-    if (res.status === 401) { reloadToRefreshToken(); return; }
-    if (!res.ok) {
-      const detail = await res.text();
-      setFormError("gci-error", "Konnte GCI-Studie nicht starten (" + res.status + "): " + detail);
-      return;
-    }
-    document.getElementById("gci-status").textContent = "GCI-Studie gestartet.";
-    fileInput.value = "";
-    loadGciStudiesList();
-  } catch (err) {
-    setFormError("gci-error", "Unerwarteter Fehler: " + err);
-  } finally {
-    btn.disabled = false;
+  if (!res.ok) {
+    const detail = await res.text();
+    setError("Konnte Berechnung nicht starten (" + res.status + "): " + detail);
+    return;
   }
-});
+  const job = await res.json();
+  // Put the job id in the address bar so this exact status page can be
+  // reopened from any device by reusing the link, and survives closing
+  // this tab, see docs/RISKS.md R14.
+  history.replaceState(null, "", "?job=" + job.id);
+  document.getElementById("status").textContent = "Berechnung " + job.id + " gestartet.";
+  loadArchiveList();
+  await pollJob(job.id);
+}
+
+async function submitGciStudy(fileInput, aoaDeg) {
+  document.getElementById("status").textContent = "Lade Datei hoch und starte Netzqualitaetspruefung (3 Aufloesungen) ...";
+
+  const form = new FormData();
+  form.append("step_file", fileInput.files[0]);
+  form.append("velocity", document.getElementById("velocity").value);
+  form.append("aoa_deg", aoaDeg);
+  form.append("sideslip_deg", document.getElementById("sideslip_deg").value);
+  form.append("refinement_ratio", document.getElementById("refinement_ratio").value);
+  appendAdvancedParams(form);
+
+  const res = await fetch("/gci-studies", { method: "POST", headers: authHeaders(), body: form });
+  if (res.status === 401) { reloadToRefreshToken(); return; }
+  if (!res.ok) {
+    const detail = await res.text();
+    setError("Konnte Netzqualitaetspruefung nicht starten (" + res.status + "): " + detail);
+    return;
+  }
+  const study = await res.json();
+  document.getElementById("status").textContent =
+    "Netzqualitaetspruefung gestartet (3 Aufloesungen, dauert deutlich laenger als eine Einzelrechnung) - Fortschritt im Archiv.";
+  fileInput.value = "";
+  expandedArchiveEntries.add("gci:" + study.id);
+  openArchive();
+}
+
+async function submitPolarStudy(fileInput, aoaValues) {
+  document.getElementById("status").textContent = "Lade Datei hoch und starte Polare (" + aoaValues.length + " Winkel) ...";
+
+  const form = new FormData();
+  form.append("step_file", fileInput.files[0]);
+  form.append("velocity", document.getElementById("velocity").value);
+  for (const v of aoaValues) form.append("aoa_values", v);
+  form.append("sideslip_deg", document.getElementById("sideslip_deg").value);
+  appendAdvancedParams(form);
+
+  const res = await fetch("/polar-studies", { method: "POST", headers: authHeaders(), body: form });
+  if (res.status === 401) { reloadToRefreshToken(); return; }
+  if (!res.ok) {
+    const detail = await res.text();
+    setError("Konnte Polare nicht starten (" + res.status + "): " + detail);
+    return;
+  }
+  const study = await res.json();
+  document.getElementById("status").textContent =
+    "Polare gestartet (" + aoaValues.length + " Winkel) - Fortschritt im Archiv.";
+  fileInput.value = "";
+  expandedArchiveEntries.add("polar:" + study.id);
+  openArchive();
+}

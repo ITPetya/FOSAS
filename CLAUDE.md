@@ -60,6 +60,15 @@ die vorige ausdruecklich freigegeben hat.
   "Technische-Mechanik-Visualisierung" (Kraft-/Momentensystem,
   Freikoerperbild) vom Projektinhaber am 2026-10-05 gestellt, als
   Backlog mit Einordnung siehe ARCHITECTURE.md.
+  Grundlegender UI-Umbau am 2026-10-16 vom Projektinhaber angestossen
+  ("virtueller Windkanal" statt drei Tools, ein Fenster statt
+  Panel-Stapel, siehe ADR-0019/ARCHITECTURE.md): umgesetzt und gegen
+  eine echte lokale Engine verifiziert (alle drei Anfragepfade,
+  Logik-Simulation der neuen Winkel-/GCI-Haken-Entscheidung); echter
+  Browser-Klicktest durch den Projektinhaber steht noch aus. Die
+  vollautomatische GCI-Entscheidungslogik (wann eine Netzstudie
+  wirklich noetig ist, Zwischenspeicherung ueber Auftraege hinweg)
+  ist bewusst zurueckgestellt, siehe ADR-0019.
 - Phase 4, Animation (quasi-stationaer), Cache, Parallelisierung.
 - Phase 5, Installer, Uninstaller, Prozessverwaltung, Servermodus,
   KI-Schnittstelle. Servermodus ist bereits erreicht (Phase 1/2 liefen
