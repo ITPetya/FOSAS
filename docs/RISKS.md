@@ -1540,3 +1540,70 @@ Mehrkern-Laufs (mpi_ranks=3) ohne Dateikonflikt.
 SU2-Version (nur die eine, im Projekt installierte Version ist
 verfuegbar). Ein SU2-Versionswechsel sollte diesen Parser explizit
 erneut gegen eine echte Rechnung pruefen, nicht blind vertrauen.
+
+## R23: Zugriff ohne Tailscale (Login-Schutz + Tailscale Funnel), behoben
+
+Anlass (2026-10-16): Der Projektinhaber wollte von einem Rechner ohne
+Tailscale auf die Web-UI zugreifen koennen, ausschliesslich per
+Browser. Direkt im Code gegengeprueft, was das bedeutet: `/`, `/viewer`
+und `/app.js` haben absichtlich KEINE Bearer-Token-Pruefung (Kommentar
+im Code: "reaching this route at all already implies network access to
+the engine") und liefern den echten Token direkt im HTML/JS mit aus.
+Das Token-Schema ist also eine zweite Absicherung *innerhalb* eines
+schon vertrauten Netzes (Tailscale), kein Schutz gegen Fremde. Eine
+simple `tailscale funnel`-Freigabe des bestehenden Ports haette den
+Token jedem im Internet geschenkt, der die URL findet - volle
+Lese/Schreib-Kontrolle (Dateien hochladen, SU2-Laeufe starten, Auftraege
+loeschen) ohne echten Schutz.
+
+**Umgesetzt:** Neuer, bewusst optionaler Login-Schutz
+(`Settings.public_password`, Standard `None` = keine Verhaltensaenderung
+gegenueber vorher). Wenn gesetzt (per `--public-password` oder, bevorzugt,
+`FOSAS_PUBLIC_PASSWORD`-Umgebungsvariable, siehe Begruendung im Code:
+ein CLI-Flag landet in Shell-History/Prozessliste, eine Env-Var nicht):
+`/`, `/viewer`, `/app.js` sowie `/docs`/`/redoc`/`/openapi.json` (letztere
+per Middleware, da FastAPIs Auto-Docs keinen `Depends()`-Injektionspunkt
+haben) verlangen vorher eine gueltige Session (Cookie), die man durch
+`POST /login` mit dem Passwort bekommt (`secrets.compare_digest`,
+zeitkonstanter Vergleich). Ratenbegrenzung: 5 Fehlversuche pro IP
+innerhalb 5 Minuten, danach 429 fuer den Rest des Zeitfensters (auch bei
+korrektem Passwort waehrend der Sperre, verhindert einen Zufallstreffer
+mitten in einem Brute-Force-Versuch). Alle bestehenden API-Routen
+(`/jobs` usw.) bleiben unveraendert beim Bearer-Token, komplett
+unabhaengig vom neuen Login-Schutz.
+
+Per echtem Test bestaetigt (nicht nur Unit-Tests): echter Engine-Lauf
+mit `FOSAS_PUBLIC_PASSWORD` gesetzt, komplette Login-Kette per `curl`
+gegen `127.0.0.1` gepruefter, danach zusaetzlich gegen die tatsaechliche
+oeffentliche Tailscale-Funnel-URL verifiziert - und zwar ueber die
+echte oeffentliche DNS-Antwort (per `curl --resolve` gegen die von
+Cloudflares DNS-over-HTTPS gelieferte IP, NICHT die MagicDNS-Kurzschluss-
+IP, die derselbe Tailnet-Rechner sonst lokal aufloesen wuerde), mit
+gueltigem, echtem HTTPS-Zertifikat: `/` ohne Session leitet auf `/login`
+um, falsches Passwort wird abgelehnt, richtiges Passwort setzt ein
+Session-Cookie, danach liefern `/` und `/app.js` den echten Inhalt samt
+Token.
+
+**Tailscale-Funnel-Einrichtung (einmalig, ausserhalb des Codes):**
+Funnel muss in der Tailscale-Admin-Konsole fuer den Tailnet freigegeben
+werden (Link kommt von `tailscale funnel` selbst, falls noch nicht
+freigegeben), und der lokale Nutzer braucht Operator-Rechte
+(`sudo tailscale set --operator=<user>`, einmalig), sonst verlangt jeder
+`tailscale funnel`/`serve`-Befehl erneut `sudo`. `--host` der Engine
+bleibt dabei unveraendert `127.0.0.1` - Funnel proxyt selbst in den
+lokalen Port, die Engine muss dafuer nicht auf mehr Interfaces binden.
+
+**Bewusst nicht geloest:** Der Login-Schutz ist ein zweites Geheimnis
+(Passwort), kein zusaetzlicher Transportschutz ueber das hinaus, was
+Funnel/TLS schon bietet. Das Session-Cookie wird ohne `Secure`-Attribut
+gesetzt (sonst wuerde es bei normalem lokalem HTTP-Zugriff ueber
+Tailscale, ohne Funnel, nicht mehr funktionieren) - auf der oeffentlichen
+Funnel-Strecke laeuft es trotzdem vollstaendig durch TLS (terminiert am
+Tailscale-Knoten, dann nur noch lokal per Loopback weitergereicht), nur
+auf einer rein lokalen HTTP-Verbindung reist das Cookie unverschluesselt,
+derselbe Vertrauensrahmen wie der Bearer-Token selbst. Kein `/logout`.
+Der In-Memory-Ratenbegrenzer waechst unbegrenzt mit der Zahl
+unterschiedlicher IPs (kein Clean-up alter Einträge) - bei der
+erwarteten Nutzung (ein Nutzer, gelegentliche Fremdzugriffe) kein
+echtes Problem, aber bei dauerhaftem oeffentlichem Betrieb mit vielen
+Bot-Anfragen ein spaeter zu behebender Speicher-Schleichverlust.

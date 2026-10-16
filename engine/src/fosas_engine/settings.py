@@ -21,3 +21,8 @@ class Settings:
     su2_executable: str = field(default_factory=lambda: os.environ.get("FOSAS_SU2_EXECUTABLE", "SU2_CFD"))
     mpirun_executable: str = field(default_factory=lambda: os.environ.get("FOSAS_MPIRUN_EXECUTABLE", "mpirun"))
     max_concurrent_jobs: int = 1
+    # None (default): no change from before, "/", "/viewer", "/app.js"
+    # and the docs routes stay ungated. Set this before exposing the
+    # engine beyond the tailnet (e.g. via "tailscale funnel"), see
+    # fosas_engine.app's module docstring and docs/RISKS.md R23.
+    public_password: str | None = None

@@ -10,11 +10,19 @@ docs/ARCHITECTURE.md, "Erreichbarkeit ueber Tailscale"): pass that IP
 explicitly rather than 0.0.0.0, so the engine is provably unreachable
 from anything but the tailnet, independent of and not relying on any
 separate firewall/security-group configuration getting it right.
+
+--public-password (or FOSAS_PUBLIC_PASSWORD) is the one exception to
+"the tailnet is the only real access control": set it before exposing
+the engine beyond the tailnet (e.g. via "tailscale funnel", which stays
+compatible with --host 127.0.0.1 - Funnel proxies into the local port,
+it does not need the app itself to bind anywhere but loopback), see
+fosas_engine.app's module docstring and docs/RISKS.md R23.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import secrets
 import socket
 from pathlib import Path
@@ -43,6 +51,20 @@ def main() -> None:
         "reachable IP (e.g. a Tailscale interface's own address) to make "
         "the engine reachable from other devices. Never pass 0.0.0.0.",
     )
+    parser.add_argument(
+        "--public-password",
+        type=str,
+        default=None,
+        help="Gate '/', '/viewer', '/app.js' and the docs routes behind a "
+        "/login session cookie instead of serving them (and the real bearer "
+        "token they embed) to anyone who can reach the port - required "
+        "before exposing the engine beyond the tailnet, e.g. via "
+        "'tailscale funnel', see docs/RISKS.md R23. Prefer the "
+        "FOSAS_PUBLIC_PASSWORD environment variable over this flag: a "
+        "command-line argument is visible in the shell history and process "
+        "list, which an env var is not. Not set by default (no change from "
+        "before).",
+    )
     args = parser.parse_args()
     if args.host in ("0.0.0.0", "::"):
         # The help text already says not to do this; enforcing it too,
@@ -53,7 +75,8 @@ def main() -> None:
 
     token = secrets.token_urlsafe(32)
     port = args.port or _find_free_port()
-    settings = Settings(token=token, work_root=args.work_root)
+    public_password = args.public_password or os.environ.get("FOSAS_PUBLIC_PASSWORD")
+    settings = Settings(token=token, work_root=args.work_root, public_password=public_password)
     app = create_app(settings)
 
     # flush=True: stdout is fully buffered (not line-buffered) when it is
@@ -65,6 +88,9 @@ def main() -> None:
     print(f"Token: {token}", flush=True)
     print(f"Web client: http://{args.host}:{port}/", flush=True)
     print(f"Interactive docs (send the token as 'Authorization: Bearer <token>'): http://{args.host}:{port}/docs", flush=True)
+    if public_password is not None:
+        print("Login gate is ACTIVE: '/', '/viewer', '/app.js' and the docs routes now require the public password below (POST to /login), not just network access.", flush=True)
+        print(f"Public password: {public_password}", flush=True)
 
     uvicorn.run(app, host=args.host, port=port, log_level="info")
 

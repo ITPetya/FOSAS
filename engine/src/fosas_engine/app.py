@@ -11,16 +11,34 @@ V1 scope: a single case pipeline (fosas_core.pipeline.run_case) exposed
 as an async job. No cache integration yet (see fosas_core.cache), no
 WebSocket progress channel yet, both are natural follow-ups once this
 shape is validated.
+
+Optional login gate (settings.public_password, see docs/RISKS.md R23):
+"/", "/viewer" and "/app.js" embed the real bearer token directly into
+the page for ANY client that loads them - by design, see the comment on
+"/" below - which is fine as long as the engine is only ever reachable
+through an already-trusted network (loopback, or Tailscale). The moment
+that stops being true (e.g. "tailscale funnel" exposing the port to the
+public internet), those three routes - plus /docs/openapi.json, which do
+not leak the token but do reveal the API's shape - hand out full control
+to anyone who finds the URL. When settings.public_password is set, all
+of them instead require a session cookie obtained by POSTing the
+password to /login first; when it is None (the default), nothing changes
+from before. This is a second, independent secret from the bearer token
+itself, deliberately: the token still has to reach the browser somehow,
+and now a password-gated login page is that path instead of "anyone who
+can load the route at all".
 """
 
 from __future__ import annotations
 
+import secrets
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, Header, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 from fosas_core.report import (
@@ -55,7 +73,10 @@ def create_app(settings: Settings) -> FastAPI:
         title="FOSAS Engine",
         description=(
             "Local automation engine for FOSAS. Every endpoint requires "
-            "the bearer token printed at startup, except /health."
+            "the bearer token printed at startup, except /health. If "
+            "settings.public_password is set, '/', '/viewer', '/app.js', "
+            "and the docs routes additionally require a /login session "
+            "cookie first (see module docstring)."
         ),
         version="0.0.1",
     )
@@ -80,16 +101,113 @@ def create_app(settings: Settings) -> FastAPI:
         if authorization != expected:
             raise HTTPException(status_code=401, detail="Missing or invalid bearer token")
 
+    # --- Optional login gate (settings.public_password), see module
+    # docstring and docs/RISKS.md R23. Session tokens and failed-login
+    # counters are in-memory only, same lifetime as the bearer token
+    # itself (lost on restart) - no new persistence layer for this.
+    app.state.sessions = set()
+    app.state.login_attempts = {}
+    _LOGIN_MAX_ATTEMPTS = 5
+    _LOGIN_WINDOW_SECONDS = 300.0
+
+    def _client_ip(request: Request) -> str:
+        return request.client.host if request.client else "unknown"
+
+    def _has_valid_session(request: Request) -> bool:
+        if settings.public_password is None:
+            return True  # gate disabled entirely, nothing changes from before
+        token = request.cookies.get("fosas_session")
+        return token is not None and token in app.state.sessions
+
+    def _login_page(next_path: str, error: str | None = None) -> str:
+        error_html = f'<p class="error">{error}</p>' if error else ""
+        return f"""<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>FOSAS Login</title>
+<style>
+body {{ font-family: sans-serif; background: #1a1d23; color: #eee; display: flex;
+  align-items: center; justify-content: center; height: 100vh; margin: 0; }}
+form {{ background: #242830; padding: 24px 32px; border-radius: 8px; min-width: 260px; }}
+input {{ padding: 8px; margin: 8px 0; width: 100%; box-sizing: border-box; }}
+button {{ padding: 8px 16px; cursor: pointer; }}
+.error {{ color: #ff6b6b; }}
+</style></head>
+<body>
+<form method="post" action="/login">
+<h2>FOSAS</h2>
+<input type="hidden" name="next" value="{next_path}">
+<label for="password">Passwort</label>
+<input type="password" id="password" name="password" autofocus>
+<button type="submit">Anmelden</button>
+{error_html}
+</form>
+</body></html>"""
+
+    def _login_redirect(request: Request) -> RedirectResponse:
+        next_path = request.url.path
+        if request.url.query:
+            next_path += "?" + request.url.query
+        return RedirectResponse(url=f"/login?next={next_path}")
+
+    @app.middleware("http")
+    async def _gate_docs_routes(request: Request, call_next):
+        # /docs, /redoc, /openapi.json are FastAPI/Starlette's own
+        # auto-registered routes - there is no Depends() injection point
+        # for them, hence a middleware instead of a route-level check
+        # like the other gated paths below. They do not leak the bearer
+        # token, only the API's shape, but that is still real
+        # information disclosure once this engine is reachable from
+        # outside the tailnet.
+        if settings.public_password is not None and request.url.path in ("/docs", "/redoc", "/openapi.json"):
+            if not _has_valid_session(request):
+                return _login_redirect(request)
+        return await call_next(request)
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login_page(next: str = "/"):
+        if settings.public_password is None:
+            raise HTTPException(status_code=404)
+        return _login_page(next)
+
+    @app.post("/login")
+    def login_submit(request: Request, password: str = Form(...), next: str = Form("/")):
+        if settings.public_password is None:
+            raise HTTPException(status_code=404)
+        ip = _client_ip(request)
+        now = time.monotonic()
+        recent_failures = [t for t in app.state.login_attempts.get(ip, []) if now - t < _LOGIN_WINDOW_SECONDS]
+        if len(recent_failures) >= _LOGIN_MAX_ATTEMPTS:
+            return HTMLResponse(
+                _login_page(next, "Zu viele Fehlversuche. Bitte einige Minuten warten."),
+                status_code=429,
+            )
+        if not secrets.compare_digest(password, settings.public_password):
+            recent_failures.append(now)
+            app.state.login_attempts[ip] = recent_failures
+            return HTMLResponse(_login_page(next, "Falsches Passwort."), status_code=401)
+        app.state.login_attempts.pop(ip, None)
+        session_token = secrets.token_urlsafe(32)
+        app.state.sessions.add(session_token)
+        response = RedirectResponse(url=next or "/", status_code=303)
+        response.set_cookie(
+            "fosas_session", session_token, httponly=True, samesite="lax", max_age=30 * 24 * 3600
+        )
+        return response
+
     @app.get("/health")
     def health():
         return {"status": "ok"}
 
     @app.get("/", response_class=HTMLResponse)
-    def index():
-        # No token check here on purpose: the token has to reach the
-        # browser somehow, and reaching this route at all already implies
-        # network access to the engine (127.0.0.1 plus, for a remote
-        # machine, an SSH tunnel), the same trust boundary /docs relies on.
+    def index(request: Request):
+        # No bearer-token check here on purpose: the token has to reach
+        # the browser somehow, and reaching this route at all already
+        # implies network access to the engine (127.0.0.1 plus, for a
+        # remote machine, an SSH tunnel), the same trust boundary /docs
+        # relies on - UNLESS settings.public_password is set, meaning
+        # that assumption no longer holds (see module docstring), in
+        # which case a valid /login session is required instead.
+        if not _has_valid_session(request):
+            return _login_redirect(request)
         if not _WEB_CLIENT_PATH.exists():
             raise HTTPException(
                 status_code=500,
@@ -99,22 +217,27 @@ def create_app(settings: Settings) -> FastAPI:
         return html.replace("__FOSAS_TOKEN__", settings.token)
 
     @app.get("/viewer", response_class=HTMLResponse)
-    def viewer():
+    def viewer(request: Request):
         # Same trust boundary as "/", see the comment there. Opened in a
         # new tab from the main page's 3D view (?job=<id> in the URL);
         # not linked to a specific job here, it reads that from its own
         # URL like the main page's ?job= resume flow does.
+        if not _has_valid_session(request):
+            return _login_redirect(request)
         if not _VIEWER_CLIENT_PATH.exists():
             raise HTTPException(status_code=500, detail=f"Viewer client not found at {_VIEWER_CLIENT_PATH}.")
         html = _VIEWER_CLIENT_PATH.read_text()
         return html.replace("__FOSAS_TOKEN__", settings.token)
 
     @app.get("/app.js")
-    def app_js():
+    def app_js(request: Request):
         # Same trust boundary as "/" and "/viewer", see the comment on
-        # "/": no token check, the token itself has to reach the browser
-        # through this exact file (it embeds __FOSAS_TOKEN__, replaced
-        # below, same as the two HTML routes).
+        # "/": no bearer-token check, the token itself has to reach the
+        # browser through this exact file (it embeds __FOSAS_TOKEN__,
+        # replaced below, same as the two HTML routes) - gated by the
+        # login session instead when settings.public_password is set.
+        if not _has_valid_session(request):
+            return _login_redirect(request)
         if not _APP_JS_PATH.exists():
             raise HTTPException(status_code=500, detail=f"app.js not found at {_APP_JS_PATH}.")
         js = _APP_JS_PATH.read_text()

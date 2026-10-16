@@ -27,6 +27,25 @@ def test_viewer_route_serves_html_with_token_injected(client, settings):
     assert "__FOSAS_TOKEN__" not in response.text
 
 
+def test_index_and_app_js_serve_token_without_a_password_set(client, settings):
+    # Default behaviour (settings.public_password is None): no change
+    # from before the login gate existed. index.html itself references
+    # app.js as an external file (no inline script, see ARCHITECTURE.md
+    # Phase 3 step 1), so the token is only embedded in /app.js's
+    # response, not /'s - same as /viewer, which IS a single file.
+    assert client.get("/").status_code == 200
+
+    js_response = client.get("/app.js")
+    assert js_response.status_code == 200
+    assert settings.token in js_response.text
+    assert "__FOSAS_TOKEN__" not in js_response.text
+
+
+def test_login_route_404s_when_no_password_is_set(client):
+    assert client.get("/login").status_code == 404
+    assert client.post("/login", data={"password": "whatever"}).status_code == 404
+
+
 def test_health_needs_no_token(client):
     response = client.get("/health")
     assert response.status_code == 200
@@ -782,3 +801,84 @@ def test_job_report_returns_a_real_pdf(client, settings, tmp_path):
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/pdf"
     assert response.content.startswith(b"%PDF")
+
+
+# --- Login gate (settings.public_password), see docs/RISKS.md R23 and
+# fosas_engine.app's module docstring: required before exposing the
+# engine beyond the tailnet (e.g. via "tailscale funnel"), since "/",
+# "/viewer", "/app.js" and the docs routes normally hand the real
+# bearer token to anyone who can load them at all.
+
+@pytest.fixture
+def gated_settings(tmp_path):
+    return Settings(token="test-token-123", work_root=tmp_path / "cases", public_password="s3cr3t")
+
+
+@pytest.fixture
+def gated_client(gated_settings):
+    app = create_app(gated_settings)
+    return TestClient(app)
+
+
+def test_index_redirects_to_login_without_a_session(gated_client):
+    response = gated_client.get("/", follow_redirects=False)
+    assert response.status_code in (302, 303, 307)
+    assert response.headers["location"].startswith("/login")
+
+
+def test_app_js_redirects_to_login_without_a_session(gated_client):
+    response = gated_client.get("/app.js", follow_redirects=False)
+    assert response.status_code in (302, 303, 307)
+
+
+def test_docs_redirects_to_login_without_a_session(gated_client):
+    response = gated_client.get("/docs", follow_redirects=False)
+    assert response.status_code in (302, 303, 307)
+    assert response.headers["location"].startswith("/login")
+
+
+def test_api_routes_are_unaffected_by_the_login_gate(gated_client):
+    # The login gate only ever guards the token-revealing/docs routes
+    # above - every actual API route keeps using require_token exactly
+    # as before, completely independent of settings.public_password.
+    assert gated_client.get("/jobs").status_code == 401  # still needs the bearer token, not a session
+    assert gated_client.get("/health").status_code == 200  # still ungated
+
+
+def test_wrong_password_is_rejected_and_grants_no_session(gated_client):
+    response = gated_client.post("/login", data={"password": "wrong", "next": "/"})
+    assert response.status_code == 401
+    assert "fosas_session" not in response.cookies
+    # Still redirected to login afterwards, not granted access.
+    assert gated_client.get("/", follow_redirects=False).status_code in (302, 303, 307)
+
+
+def test_correct_password_grants_a_session_that_unlocks_everything(gated_client, gated_settings):
+    login_response = gated_client.post(
+        "/login", data={"password": "s3cr3t", "next": "/"}, follow_redirects=False
+    )
+    assert login_response.status_code == 303
+    assert "fosas_session" in login_response.cookies
+
+    # The TestClient keeps cookies across requests on the same instance
+    # (same as a real browser), so subsequent requests should now see
+    # the real content instead of being redirected.
+    assert gated_client.get("/").status_code == 200
+
+    js_response = gated_client.get("/app.js")
+    assert js_response.status_code == 200
+    assert gated_settings.token in js_response.text
+
+    assert gated_client.get("/docs").status_code == 200
+
+
+def test_too_many_wrong_passwords_are_rate_limited(gated_client):
+    for _ in range(5):
+        response = gated_client.post("/login", data={"password": "wrong", "next": "/"})
+        assert response.status_code == 401
+    locked_out_response = gated_client.post("/login", data={"password": "wrong", "next": "/"})
+    assert locked_out_response.status_code == 429
+    # Even the correct password is refused while locked out - a correct
+    # guess during a brute-force burst must not bypass the lockout.
+    still_locked_response = gated_client.post("/login", data={"password": "s3cr3t", "next": "/"})
+    assert still_locked_response.status_code == 429
