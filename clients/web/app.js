@@ -1432,9 +1432,12 @@ function renderProgress(job) {
   const label = document.getElementById("progress-label");
   const etaEl = document.getElementById("progress-eta");
 
+  const summaryEl = document.getElementById("console-summary");
+
   if (job.status === "done") {
     panel.hidden = true;
     document.getElementById("console-toggle-icon").innerHTML = "&#9656;";
+    summaryEl.textContent = "";
     return;
   }
 
@@ -1447,6 +1450,7 @@ function renderProgress(job) {
     fill.className = "progress-fill indeterminate";
     label.textContent = "Wird gestartet ...";
     etaEl.textContent = "";
+    summaryEl.textContent = "· " + label.textContent;
     return;
   }
 
@@ -1478,6 +1482,7 @@ function renderProgress(job) {
     fill.style.width = "0%";
     label.textContent = "Fehlgeschlagen in Phase '" + failedAt + "'";
     etaEl.textContent = "";
+    summaryEl.textContent = "· " + label.textContent;
     return;
   }
 
@@ -1507,6 +1512,7 @@ function renderProgress(job) {
       ? "noch ca. " + formatDuration(progress.eta_seconds)
       : "Restzeit noch unbekannt";
   }
+  summaryEl.textContent = "· " + label.textContent;
 }
 
 function reloadToRefreshToken() {
