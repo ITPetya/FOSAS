@@ -226,6 +226,47 @@ class OrientationResult:
     candidates: tuple[OrientationCandidate, ...]  # all 6, for diagnostics/error messages/the manual preview tool
 
 
+# The 6 possible 90-degree axis-permutation labels, shared between
+# detect_axis_orientation (automatic case) and apply_named_rotation
+# (manual preview case, pipeline.py's CaseParams.manual_rotation_label) so
+# both always mean exactly the same physical rotation - the label is the
+# single source of truth, never a separately re-derived (x, y, z) angle
+# triple on either side (rotations do not commute, so a fixed-order
+# x-then-y-then-z composition cannot reproduce every one of the 6 cases,
+# "rot_z90_then_x90" in particular - see geometry preview endpoint).
+ROTATION_LABELS: tuple[str, ...] = (
+    "identity",
+    "rot_x90",
+    "rot_y90",
+    "rot_z90",
+    "rot_x90_then_z90",
+    "rot_z90_then_x90",
+)
+
+
+def _named_rotations(shape: Shape) -> dict[str, Shape]:
+    return {
+        "identity": shape,
+        "rot_x90": shape.rotate(Axis.X, 90),
+        "rot_y90": shape.rotate(Axis.Y, 90),
+        "rot_z90": shape.rotate(Axis.Z, 90),
+        "rot_x90_then_z90": shape.rotate(Axis.X, 90).rotate(Axis.Z, 90),
+        "rot_z90_then_x90": shape.rotate(Axis.Z, 90).rotate(Axis.X, 90),
+    }
+
+
+def apply_named_rotation(shape: Shape, label: str) -> Shape:
+    """Applies one of ROTATION_LABELS by name. Used for a manually chosen
+    orientation (geometry preview tool) - the automatic detector below
+    uses the exact same recipes, so a label means the same thing either
+    way.
+    """
+    rotations = _named_rotations(shape)
+    if label not in rotations:
+        raise GeometryError(f"Unknown rotation label '{label}', expected one of {ROTATION_LABELS}")
+    return rotations[label]
+
+
 def detect_axis_orientation(shape: Shape) -> OrientationResult:
     """Looks for a confident 90-degree-multiple rotation that fixes a
     chord/span/thickness axis mix-up, without ever second-guessing a
@@ -241,14 +282,7 @@ def detect_axis_orientation(shape: Shape) -> OrientationResult:
     still run afterwards on whatever shape comes back from here, this
     only decides which (if any) rotation to try first.
     """
-    rotations: dict[str, Shape] = {
-        "identity": shape,
-        "rot_x90": shape.rotate(Axis.X, 90),
-        "rot_y90": shape.rotate(Axis.Y, 90),
-        "rot_z90": shape.rotate(Axis.Z, 90),
-        "rot_x90_then_z90": shape.rotate(Axis.X, 90).rotate(Axis.Z, 90),
-        "rot_z90_then_x90": shape.rotate(Axis.Z, 90).rotate(Axis.X, 90),
-    }
+    rotations = _named_rotations(shape)
 
     def make_candidate(label: str, candidate_shape: Shape) -> OrientationCandidate:
         bbox = candidate_shape.bounding_box()

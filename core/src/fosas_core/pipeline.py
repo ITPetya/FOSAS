@@ -38,7 +38,7 @@ from .forces import (
     compute_moment_system,
     rescale_coefficient_to_frontal_area,
 )
-from .geometry import GeometryError, detect_axis_orientation, import_step
+from .geometry import GeometryError, OrientationResult, ROTATION_LABELS, apply_named_rotation, detect_axis_orientation, import_step
 from .materials import MATERIAL_DENSITIES_KG_M3, STANDARD_GRAVITY
 from .meshing import (
     BoundaryLayerMeshParams,
@@ -150,6 +150,16 @@ class CaseParams:
     # 2026-10-14: mass comes from a material dropdown + density lookup,
     # not a directly-entered mass value.
     material: str | None = None
+    # Explicit, user-chosen orientation from the geometry preview tool
+    # (docs/ARCHITECTURE.md "Koordinatenkonvention", ADR-0020 Teil B):
+    # one of geometry.ROTATION_LABELS, or None for "no manual choice was
+    # made, let detect_axis_orientation decide automatically". When set,
+    # it is applied directly and detect_axis_orientation is NOT consulted
+    # at all - the user has already seen the geometry and confirmed this
+    # orientation visually, so the automatic heuristic (which exists only
+    # to guess when nobody has looked) must not second-guess it. Only the
+    # basic chord/span > 0 safety net below still applies either way.
+    manual_rotation_label: str | None = None
 
     def __post_init__(self):
         if self.velocity <= 0:
@@ -162,6 +172,11 @@ class CaseParams:
             raise ValueError(
                 f"Unknown material '{self.material}'. Available: "
                 f"{sorted(MATERIAL_DENSITIES_KG_M3)}"
+            )
+        if self.manual_rotation_label is not None and self.manual_rotation_label not in ROTATION_LABELS:
+            raise ValueError(
+                f"Unknown manual_rotation_label '{self.manual_rotation_label}'. "
+                f"Available: {ROTATION_LABELS}"
             )
 
 
@@ -295,15 +310,25 @@ def run_case(
     except GeometryError as exc:
         raise PipelineError("geometry", str(exc)) from exc
 
-    # Automatic axis-orientation correction (docs/RISKS.md R13): tries a
-    # confident 90-degree-multiple fix first; never touches a shape
-    # that is already plausibly oriented (see detect_axis_orientation's
-    # own docstring for why). geometry_rotation_applied is surfaced in
-    # CaseResult, never a silent change (CLAUDE.md).
-    orientation = detect_axis_orientation(geometry.shape)
-    geometry_rotation_applied = orientation.applied_label
-    if orientation.applied_label is not None:
-        geometry = replace(geometry, shape=orientation.shape)
+    # Axis orientation (docs/RISKS.md R13, ADR-0020): a manual choice
+    # from the geometry preview tool always wins and skips the automatic
+    # heuristic entirely - the user has already looked at the geometry
+    # and decided, the heuristic exists only as a best-effort guess for
+    # when nobody has. Otherwise, try a confident 90-degree-multiple fix
+    # automatically; never touches a shape that is already plausibly
+    # oriented (see detect_axis_orientation's own docstring for why).
+    # geometry_rotation_applied is surfaced in CaseResult either way,
+    # never a silent change (CLAUDE.md).
+    orientation: OrientationResult | None = None
+    if params.manual_rotation_label is not None:
+        geometry_rotation_applied = params.manual_rotation_label
+        if params.manual_rotation_label != "identity":
+            geometry = replace(geometry, shape=apply_named_rotation(geometry.shape, params.manual_rotation_label))
+    else:
+        orientation = detect_axis_orientation(geometry.shape)
+        geometry_rotation_applied = orientation.applied_label
+        if orientation.applied_label is not None:
+            geometry = replace(geometry, shape=orientation.shape)
 
     bbox = geometry.shape.bounding_box()
     chord = bbox.max.X - bbox.min.X
@@ -330,22 +355,38 @@ def run_case(
     # unrotated shape was already implausible in a way that is not a
     # simple axis assignment problem at all.
     if span < 0.5 * chord or thickness > 2 * span:
-        candidate_lines = "\n".join(
-            f"  - {c.label}: chord={c.chord:.4g}, span={c.span:.4g}, thickness={c.thickness:.4g}, "
-            f"thickness/chord={c.thickness_ratio:.2f}"
-            + ("" if c.plausible else " (does not even pass the loose bound)")
-            for c in orientation.candidates
-        )
+        if orientation is not None:
+            candidate_lines = "\n".join(
+                f"  - {c.label}: chord={c.chord:.4g}, span={c.span:.4g}, thickness={c.thickness:.4g}, "
+                f"thickness/chord={c.thickness_ratio:.2f}"
+                + ("" if c.plausible else " (does not even pass the loose bound)")
+                for c in orientation.candidates
+            )
+            raise PipelineError(
+                "geometry",
+                f"Bounding box looks implausible for the assumed axis convention "
+                f"(X chordwise={chord:.4g}, Y spanwise={span:.4g}, Z vertical="
+                f"{thickness:.4g}). Tried every 90-degree axis reassignment "
+                "automatically, none was confident enough to apply by itself "
+                f"(see docs/RISKS.md R13):\n{candidate_lines}\n"
+                "Re-export the geometry with X chordwise, Y spanwise, Z vertical, "
+                "or use the geometry preview/rotate tool to orient it manually "
+                "before submitting, see docs/ARCHITECTURE.md.",
+            )
+        # A manually chosen rotation (preview tool) still failed the basic
+        # sanity check - the user's choice is respected (not silently
+        # replaced by the automatic heuristic), but it cannot proceed
+        # either, see the mm-to-m OOM incident this check guards against
+        # (docs/RISKS.md R13/R15).
         raise PipelineError(
             "geometry",
             f"Bounding box looks implausible for the assumed axis convention "
             f"(X chordwise={chord:.4g}, Y spanwise={span:.4g}, Z vertical="
-            f"{thickness:.4g}). Tried every 90-degree axis reassignment "
-            "automatically, none was confident enough to apply by itself "
-            f"(see docs/RISKS.md R13):\n{candidate_lines}\n"
-            "Re-export the geometry with X chordwise, Y spanwise, Z vertical, "
-            "or use the geometry preview/rotate tool to orient it manually "
-            "before submitting, see docs/ARCHITECTURE.md.",
+            f"{thickness:.4g}) even after applying the manually chosen "
+            f"rotation '{params.manual_rotation_label}'. Open the geometry "
+            "preview tool again and try a different orientation, or "
+            "re-export the geometry with X chordwise, Y spanwise, Z "
+            "vertical, see docs/ARCHITECTURE.md.",
         )
     mid_y = (bbox.min.Y + bbox.max.Y) / 2
 

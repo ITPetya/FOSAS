@@ -52,6 +52,69 @@ def test_run_case_converts_geometry_from_millimetres_to_metres(tmp_path, monkeyp
     assert float(match.group(1)) == pytest.approx(0.6, rel=1e-3)
 
 
+def test_run_case_applies_an_explicit_manual_rotation_label_and_skips_detection(tmp_path, monkeypatch):
+    # ADR-0020 Teil B (geometry preview tool): naca0012_wing_step_wrong_axes
+    # is a real case where automatic detect_axis_orientation declines
+    # (its best candidate, rot_x90_then_z90 at thickness_ratio=0.060,
+    # narrowly misses the 2x confidence margin against rot_x90 at
+    # 0.120 - confirmed numerically while writing this test). A user who
+    # has looked at the geometry preview and picked rot_x90_then_z90
+    # explicitly must still get it applied directly, not re-declined by
+    # the same automatic heuristic that was just bypassed on purpose.
+    step_path = naca0012_wing_step_wrong_axes(tmp_path / "wrong_axes.step", chord=0.6, span=1.2, n=25)
+    params = CaseParams(velocity=30, aoa_deg=5, manual_rotation_label="rot_x90_then_z90")
+
+    captured = {}
+
+    def fake_run_gmsh(geo_script, output_su2_path, **kwargs):
+        captured["geo_script"] = geo_script
+        raise MeshingError("stop before actually invoking Gmsh")
+
+    monkeypatch.setattr("fosas_core.pipeline.run_gmsh", fake_run_gmsh)
+
+    with pytest.raises(PipelineError) as exc_info:
+        run_case(step_path, params, tmp_path / "work")
+    assert exc_info.value.stage == "meshing"  # got past the geometry check, not rejected there
+
+    assert "geo_script" in captured
+    match = re.search(r"^chord = ([0-9.eE+-]+);", captured["geo_script"], re.MULTILINE)
+    assert match is not None, captured["geo_script"]
+    # rot_x90_then_z90 reassigns this fixture's own X/Y/Z extents to
+    # chord=1200mm (not the original 600mm), confirmed numerically.
+    assert float(match.group(1)) == pytest.approx(1.2, rel=1e-3)
+
+
+def test_run_case_reports_manual_rotation_label_in_the_result(tmp_path, monkeypatch):
+    step_path = naca0012_wing_step(tmp_path / "wing.step", chord=0.6, span=1.2, n=10)
+    params = CaseParams(velocity=30, aoa_deg=5, manual_rotation_label="identity")
+
+    def fake_run_gmsh(geo_script, output_su2_path, **kwargs):
+        raise MeshingError("stop before actually invoking Gmsh")
+
+    monkeypatch.setattr("fosas_core.pipeline.run_gmsh", fake_run_gmsh)
+
+    with pytest.raises(PipelineError):
+        run_case(step_path, params, tmp_path / "work")
+    # Nothing else to assert here without a full run, but this at least
+    # pins down that "identity" (no-op) does not crash and still reaches
+    # meshing, same as not passing manual_rotation_label at all.
+
+
+def test_run_case_rejects_a_manual_rotation_that_still_fails_the_sanity_check(tmp_path):
+    # A manual choice is respected (not silently replaced by automatic
+    # detection), but still has to pass the basic chord/span sanity
+    # check (docs/RISKS.md R13/R15) - rot_x90 applied to an already-
+    # correctly-oriented wing deliberately scrambles it (chord=100,
+    # span=10, thickness=500 instead of 100/500/10, confirmed
+    # numerically), so this must fail with a message naming the manual
+    # choice, not silently proceed into Gmsh with nonsense dimensions.
+    step_path = naca0012_wing_step(tmp_path / "wing.step", chord=0.6, span=1.2, n=10)
+    params = CaseParams(velocity=30, aoa_deg=5, manual_rotation_label="rot_x90")
+    with pytest.raises(PipelineError, match="manually chosen rotation 'rot_x90'") as exc_info:
+        run_case(step_path, params, tmp_path / "work")
+    assert exc_info.value.stage == "geometry"
+
+
 def test_case_params_reject_invalid_input():
     with pytest.raises(ValueError, match="velocity"):
         CaseParams(velocity=0, aoa_deg=0)

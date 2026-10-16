@@ -4,7 +4,7 @@ pytest.importorskip("build123d")
 
 from build123d import Box, Compound, Locations, export_step
 
-from fosas_core.geometry import GeometryError, detect_axis_orientation, import_step
+from fosas_core.geometry import GeometryError, ROTATION_LABELS, apply_named_rotation, detect_axis_orientation, import_step
 
 
 @pytest.fixture
@@ -168,3 +168,44 @@ def test_detect_axis_orientation_picks_up_a_genuine_3_cycle_permutation():
     assert chord == pytest.approx(50, rel=1e-3)
     assert span == pytest.approx(400, rel=1e-3)
     assert thickness == pytest.approx(5, rel=1e-3)
+
+
+# --- apply_named_rotation (ADR-0020 Teil B, geometry preview tool):
+# must use the exact same recipes as detect_axis_orientation above, so
+# a label picked in the preview tool means the same physical rotation
+# server-side as it did when detect_axis_orientation itself computed it.
+
+
+def test_apply_named_rotation_matches_detect_axis_orientations_own_recipe():
+    box = Box(100, 10.23, 500)
+    detected = detect_axis_orientation(box)
+    assert detected.applied_label == "rot_x90"
+
+    manually_rotated = apply_named_rotation(box, "rot_x90")
+    bbox = manually_rotated.bounding_box()
+    detected_bbox = detected.shape.bounding_box()
+    assert (bbox.max.X - bbox.min.X) == pytest.approx(detected_bbox.max.X - detected_bbox.min.X)
+    assert (bbox.max.Y - bbox.min.Y) == pytest.approx(detected_bbox.max.Y - detected_bbox.min.Y)
+    assert (bbox.max.Z - bbox.min.Z) == pytest.approx(detected_bbox.max.Z - detected_bbox.min.Z)
+
+
+def test_apply_named_rotation_identity_returns_the_same_dimensions():
+    box = Box(100, 500, 10)
+    rotated = apply_named_rotation(box, "identity")
+    bbox = rotated.bounding_box()
+    assert (bbox.max.X - bbox.min.X) == pytest.approx(100)
+    assert (bbox.max.Y - bbox.min.Y) == pytest.approx(500)
+    assert (bbox.max.Z - bbox.min.Z) == pytest.approx(10)
+
+
+def test_apply_named_rotation_rejects_an_unknown_label():
+    box = Box(100, 500, 10)
+    with pytest.raises(GeometryError, match="Unknown rotation label"):
+        apply_named_rotation(box, "rot_sideways")
+
+
+def test_rotation_labels_lists_exactly_the_six_candidates_detect_axis_orientation_uses():
+    box = Box(207.5, 150.2, 308)
+    candidates = detect_axis_orientation(box).candidates
+    assert {c.label for c in candidates} == set(ROTATION_LABELS)
+    assert len(ROTATION_LABELS) == 6

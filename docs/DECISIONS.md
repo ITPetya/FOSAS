@@ -832,17 +832,43 @@ neuen `CaseResult.geometry_rotation_applied`-Feld immer offen ausgewiesen
 listet die neue Fehlermeldung alle 6 Kandidaten mit echten Zahlen auf
 (statt nur "re-export or rotate"), inklusive Verweis auf Teil B.
 
-**Entscheidung, Teil B (in Arbeit, siehe ARCHITECTURE.md fuer den
-jeweils aktuellen Stand):** Ein neuer, bewusst kurzlebiger Vorschau-
-Endpunkt (`POST /geometry/preview`, kein Gmsh/SU2-Aufruf, nur
-`import_step` + Tessellierung) liefert eine 3D-Darstellung der
-Roh-Geometrie; eine neue, sekundaere UI-Aktion laesst den Nutzer die
-Geometrie in 90-Grad-Schritten drehen (rein clientseitige Live-Vorschau
-auf der schon geladenen Punktwolke, kein Server-Rundweg pro Klick),
-bevor der eigentliche Rechenauftrag mit der gewaehlten Drehung
-abgeschickt wird. Dieselbe Zwei-Phasen-Idee (Datei hoch, Vorschau ohne
-Rechnung, dann erst der echte Auftrag), die auch fuer den spaeter
-geplanten Lagerpunkt-Picker (Punkt 7, ARCHITECTURE.md) gebraucht wird.
+**Entscheidung, Teil B (umgesetzt, 2026-10-16):** Ein neuer, bewusst
+kurzlebiger Vorschau-Endpunkt (`POST /geometry/preview`, kein Gmsh/SU2-
+Aufruf, nur `import_step` + Tessellierung, Datei max. 2 Stunden im
+neuen `GeometryPreviewStore` gehalten) liefert alle 6 moeglichen
+Achsenzuordnungen bereits vorberechnet (Zahlen + tessellierte
+Dreiecksnetze), nicht nur die Rohgeometrie. `POST /jobs`/
+`/polar-studies`/`/gci-studies` bekommen zwei neue, optionale Felder:
+`preview_id` (verwendet die dort abgelegte Datei statt eines erneuten
+Uploads) und `manual_rotation_label` (eines der 6 Labels aus
+`detect_axis_orientation`, direkt angewendet, OHNE die automatische
+Heuristik erneut zu befragen - eine vom Nutzer gesehene und bestaetigte
+Wahl wird nie von der Automatik ueberschrieben).
+
+Eine Abweichung von der urspruenglich geplanten Umsetzung, bewusst
+waehrend der Implementierung getroffen, nicht stillschweigend: geplant
+waren drei freie Form-Winkelfelder (`rotate_x_deg`/`rotate_y_deg`/
+`rotate_z_deg`, Vielfache von 90, "in dieser Reihenfolge angewendet").
+Rotationen sind aber nicht kommutativ - eine feste X-dann-Y-dann-Z-
+Komposition kann nicht alle 6 Faelle erzeugen, insbesondere nicht die
+Kombination `rot_z90_then_x90` (Z zuerst, dann X), die
+`detect_axis_orientation` selbst kennt. Ein generisches Winkel-Tripel
+auf Client und Server haette entweder diese Kombination verloren oder
+zwei unabhaengig gepflegte Rotationsrezepte riskiert, die bei einer
+spaeteren Aenderung leise auseinanderlaufen koennten. Stattdessen
+teilen sich Server (Erkennung) und Client (Vorschau) dieselben 6
+benannten Labels als einzige Quelle der Wahrheit
+(`geometry.ROTATION_LABELS`/`apply_named_rotation`): der Server liefert
+alle 6 Kandidaten vorab tesselliert, der Client schaltet beim Klick nur
+um (sofortige "Live-Vorschau" ohne Server-Rundweg, wie geplant), statt
+Drehungen selbst im Browser nachzurechnen. Funktional identisch zum
+geplanten Ergebnis (Nutzer sieht/waehlt eine Ausrichtung interaktiv in
+3D, bevor der Auftrag abgeschickt wird), nur die UI zeigt 6 anklickbare
+Kandidatenkarten statt vier freier Dreh-Knoepfe.
+
+Dieselbe Zwei-Phasen-Idee (Datei hoch, Vorschau ohne Rechnung, dann erst
+der echte Auftrag) wird auch fuer den spaeter geplanten Lagerpunkt-
+Picker (Punkt 7, ARCHITECTURE.md) gebraucht werden.
 
 **Verifikation Teil A:** Neue Unit-Tests mit synthetischen Boxen in
 genau den beobachteten Seitenverhaeltnissen (eindeutiger Fall,
@@ -854,3 +880,20 @@ durch Vernetzung und Loesung durch (automatisch `rot_x90` angewendet,
 cl/cd nach 15 Iterationen plausibel, siehe RISKS.md R13), Heckfluegel
 bekommt die neue, ausfuehrliche Fehlermeldung mit allen 6 echten
 Kandidatenzahlen.
+
+**Verifikation Teil B:** Neue Engine-Tests (`/geometry/preview` echo
+aller 6 Kandidaten/Varianten; `preview_id` ohne erneuten Upload bei
+`/jobs`; Ablehnung bei sowohl Datei als auch `preview_id`, bei keinem
+von beiden, und bei unbekannter `preview_id`). Echter Lauf gegen beide
+tatsaechlich gescheiterten Dateien per curl: Tragflaeche liefert
+identische Zahlen wie Teil A (chord=100/span=500/thickness=10.2,
+`rot_x90` vorgeschlagen), Heckfluegel liefert `confident=false` ohne
+Vorschlag, beide mit allen 6 tessellierten Varianten (181-3435 Punkte).
+Vollstaendiger End-zu-Ende-Test ueber `preview_id` +
+`manual_rotation_label=rot_x90` (Tragflaeche, ohne erneuten Upload):
+Auftrag lief durch Vernetzung und Loesung bis "done" (cl=0.601,
+cd=0.426 nach 15 Iterationen). Neue Frontend-Logik
+(`buildRotationVariantGeometry`, Kandidatenliste,
+`appendStepFileOrPreview`) per Node-Simulation mit einem three.js-Stub
+gegengeprueft (kein echter Browser verfuegbar); ein echter
+Klicktest durch den Projektinhaber steht wie immer noch aus.

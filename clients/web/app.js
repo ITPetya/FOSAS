@@ -1156,6 +1156,133 @@ function renderSurface3D(result) {
   };
 }
 
+// Geometry preview/rotate tool (docs/ARCHITECTURE.md
+// "Koordinatenkonvention", ADR-0020 Teil B): a separate, self-contained
+// three.js scene from the result viewer above - a plain tessellated
+// mesh, not a cp-colored surface point cloud, and swappable between the
+// 6 precomputed candidate orientations the server already sent, so
+// switching candidates is instant (no server round-trip per click).
+let rotationPreviewState = null;
+
+function disposeRotationPreview3D() {
+  if (!rotationPreviewState) return;
+  rotationPreviewState.controls.dispose();
+  rotationPreviewState.renderer.dispose();
+  rotationPreviewState.mesh.geometry.dispose();
+  rotationPreviewState.wireframe.geometry.dispose();
+  rotationPreviewState.container.innerHTML = "";
+  cancelAnimationFrame(rotationPreviewState.frameHandle);
+  window.removeEventListener("resize", rotationPreviewState.onResize);
+  rotationPreviewState = null;
+}
+
+// Flat [x,y,z]/[i,j,k] arrays from one /geometry/preview variant ->
+// a centered, unit-scaled BufferGeometry. Same Z(FOSAS vertical)->Y
+// (three.js up) swap as bodyPointToScene above, for the same reason.
+// Centering/scaling is purely visual (this is an orientation check, not
+// a to-scale model), so it is independent of the geometry's own size.
+function buildRotationVariantGeometry(variant) {
+  const verts = variant.vertices;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [x, y, z] of verts) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+  }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
+  const extent = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 1e-6);
+
+  const positions = new Float32Array(verts.length * 3);
+  verts.forEach(([x, y, z], i) => {
+    positions[i * 3 + 0] = (x - cx) / extent;
+    positions[i * 3 + 1] = (z - cz) / extent;
+    positions[i * 3 + 2] = (y - cy) / extent;
+  });
+  const indices = new Uint32Array(variant.triangles.length * 3);
+  variant.triangles.forEach(([a, b, c], i) => {
+    indices[i * 3 + 0] = a; indices[i * 3 + 1] = b; indices[i * 3 + 2] = c;
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function renderRotationPreviewVariant(variant) {
+  const container = document.getElementById("rotation-preview-viewer");
+  if (typeof THREE === "undefined") {
+    container.textContent = "3D-Bibliothek (three.js) konnte nicht geladen werden.";
+    return;
+  }
+
+  const geometry = buildRotationVariantGeometry(variant);
+
+  if (rotationPreviewState) {
+    // Swap geometry only, keep camera/controls so the user's own view
+    // angle survives switching between candidates (comparing
+    // orientations is the whole point of this tool).
+    rotationPreviewState.mesh.geometry.dispose();
+    rotationPreviewState.mesh.geometry = geometry;
+    rotationPreviewState.wireframe.geometry.dispose();
+    rotationPreviewState.wireframe.geometry = new THREE.WireframeGeometry(geometry);
+    return;
+  }
+
+  const scene = new THREE.Scene();
+  const material = new THREE.MeshStandardMaterial({ color: 0x4f8cff, side: THREE.DoubleSide, flatShading: true });
+  const mesh = new THREE.Mesh(geometry, material);
+  scene.add(mesh);
+  const wireframe = new THREE.LineSegments(
+    new THREE.WireframeGeometry(geometry),
+    new THREE.LineBasicMaterial({ color: 0x0d0f13, transparent: true, opacity: 0.25 }),
+  );
+  scene.add(wireframe);
+  scene.add(new THREE.AxesHelper(0.7));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(1.5, 2, 1.5);
+  scene.add(dirLight);
+
+  const width = container.clientWidth, height = container.clientHeight;
+  const camera = new THREE.PerspectiveCamera(45, width / height, 0.01, 100);
+  camera.position.set(1.6, 1.2, 1.6);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(width, height);
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  container.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.update();
+
+  function onResize() {
+    const w = container.clientWidth, h = container.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  window.addEventListener("resize", onResize);
+  requestAnimationFrame(onResize);
+
+  let frameHandle;
+  function animate() {
+    frameHandle = requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  rotationPreviewState = {
+    renderer, controls, container, onResize, mesh, wireframe,
+    get frameHandle() { return frameHandle; },
+  };
+}
+
 // Simple colored-line coordinate triad (body axes) plus the wind-axis
 // direction arrow and angle arcs for alpha (X-Z plane) and beta (X-Y
 // plane, sideslip/crosswind), all anchored at the scene origin (the
@@ -2058,8 +2185,145 @@ function updateFileInputName() {
   const files = document.getElementById("step_file").files;
   document.getElementById("step_file-name").textContent =
     files.length ? files[0].name : "Keine Datei gewaehlt";
+  document.getElementById("geometry-preview-btn").hidden = !files.length;
+  // A stored preview_id refers to specifically the bytes that were
+  // uploaded to /geometry/preview, not "whatever file is in the input
+  // right now" - any change to the file selection (a different file, or
+  // a programmatic reset after a submission) invalidates it. This is
+  // the single place every such change already passes through.
+  activeGeometryPreview = null;
+  document.getElementById("geometry-preview-status").textContent = "";
 }
 document.getElementById("step_file").addEventListener("change", updateFileInputName);
+
+// --- Geometry preview/rotate tool (ADR-0020 Teil B): upload once, see
+// all 6 possible axis orientations in 3D, pick one, then submit without
+// re-uploading (preview_id + manual_rotation_label instead of
+// step_file). See fosas_engine.app POST /geometry/preview.
+const ROTATION_LABEL_TEXT = {
+  identity: "Unveraendert (wie hochgeladen)",
+  rot_x90: "90° um X gedreht",
+  rot_y90: "90° um Y gedreht",
+  rot_z90: "90° um Z gedreht",
+  rot_x90_then_z90: "90° um X, danach 90° um Z gedreht",
+  rot_z90_then_x90: "90° um Z, danach 90° um X gedreht",
+};
+
+let currentPreviewData = null; // last /geometry/preview response, while the overlay is open
+let selectedPreviewLabel = null; // which candidate is currently shown/highlighted in the overlay
+let activeGeometryPreview = null; // { previewId, label }, only after "Anwenden" was clicked
+
+// Shared by submitSingleJob/submitGciStudy/submitPolarStudy: a
+// submission either uploads the chosen file fresh, or - if the preview
+// tool was used and its result applied - reuses the already-uploaded
+// geometry plus the chosen rotation instead (see POST /jobs etc.'s
+// preview_id/manual_rotation_label fields).
+function appendStepFileOrPreview(form, fileInput) {
+  if (activeGeometryPreview) {
+    form.append("preview_id", activeGeometryPreview.previewId);
+    form.append("manual_rotation_label", activeGeometryPreview.label);
+  } else {
+    form.append("step_file", fileInput.files[0]);
+  }
+}
+
+function renderRotationCandidates(data, selectedLabel) {
+  const container = document.getElementById("rotation-preview-candidates");
+  container.innerHTML = "";
+  for (const candidate of data.candidates) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "rotation-candidate-btn" + (candidate.label === selectedLabel ? " active" : "");
+
+    const title = document.createElement("div");
+    title.className = "candidate-title";
+    const dot = document.createElement("span");
+    dot.className = "candidate-dot " + (candidate.plausible ? "plausible" : "implausible");
+    title.appendChild(dot);
+    const labelText = (ROTATION_LABEL_TEXT[candidate.label] || candidate.label)
+      + (candidate.label === data.suggested_label ? " (Vorschlag)" : "");
+    title.appendChild(document.createTextNode(labelText));
+    btn.appendChild(title);
+
+    const numbers = document.createElement("div");
+    numbers.className = "candidate-numbers";
+    numbers.textContent =
+      "Sehne=" + candidate.chord.toFixed(1) + " mm · Spannweite=" + candidate.span.toFixed(1) +
+      " mm · Dicke=" + candidate.thickness.toFixed(1) + " mm · Dicke/Sehne=" +
+      (candidate.thickness_ratio * 100).toFixed(0) + "%";
+    btn.appendChild(numbers);
+
+    btn.addEventListener("click", () => selectRotationCandidate(data, candidate.label));
+    container.appendChild(btn);
+  }
+}
+
+function selectRotationCandidate(data, label) {
+  selectedPreviewLabel = label;
+  renderRotationCandidates(data, label);
+  const variant = data.variants.find((v) => v.label === label);
+  if (variant) renderRotationPreviewVariant(variant);
+}
+
+async function openGeometryPreview() {
+  const fileInput = document.getElementById("step_file");
+  if (!fileInput.files.length) return;
+
+  document.getElementById("rotation-preview-overlay").hidden = false;
+  document.getElementById("rotation-preview-status").textContent =
+    "Lade Geometrie und berechne alle moeglichen Ausrichtungen ...";
+  document.getElementById("rotation-preview-candidates").innerHTML = "";
+  disposeRotationPreview3D();
+  currentPreviewData = null;
+  selectedPreviewLabel = null;
+
+  const form = new FormData();
+  form.append("step_file", fileInput.files[0]);
+
+  let res;
+  try {
+    res = await fetch("/geometry/preview", { method: "POST", headers: authHeaders(), body: form });
+  } catch (err) {
+    document.getElementById("rotation-preview-status").textContent = "Netzwerkfehler: " + err;
+    return;
+  }
+  if (res.status === 401) { reloadToRefreshToken(); return; }
+  if (!res.ok) {
+    const detail = await res.text();
+    document.getElementById("rotation-preview-status").textContent =
+      "Konnte Geometrie nicht laden (" + res.status + "): " + detail;
+    return;
+  }
+
+  const data = await res.json();
+  currentPreviewData = data;
+  const initialLabel = data.suggested_label || "identity";
+  document.getElementById("rotation-preview-status").textContent = data.confident
+    ? "Automatisch erkannt: " + (ROTATION_LABEL_TEXT[initialLabel] || initialLabel) +
+      ". Bei Bedarf unten eine andere Ausrichtung waehlen."
+    : "Keine Ausrichtung konnte automatisch sicher bestimmt werden - bitte unten anhand der " +
+      "3D-Vorschau die passende Ausrichtung waehlen.";
+  selectRotationCandidate(data, initialLabel);
+}
+
+function closeGeometryPreview() {
+  document.getElementById("rotation-preview-overlay").hidden = true;
+  disposeRotationPreview3D();
+}
+
+document.getElementById("geometry-preview-btn").addEventListener("click", openGeometryPreview);
+document.getElementById("rotation-preview-close-btn").addEventListener("click", closeGeometryPreview);
+document.getElementById("rotation-preview-cancel-btn").addEventListener("click", closeGeometryPreview);
+document.getElementById("rotation-preview-overlay").addEventListener("click", (e) => {
+  if (e.target.id === "rotation-preview-overlay") closeGeometryPreview();
+});
+document.getElementById("rotation-preview-apply-btn").addEventListener("click", () => {
+  if (!currentPreviewData || !selectedPreviewLabel) return;
+  activeGeometryPreview = { previewId: currentPreviewData.preview_id, label: selectedPreviewLabel };
+  document.getElementById("geometry-preview-status").textContent =
+    "Ausrichtung gewaehlt: " + (ROTATION_LABEL_TEXT[selectedPreviewLabel] || selectedPreviewLabel);
+  closeGeometryPreview();
+});
 
 // "Neue Berechnung" (topbar): resets the one unified form back to its
 // defaults and clears the current result, same as reloading used to
@@ -2075,6 +2339,7 @@ document.getElementById("topbar-new-btn").addEventListener("click", () => {
   setError(null);
   document.getElementById("status").textContent = "";
   disposeViewer3D();
+  closeGeometryPreview();
 });
 
 // One text field accepts either a single angle ("5") or a comma-
@@ -2174,7 +2439,7 @@ async function submitSingleJob(fileInput, aoaDeg) {
   document.getElementById("status").textContent = "Lade Datei hoch und starte Berechnung ...";
 
   const form = new FormData();
-  form.append("step_file", fileInput.files[0]);
+  appendStepFileOrPreview(form, fileInput);
   form.append("velocity", document.getElementById("velocity").value);
   form.append("aoa_deg", aoaDeg);
   form.append("sideslip_deg", document.getElementById("sideslip_deg").value);
@@ -2205,7 +2470,7 @@ async function submitGciStudy(fileInput, aoaDeg) {
   document.getElementById("status").textContent = "Lade Datei hoch und starte Netzqualitaetspruefung (3 Aufloesungen) ...";
 
   const form = new FormData();
-  form.append("step_file", fileInput.files[0]);
+  appendStepFileOrPreview(form, fileInput);
   form.append("velocity", document.getElementById("velocity").value);
   form.append("aoa_deg", aoaDeg);
   form.append("sideslip_deg", document.getElementById("sideslip_deg").value);
@@ -2232,7 +2497,7 @@ async function submitPolarStudy(fileInput, aoaValues) {
   document.getElementById("status").textContent = "Lade Datei hoch und starte Polare (" + aoaValues.length + " Winkel) ...";
 
   const form = new FormData();
-  form.append("step_file", fileInput.files[0]);
+  appendStepFileOrPreview(form, fileInput);
   form.append("velocity", document.getElementById("velocity").value);
   for (const v of aoaValues) form.append("aoa_values", v);
   form.append("sideslip_deg", document.getElementById("sideslip_deg").value);

@@ -291,6 +291,56 @@
     padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
   }
   #report-popover h3 { margin: 0 0 8px; font-size: 0.95rem; }
+  .geometry-preview-btn {
+    margin: 8px 0 0; width: auto; background: transparent; border: 1px solid var(--border);
+    color: var(--text); padding: 7px 12px; font-size: 0.85rem; border-radius: 6px;
+  }
+  .geometry-preview-btn:hover { border-color: var(--accent); }
+  #geometry-preview-status { display: block; color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
+  #rotation-preview-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 110;
+  }
+  /* Same [hidden]-vs-display:flex trap as #archive-overlay/#report-
+     popover - see their comments. Scoped from the start here. */
+  #rotation-preview-overlay:not([hidden]) {
+    display: flex; align-items: center; justify-content: center;
+  }
+  #rotation-preview-panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; width: min(900px, 94vw); max-height: 90vh; overflow-y: auto;
+  }
+  .rotation-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
+  .rotation-preview-header h2 { margin: 0; font-size: 1.1rem; flex: 1; }
+  #rotation-preview-close-btn {
+    margin: 0; width: auto; background: transparent; border: 1px solid var(--border);
+    color: var(--muted); padding: 6px 12px; font-size: 1rem; border-radius: 6px; line-height: 1;
+  }
+  #rotation-preview-status { color: var(--muted); font-size: 0.85rem; margin-bottom: 10px; }
+  #rotation-preview-viewer {
+    width: 100%; height: 360px; background: #0d0f13; border: 1px solid var(--border);
+    border-radius: 8px; position: relative; overflow: hidden;
+  }
+  #rotation-preview-candidates {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 14px;
+  }
+  .rotation-candidate-btn {
+    margin: 0; width: 100%; text-align: left; background: #0d0f13; border: 1px solid var(--border);
+    color: var(--text); padding: 8px 10px; font-size: 0.82rem; border-radius: 6px; cursor: pointer;
+    line-height: 1.4;
+  }
+  .rotation-candidate-btn:hover { border-color: var(--accent); }
+  .rotation-candidate-btn.active { border-color: var(--accent); background: #16213a; }
+  .rotation-candidate-btn .candidate-title { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 2px; }
+  .rotation-candidate-btn .candidate-numbers { color: var(--muted); font-size: 0.78rem; }
+  .candidate-dot { width: 8px; height: 8px; border-radius: 999px; flex: 0 0 auto; }
+  .candidate-dot.plausible { background: var(--ok); }
+  .candidate-dot.implausible { background: var(--bad); }
+  .rotation-preview-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+  #rotation-preview-apply-btn { margin: 0; }
+  #rotation-preview-cancel-btn {
+    margin: 0; width: auto; background: transparent; border: 1px solid var(--border);
+    color: var(--text); padding: 8px 16px; font-size: 0.9rem; border-radius: 6px;
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.140.2/examples/js/controls/OrbitControls.js"></script>
@@ -314,6 +364,8 @@
         <label for="step_file" class="file-input-btn">Datei waehlen</label>
         <span class="file-input-name" id="step_file-name">Keine Datei gewaehlt</span>
       </div>
+      <button type="button" class="geometry-preview-btn" id="geometry-preview-btn" hidden>Geometrie pruefen/drehen</button>
+      <span id="geometry-preview-status"></span>
 
       <label data-info="velocity">Anstroemgeschwindigkeit (m/s)</label>
       <input type="number" id="velocity" value="30" step="any" required>
@@ -571,6 +623,22 @@
   <select id="combined-report-polar-select" style="margin-bottom:10px;"></select>
   <select id="combined-report-gci-select" style="margin-bottom:10px;"></select>
   <button type="button" id="combined-report-btn">Bericht erstellen</button>
+</div>
+
+<div id="rotation-preview-overlay" hidden>
+  <div id="rotation-preview-panel">
+    <div class="rotation-preview-header">
+      <h2>Geometrie pruefen/drehen</h2>
+      <button type="button" id="rotation-preview-close-btn">&times;</button>
+    </div>
+    <p id="rotation-preview-status">Lade Geometrie ...</p>
+    <div id="rotation-preview-viewer"></div>
+    <div id="rotation-preview-candidates"></div>
+    <div class="rotation-preview-footer">
+      <button type="button" id="rotation-preview-cancel-btn">Abbrechen</button>
+      <button type="button" id="rotation-preview-apply-btn">Diese Ausrichtung uebernehmen</button>
+    </div>
+  </div>
 </div>
 
 <script src="app.js"></script>

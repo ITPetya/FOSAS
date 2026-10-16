@@ -69,6 +69,12 @@ die vorige ausdruecklich freigegeben hat.
   vollautomatische GCI-Entscheidungslogik (wann eine Netzstudie
   wirklich noetig ist, Zwischenspeicherung ueber Auftraege hinweg)
   ist bewusst zurueckgestellt, siehe ADR-0019.
+  Achsenorientierung (zwei real gescheiterte STEP-Dateien, siehe
+  RISKS.md R13): automatische Korrektur fuer den eindeutigen Fall plus
+  manuelle 3D-Dreh-Vorschau (`/geometry/preview`) fuer den mehrdeutigen
+  Rest am 2026-10-16 umgesetzt und gegen beide echten Dateien end-to-end
+  verifiziert (siehe ADR-0020); die Frontend-Logik nur per Node-
+  Simulation gegengeprueft, echter Browser-Klicktest steht noch aus.
 - Phase 4, Animation (quasi-stationaer), Cache, Parallelisierung.
 - Phase 5, Installer, Uninstaller, Prozessverwaltung, Servermodus,
   KI-Schnittstelle. Servermodus ist bereits erreicht (Phase 1/2 liefen

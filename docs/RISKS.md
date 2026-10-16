@@ -1217,9 +1217,23 @@ erwartungsgemaess noch nicht konvergiert). Eine zweite echte Datei
 eindeutig (vier von sechs Kandidaten bestehen die lockere Pruefung, die
 beste hat trotzdem 49% Dicke/Sehnen-Verhaeltnis) - bleibt bewusst
 unkorrigiert, bekommt aber jetzt eine viel konkretere Fehlermeldung mit
-allen sechs Kandidatenzahlen statt der alten, generischen. Die manuelle
-3D-Dreh-Vorschau fuer genau diesen (und jeden anderen uneindeutigen)
-Fall ist nicht Teil dieser automatischen Haelfte, siehe ADR-0020.
+allen sechs Kandidatenzahlen statt der alten, generischen.
+
+**Update 2026-10-16, manuelle Haelfte (Teil B) jetzt auch umgesetzt
+(ADR-0020):** `POST /geometry/preview` plus eine neue "Geometrie
+pruefen/drehen"-Aktion in der Web-UI deckt jetzt genau den Heckfluegel-
+Fall (und jeden anderen uneindeutigen) ab: alle 6 Achsenzuordnungen
+werden vorab tesselliert und als anklickbare 3D-Kandidaten gezeigt,
+die gewaehlte Zuordnung wird per `preview_id`/`manual_rotation_label`
+ohne erneuten Upload direkt an den Auftrag durchgereicht (automatische
+Erkennung wird dabei nicht mehr befragt). Gegen beide echten Dateien
+per curl bestaetigt (identische Zahlen wie oben); ein End-zu-Ende-Lauf
+ueber genau diesen neuen Pfad (Tragflaeche, `manual_rotation_label=
+rot_x90`, ohne erneuten Upload) kam ebenfalls durch Vernetzung und
+Loesung (cl=0.601, cd=0.426 bei 15 Iterationen). Damit ist die in der
+urspruenglichen Pflichtenheft-Anforderung (Abschnitt 3) vorgesehene,
+nutzerbestaetigte Ausrichtung erstmals tatsaechlich gebaut, nicht nur
+automatisch erraten.
 
 ## R14: Kein Absturzschutz, Auftragsstatus an einen einzelnen Browser-Tab gebunden (in Arbeit)
 

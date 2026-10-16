@@ -1,9 +1,10 @@
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.fixtures import naca0012_wing_step
+from tests.fixtures import naca0012_wing_step, naca0012_wing_step_wrong_axes
 
 from fosas_engine.app import create_app
 from fosas_engine.settings import Settings
@@ -883,3 +884,158 @@ def test_too_many_wrong_passwords_are_rate_limited(gated_client):
     # guess during a brute-force burst must not bypass the lockout.
     still_locked_response = gated_client.post("/login", data={"password": "s3cr3t", "next": "/"})
     assert still_locked_response.status_code == 429
+
+
+# --- Geometry preview tool (docs/ARCHITECTURE.md "Koordinatenkonvention",
+# ADR-0020 Teil B): POST /geometry/preview, and the preview_id/
+# manual_rotation_label submission path on /jobs.
+
+
+def test_geometry_preview_rejects_missing_token(client, tmp_path):
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    with open(step_path, "rb") as f:
+        response = client.post("/geometry/preview", files={"step_file": ("wing.step", f, "application/octet-stream")})
+    assert response.status_code == 401
+
+
+def test_geometry_preview_reports_all_six_candidates_and_variants(client, settings, tmp_path):
+    # A deliberately wrong-axis wing (same fixture used in
+    # core/tests/test_pipeline.py for run_case's own rejection test):
+    # even the best of all 6 automatic candidates is not confident
+    # enough (see detect_axis_orientation), which is exactly the case
+    # the preview tool exists for - the response must still carry real
+    # numbers and a tessellated variant for every candidate, not just
+    # the ones that happen to look plausible.
+    step_path = naca0012_wing_step_wrong_axes(tmp_path / "wrong_axes.step", chord=0.6, span=1.2, n=15)
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/geometry/preview",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("wrong_axes.step", f, "application/octet-stream")},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["preview_id"]
+    assert len(body["candidates"]) == 6
+    assert {c["label"] for c in body["candidates"]} == {
+        "identity", "rot_x90", "rot_y90", "rot_z90", "rot_x90_then_z90", "rot_z90_then_x90",
+    }
+    assert body["confident"] is False
+    assert body["suggested_label"] is None
+    assert len(body["variants"]) == 6
+    for variant in body["variants"]:
+        assert len(variant["vertices"]) > 0
+        assert len(variant["triangles"]) > 0
+        assert all(len(v) == 3 for v in variant["vertices"])
+        assert all(len(t) == 3 for t in variant["triangles"])
+
+
+def test_geometry_preview_confidently_suggests_a_rotation_for_an_already_correct_wing(client, settings, tmp_path):
+    # The identity candidate is already plausible here, so there is
+    # nothing to suggest (see GeometryPreviewOut.from_orientation:
+    # suggested_label stays None whenever applied_label is None, even
+    # though the shape as given is perfectly fine) - this pins down
+    # that "confident" and "has a suggestion" are not the same thing.
+    step_path = naca0012_wing_step(tmp_path / "wing.step", chord=0.6, span=1.2, n=15)
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/geometry/preview",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["confident"] is True
+    assert body["suggested_label"] is None
+
+
+def test_geometry_preview_rejects_a_bad_step_file(client, settings, tmp_path):
+    bad_path = tmp_path / "not_a_step_file.step"
+    bad_path.write_text("this is not STEP data")
+    with open(bad_path, "rb") as f:
+        response = client.post(
+            "/geometry/preview",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("not_a_step_file.step", f, "application/octet-stream")},
+        )
+    assert response.status_code == 422
+
+
+def test_create_job_rejects_both_step_file_and_preview_id(client, settings, tmp_path):
+    step_path = naca0012_wing_step(tmp_path / "wing.step")
+    with open(step_path, "rb") as f:
+        response = client.post(
+            "/jobs",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("wing.step", f, "application/octet-stream")},
+            data={"velocity": "30", "aoa_deg": "5", "preview_id": "some-id"},
+        )
+    assert response.status_code == 422
+
+
+def test_create_job_rejects_neither_step_file_nor_preview_id(client, settings):
+    response = client.post(
+        "/jobs",
+        headers={"Authorization": f"Bearer {settings.token}"},
+        data={"velocity": "30", "aoa_deg": "5"},
+    )
+    assert response.status_code == 422
+
+
+def test_create_job_rejects_an_unknown_preview_id(client, settings):
+    response = client.post(
+        "/jobs",
+        headers={"Authorization": f"Bearer {settings.token}"},
+        data={"velocity": "30", "aoa_deg": "5", "preview_id": "does-not-exist"},
+    )
+    assert response.status_code == 404
+
+
+def test_create_job_from_a_preview_id_applies_the_chosen_rotation(client, settings, tmp_path, monkeypatch):
+    # The whole point of the preview tool: upload once, then submit
+    # without re-uploading, with the user's own chosen rotation applied
+    # directly (bypassing detect_axis_orientation entirely, see
+    # pipeline.run_case) - this pins down that preview_id actually
+    # reaches the real job, not just that the request is accepted.
+    import fosas_engine.app as app_module
+
+    captured = {}
+
+    def fake_run_case(step_path, params, work_dir, executables, solve_timeout=None, **kwargs):
+        captured["manual_rotation_label"] = params.manual_rotation_label
+        captured["step_path"] = Path(step_path)
+        raise app_module.PipelineError("solving", "stop before actually running SU2")
+
+    monkeypatch.setattr(app_module, "run_case", fake_run_case)
+
+    step_path = naca0012_wing_step_wrong_axes(tmp_path / "wrong_axes.step", chord=0.6, span=1.2, n=15)
+    with open(step_path, "rb") as f:
+        preview_response = client.post(
+            "/geometry/preview",
+            headers={"Authorization": f"Bearer {settings.token}"},
+            files={"step_file": ("wrong_axes.step", f, "application/octet-stream")},
+        )
+    preview_id = preview_response.json()["preview_id"]
+
+    job_response = client.post(
+        "/jobs",
+        headers={"Authorization": f"Bearer {settings.token}"},
+        data={
+            "velocity": "30",
+            "aoa_deg": "5",
+            "preview_id": preview_id,
+            "manual_rotation_label": "rot_z90_then_x90",
+        },
+    )
+    assert job_response.status_code == 200
+    job_id = job_response.json()["id"]
+    assert job_response.json()["params"]["manual_rotation_label"] == "rot_z90_then_x90"
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and "manual_rotation_label" not in captured:
+        time.sleep(0.05)
+    assert captured["manual_rotation_label"] == "rot_z90_then_x90"
+    assert captured["step_path"].exists()  # the preview's own STEP file was reused, not re-uploaded
+
+    job = client.get(f"/jobs/{job_id}", headers={"Authorization": f"Bearer {settings.token}"}).json()
+    assert job["status"] == "failed"

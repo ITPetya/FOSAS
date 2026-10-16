@@ -40,6 +40,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
+from fosas_core.geometry import GeometryError, ROTATION_LABELS, apply_named_rotation, detect_axis_orientation, import_step
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
 from fosas_core.report import (
     CombinedReportData,
@@ -58,8 +59,9 @@ from fosas_core.report import (
 )
 
 from fosas_engine.gci_studies import GciStudyStore, new_gci_study_id
+from fosas_engine.geometry_previews import GeometryPreviewStore
 from fosas_engine.jobs import Job, JobNotArchivableError, JobNotDeletableError, JobNotResumableError, JobStore, new_job_id
-from fosas_engine.models import GciStudyOut, JobOut, PolarStudyOut
+from fosas_engine.models import GciStudyOut, GeometryPreviewOut, GeometryVariantOut, JobOut, PolarStudyOut
 from fosas_engine.polar_studies import PolarStudyStore, new_polar_study_id
 from fosas_engine.settings import Settings
 
@@ -85,6 +87,7 @@ def create_app(settings: Settings) -> FastAPI:
     app.state.jobs = JobStore.load_from_disk(settings.work_root)
     app.state.polar_studies = PolarStudyStore.load_from_disk(settings.work_root)
     app.state.gci_studies = GciStudyStore.load_from_disk(settings.work_root)
+    app.state.geometry_previews = GeometryPreviewStore(settings.work_root / "previews")
     app.state.executor = ThreadPoolExecutor(max_workers=settings.max_concurrent_jobs)
 
     # A job that was still "running" when the engine last stopped (crash
@@ -243,9 +246,64 @@ button {{ padding: 8px 16px; cursor: pointer; }}
         js = _APP_JS_PATH.read_text()
         return Response(content=js.replace("__FOSAS_TOKEN__", settings.token), media_type="application/javascript")
 
+    @app.post("/geometry/preview", response_model=GeometryPreviewOut, dependencies=[Depends(require_token)])
+    async def create_geometry_preview(step_file: UploadFile):
+        # Manual rotation preview (docs/ARCHITECTURE.md
+        # "Koordinatenkonvention", ADR-0020 Teil B): deliberately
+        # synchronous, inline in the request handler, not submitted to
+        # app.state.executor - import_step and tessellate are both cheap
+        # (no Gmsh/SU2 involved at all here, confirmed ~0.1s combined on
+        # a real wing file in the approved plan), so a background job
+        # would only add latency for no benefit.
+        step_bytes = await step_file.read()
+        preview = app.state.geometry_previews.create(step_bytes)
+        try:
+            geometry = import_step(preview.step_path)
+        except GeometryError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        orientation = detect_axis_orientation(geometry.shape)
+
+        bbox = geometry.shape.bounding_box()
+        diagonal = (
+            (bbox.max.X - bbox.min.X) ** 2 + (bbox.max.Y - bbox.min.Y) ** 2 + (bbox.max.Z - bbox.min.Z) ** 2
+        ) ** 0.5
+        # A fixed absolute tessellation tolerance (e.g. the 0.1mm used
+        # ad-hoc while verifying the plan) only looks reasonable for a
+        # ~100mm-chord wing; scaling it to the actual geometry's own
+        # size keeps triangle counts (and thus response size) similar
+        # regardless of whether the part is 10mm or 10m across. This is
+        # for a visual preview only, nowhere near as strict as a meshing
+        # tolerance would need to be.
+        tessellate_tolerance = max(diagonal * 0.001, 1e-4)
+
+        variants = []
+        for label in ROTATION_LABELS:
+            shape = geometry.shape if label == "identity" else apply_named_rotation(geometry.shape, label)
+            vertices, triangles = shape.tessellate(tessellate_tolerance, 0.3)
+            variants.append(
+                GeometryVariantOut(
+                    label=label,
+                    vertices=[(v.X, v.Y, v.Z) for v in vertices],
+                    triangles=list(triangles),
+                )
+            )
+
+        return GeometryPreviewOut.from_orientation(preview.id, orientation, variants)
+
     @app.post("/jobs", response_model=JobOut, dependencies=[Depends(require_token)])
     async def create_job(
-        step_file: UploadFile,
+        step_file: UploadFile | None = None,
+        preview_id: str | None = Form(
+            None, description="Use an already-uploaded geometry from POST /geometry/preview instead of step_file"
+        ),
+        manual_rotation_label: str | None = Form(
+            None,
+            description=(
+                "Explicit axis orientation chosen in the geometry preview tool, one of "
+                f"{ROTATION_LABELS}; overrides automatic detection when set"
+            ),
+        ),
         velocity: float = Form(..., description="Freestream velocity magnitude, m/s"),
         aoa_deg: float = Form(..., description="Angle of attack, degrees"),
         sideslip_deg: float = Form(0.0, description="Sideslip angle (crosswind), degrees"),
@@ -283,12 +341,13 @@ button {{ padding: 8px 16px; cursor: pointer; }}
                 time_discretization=time_discretization,
                 residual_threshold=residual_threshold,
                 material=material or None,
+                manual_rotation_label=manual_rotation_label or None,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-        step_bytes = await step_file.read()
-        job = _create_and_submit_job(app, params, step_file.filename or "geometry.step", step_bytes)
+        step_bytes, step_filename = await _resolve_step_bytes(app, step_file, preview_id)
+        job = _create_and_submit_job(app, params, step_filename, step_bytes)
         return JobOut.from_job(job)
 
     @app.get("/jobs", response_model=list[JobOut], dependencies=[Depends(require_token)])
@@ -421,7 +480,17 @@ button {{ padding: 8px 16px; cursor: pointer; }}
 
     @app.post("/polar-studies", response_model=PolarStudyOut, dependencies=[Depends(require_token)])
     async def create_polar_study(
-        step_file: UploadFile,
+        step_file: UploadFile | None = None,
+        preview_id: str | None = Form(
+            None, description="Use an already-uploaded geometry from POST /geometry/preview instead of step_file"
+        ),
+        manual_rotation_label: str | None = Form(
+            None,
+            description=(
+                "Explicit axis orientation chosen in the geometry preview tool, one of "
+                f"{ROTATION_LABELS}; overrides automatic detection when set"
+            ),
+        ),
         aoa_values: list[float] = Form(..., description="Angle of attack values to sweep, degrees"),
         velocity: float = Form(..., description="Freestream velocity magnitude, m/s"),
         sideslip_deg: float = Form(0.0, description="Sideslip angle (crosswind), degrees, fixed across the sweep"),
@@ -449,8 +518,7 @@ button {{ padding: 8px 16px; cursor: pointer; }}
         if not aoa_values:
             raise HTTPException(status_code=422, detail="aoa_values must not be empty")
 
-        step_bytes = await step_file.read()
-        step_filename = step_file.filename or "geometry.step"
+        step_bytes, step_filename = await _resolve_step_bytes(app, step_file, preview_id)
         job_ids = []
         for aoa in aoa_values:
             try:
@@ -471,6 +539,7 @@ button {{ padding: 8px 16px; cursor: pointer; }}
                     time_discretization=time_discretization,
                     residual_threshold=residual_threshold,
                     material=material or None,
+                    manual_rotation_label=manual_rotation_label or None,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -556,7 +625,17 @@ button {{ padding: 8px 16px; cursor: pointer; }}
 
     @app.post("/gci-studies", response_model=GciStudyOut, dependencies=[Depends(require_token)])
     async def create_gci_study(
-        step_file: UploadFile,
+        step_file: UploadFile | None = None,
+        preview_id: str | None = Form(
+            None, description="Use an already-uploaded geometry from POST /geometry/preview instead of step_file"
+        ),
+        manual_rotation_label: str | None = Form(
+            None,
+            description=(
+                "Explicit axis orientation chosen in the geometry preview tool, one of "
+                f"{ROTATION_LABELS}; overrides automatic detection when set"
+            ),
+        ),
         velocity: float = Form(..., description="Freestream velocity magnitude, m/s"),
         aoa_deg: float = Form(..., description="Angle of attack, degrees"),
         sideslip_deg: float = Form(0.0, description="Sideslip angle (crosswind), degrees"),
@@ -586,8 +665,7 @@ button {{ padding: 8px 16px; cursor: pointer; }}
         if refinement_ratio <= 1.0:
             raise HTTPException(status_code=422, detail="refinement_ratio must be greater than 1.0")
 
-        step_bytes = await step_file.read()
-        step_filename = step_file.filename or "geometry.step"
+        step_bytes, step_filename = await _resolve_step_bytes(app, step_file, preview_id)
 
         base_min_factor = 0.01
         base_max_factor = 0.5
@@ -615,6 +693,7 @@ button {{ padding: 8px 16px; cursor: pointer; }}
                     background_size_min_factor=base_min_factor / scale,
                     background_size_max_factor=base_max_factor / scale,
                     material=material or None,
+                    manual_rotation_label=manual_rotation_label or None,
                 )
             except ValueError as exc:
                 raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -799,6 +878,29 @@ button {{ padding: 8px 16px; cursor: pointer; }}
 # with ~2960 iterations done, recovered only via the resume mechanism.
 _SOLVE_SECONDS_PER_ITERATION = 10.0
 _SOLVE_TIMEOUT_FLOOR = 7200.0
+
+
+async def _resolve_step_bytes(
+    app: FastAPI, step_file: UploadFile | None, preview_id: str | None
+) -> tuple[bytes, str]:
+    """Shared by POST /jobs, /polar-studies, /gci-studies: a submission
+    either uploads a fresh STEP file, or references one already
+    uploaded to the geometry preview tool (see geometry_previews.py,
+    ADR-0020 Teil B) - exactly one of the two, never both and never
+    neither, so a submission never silently runs on the wrong file.
+    """
+    if step_file is not None and preview_id is not None:
+        raise HTTPException(status_code=422, detail="Provide either step_file or preview_id, not both")
+    if step_file is not None:
+        return await step_file.read(), step_file.filename or "geometry.step"
+    if preview_id is not None:
+        preview = app.state.geometry_previews.get(preview_id)
+        if preview is None:
+            raise HTTPException(
+                status_code=404, detail="No such geometry preview (expired after 2 hours, or never existed)"
+            )
+        return preview.step_path.read_bytes(), preview.step_path.name
+    raise HTTPException(status_code=422, detail="Provide either step_file or preview_id")
 
 
 def _create_and_submit_job(app: FastAPI, params: CaseParams, step_filename: str, step_bytes: bytes) -> Job:

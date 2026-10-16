@@ -146,7 +146,7 @@ und erklaert, warum die vom Nutzer per 3D-Vorschau zu bestaetigende
 Ausrichtung (Abschnitt 3 der urspruenglichen Anforderungen) architektonisch
 notwendig ist, nicht nur eine Komfortfunktion.
 
-**Teilweise umgesetzt (2026-10-16, siehe ADR-0020, RISKS.md R13):**
+**Umgesetzt (2026-10-16, siehe ADR-0020, RISKS.md R13):**
 `fosas_core.geometry.detect_axis_orientation` erkennt und korrigiert
 jetzt automatisch den eindeutigen Fall (Achsen um ein Vielfaches von 90
 Grad verwechselt, typisch bei unterschiedlichen CAD-Export-Konventionen),
@@ -154,10 +154,29 @@ direkt gegen zwei echte, zuvor gescheiterte STEP-Dateien bestaetigt.
 Eine bereits plausible Geometrie wird nie angetastet. Eine mehrdeutige
 Geometrie (die Heuristik findet keine eindeutig beste Zuordnung) scheitert
 weiterhin, jetzt aber mit einer genauen Fehlermeldung (alle sechs
-moeglichen Zuordnungen mit echten Zahlen). Die eigentliche, urspruenglich
-vorgesehene manuelle "Ausrichtung per 3D-Vorschau bestaetigt" fuer genau
-diesen mehrdeutigen Rest ist zum jetzigen Zeitpunkt noch in Arbeit
-(neuer `/geometry/preview`-Endpunkt plus Dreh-UI, siehe ADR-0020).
+moeglichen Zuordnungen mit echten Zahlen).
+
+Die urspruenglich vorgesehene manuelle "Ausrichtung per 3D-Vorschau
+bestaetigt" fuer genau diesen mehrdeutigen Rest ist jetzt ebenfalls
+umgesetzt: `POST /geometry/preview` (`fosas_engine/app.py`) nimmt eine
+STEP-Datei entgegen, legt sie kurzlebig (max. 2 Stunden,
+`fosas_engine.geometry_previews.GeometryPreviewStore`) unter einer
+`preview_id` ab und liefert alle 6 moeglichen Achsenzuordnungen bereits
+vorberechnet zurueck (Zahlen plus tesselliertes Dreiecksnetz je
+Zuordnung, `Shape.tessellate`, kein Gmsh/SU2-Aufruf). Die Web-UI zeigt
+diese 6 Varianten als anklickbare Kandidatenkarten in einer eigenen,
+kleinen three.js-Szene (`clients/web/app.js`:
+`renderRotationPreviewVariant`/`renderRotationCandidates`) - ein Klick
+auf eine Karte tauscht nur die bereits geladene Geometrie aus (keine
+weitere Serveranfrage, echte Live-Vorschau). `POST /jobs`/
+`/polar-studies`/`/gci-studies` akzeptieren seitdem optional
+`preview_id` (keine erneute Datei-Uebertragung) und
+`manual_rotation_label` (eines von `geometry.ROTATION_LABELS`, direkt
+angewendet, OHNE `detect_axis_orientation` erneut zu befragen - eine
+vom Nutzer in der Vorschau getroffene Wahl wird nie von der Automatik
+ueberschrieben). Siehe ADR-0020 fuer die bewusste Abweichung von der
+urspruenglich geplanten Umsetzung (sechs benannte Labels statt drei
+freier Drehwinkel, wegen der Nichtkommutativitaet von Rotationen).
 
 ## Geometrie- und Vernetzungspipeline
 

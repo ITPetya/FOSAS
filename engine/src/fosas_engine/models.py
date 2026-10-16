@@ -9,6 +9,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 from fosas_core.gci import GciResult, GridLevel, compute_gci
+from fosas_core.geometry import OrientationResult
 
 from fosas_engine.gci_studies import GciStudy
 from fosas_engine.jobs import Job, JobStatus, JobStore
@@ -45,6 +46,7 @@ class CaseParamsOut(BaseModel):
     background_size_min_factor: float
     background_size_max_factor: float
     material: str | None
+    manual_rotation_label: str | None
 
 
 class ConvergenceOut(BaseModel):
@@ -170,6 +172,7 @@ class JobOut(BaseModel):
             background_size_min_factor=job.params.background_size_min_factor,
             background_size_max_factor=job.params.background_size_max_factor,
             material=job.params.material,
+            manual_rotation_label=job.params.manual_rotation_label,
         )
         result_out = None
         if job.result is not None:
@@ -435,4 +438,67 @@ class GciStudyOut(BaseModel):
             levels=levels,
             result=result_out,
             result_error=result_error,
+        )
+
+
+class OrientationCandidateOut(BaseModel):
+    """Mirrors fosas_core.geometry.OrientationCandidate, for the geometry
+    preview tool (docs/ARCHITECTURE.md "Koordinatenkonvention",
+    ADR-0020 Teil B) to show real numbers for every one of the 6
+    possible axis assignments, not just whichever one was auto-applied.
+    """
+
+    label: str
+    chord: float
+    span: float
+    thickness: float
+    plausible: bool
+    thickness_ratio: float
+
+
+class GeometryVariantOut(BaseModel):
+    """One of the 6 possible axis-rotation outcomes, pre-tessellated so
+    the client can switch between them instantly (no per-click server
+    round-trip, see ADR-0020 Teil B / plan "rein clientseitig"). Flat
+    [x, y, z] vertex triples and [i, j, k] triangle index triples,
+    straight from build123d's Shape.tessellate.
+    """
+
+    label: str
+    vertices: list[tuple[float, float, float]]
+    triangles: list[tuple[int, int, int]]
+
+
+class GeometryPreviewOut(BaseModel):
+    preview_id: str
+    candidates: list[OrientationCandidateOut]
+    # The automatically suggested label, only set when detect_axis_
+    # orientation was actually confident - a non-confident "best guess"
+    # is deliberately not surfaced as a suggestion here, same rule as
+    # the automatic correction itself never applying a low-confidence
+    # guess silently (see geometry.py docstring).
+    suggested_label: str | None
+    confident: bool
+    variants: list[GeometryVariantOut]
+
+    @classmethod
+    def from_orientation(
+        cls, preview_id: str, orientation: OrientationResult, variants: list[GeometryVariantOut]
+    ) -> "GeometryPreviewOut":
+        return cls(
+            preview_id=preview_id,
+            candidates=[
+                OrientationCandidateOut(
+                    label=c.label,
+                    chord=c.chord,
+                    span=c.span,
+                    thickness=c.thickness,
+                    plausible=c.plausible,
+                    thickness_ratio=c.thickness_ratio,
+                )
+                for c in orientation.candidates
+            ],
+            suggested_label=orientation.applied_label if orientation.confident else None,
+            confident=orientation.confident,
+            variants=variants,
         )
