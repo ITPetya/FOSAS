@@ -897,3 +897,79 @@ cd=0.426 nach 15 Iterationen). Neue Frontend-Logik
 `appendStepFileOrPreview`) per Node-Simulation mit einem three.js-Stub
 gegengeprueft (kein echter Browser verfuegbar); ein echter
 Klicktest durch den Projektinhaber steht wie immer noch aus.
+
+## ADR-0021: Mobile-taugliches UI (ein-/ausklappbare und groessenverstellbare Panels, echtes Vollbild, sofortige Geometrie-Vorschau)
+
+**Kontext:** Der Projektinhaber hat die Web-UI erstmals auf dem Handy
+ausprobiert: "das UI ist auf dem Handy leider etwas blöd". Konkrete
+Punkte: (1) kein `<meta name="viewport">` - mobile Browser rendern die
+Seite daher in Desktop-Breite (~980px) und zoomen herunter, statt die
+tatsaechliche Geraetebreite zu nutzen; (2) die drei festen 320px-
+Seitenpanels (ADR-0019) passen auf ein ~375px breites Display nicht,
+Panels sollen ein-/ausklappbar sein; (3) Panels (Menues, Konsole) sollen
+sich in einer Achse ziehen/skalieren lassen; (4) der "Vollbild"-Knopf
+oeffnete `/viewer?job=...` in einem neuen Tab (`target="_blank"`) - auf
+dem Handy wirkt das wie "die Seite laedt einfach neu", kein erkennbarer
+Tabwechsel; (5) zwischen Datei-Upload und fertigem Ergebnis wurde
+nichts angezeigt - weder eine Bestaetigung "richtige Datei, richtige
+Achsen geladen" noch (auf dem Handy, siehe Punkt 2/3) der ohnehin
+vorhandene Fortschrittsbereich, da er ausserhalb des sichtbaren
+Bereichs lag.
+
+**Entscheidung:**
+- `<meta name="viewport" content="width=device-width, initial-scale=1">`
+  ergaenzt - die eigentliche Grundursache fuer "sieht komisch/winzig
+  aus", vor jeder anderen Aenderung behoben.
+- Linkes und rechtes Panel ueber zwei neue Kopfzeilen-Knoepfe
+  ("Einstellungen"/"Ergebnis") ein-/ausklappbar, auf Desktop als
+  Grid-Spalte auf 0 kollabiert, auf schmalen Bildschirmen (<=860px,
+  Media-Query) stattdessen als seitliche Schubladen-Overlays mit
+  Abdunkelung zum Schliessen per Antippen aussen - dieselben
+  `left-collapsed`/`right-collapsed`-Klassen steuern beide Darstellungen
+  einheitlich, nur die CSS-Definition dessen, was "eingeklappt"
+  bedeutet, unterscheidet sich. Auf schmalen Bildschirmen starten beide
+  Panels eingeklappt (sonst waere ein fester 320px-Block auf einem
+  375px-Display unbrauchbar); "Ergebnis" bleibt zusaetzlich deaktiviert,
+  bis tatsaechlich ein Ergebnis existiert (keine leere Schublade).
+- Drei schmale Zieh-Griffe (links/Mitte, Mitte/rechts, Mitte/Konsole),
+  reine Pointer-Events, schreiben auf CSS-Variablen (`--left-w`/
+  `--right-w`/`--console-h`), die in den bestehenden Grid-Spalten/-Zeilen
+  verwendet werden - eine Achse pro Griff, wie angefordert. Auf schmalen
+  Bildschirmen ausgeblendet (dort sind die Panels ohnehin Overlays, eine
+  feste Breite ergibt dort keinen Sinn).
+- "Vollbild" ruft jetzt die echte Fullscreen-API auf dem Center-Panel
+  auf (`requestFullscreen`/`exitFullscreen`), statt eine zweite Seite in
+  einem neuen Tab zu oeffnen - funktioniert auf Desktop und Handy
+  gleich, kein verwirrender Tab-Wechsel mehr. `viewer.html` selbst bleibt
+  unveraendert und weiterhin direkt per URL erreichbar (nur dieser eine
+  Knopf verlinkt nicht mehr automatisch dorthin, siehe Verifikation
+  unten fuer die Abwaegung).
+- Neue, automatische Geometrie-Vorschau: sobald eine STEP-Datei gewaehlt
+  wird, laedt die UI sie im Hintergrund zu `/geometry/preview` hoch
+  (derselbe Endpunkt wie ADR-0020 Teil B) und zeigt die vorgeschlagene
+  (oder, falls nicht eindeutig, die unveraenderte) Variante sofort im
+  3D-Tab - noch vor jeder Berechnung, rein passiv, blockiert das
+  Absenden nicht bei einem Fehler. Beantwortet direkt "ist die richtige
+  Datei geladen, in der richtigen Ausrichtung?", ohne dass der Nutzer
+  erst den separaten Dreh-Vorschau-Knopf (ADR-0020) oeffnen muss. Ein
+  Token-Mechanismus (gleiches Muster wie `pollJob`s `activePollToken`)
+  verhindert, dass eine noch laufende Vorschau-Anfrage ein inzwischen
+  bereits fertiges echtes Ergebnis im selben 3D-Bereich ueberschreibt.
+
+**Verifikation:** Kein echter Browser verfuegbar (auch `claude-in-chrome`
+in dieser Sitzung nicht eingerichtet) - stattdessen: HTML-
+Wohlformtheit per Python-`html.parser` gegengeprueft (keine
+unausgeglichenen Tags), CSS-Klammerbalance gezaehlt, `node --check` auf
+`app.js`, und die komplette `app.js` in einem Node/three.js-Stub
+ausgefuehrt (nicht nur einzelne Funktionen wie zuvor - deckt echte
+Lade-/Verdrahtungsfehler zuverlaessiger auf): Panel-Ein-/Ausklappen,
+Ergebnis-Panel-Sichtbarkeit samt Knopf-Deaktivierung, Zieh-Griff-Drag
+(Pointer-Events simuliert, Breite korrekt berechnet), automatische
+Geometrie-Vorschau (Legende, kein Fehlhinweis, Renderer tatsaechlich in
+den Container eingehaengt) und der Vollbild-Klick (wirft keine
+Ausnahme) laufen alle wie erwartet. Zusaetzlich gegen eine echte lokale
+Engine verifiziert: `/geometry/preview` liefert weiterhin korrekte
+Daten, die ausgelieferte `app.js`/`index.html` (mit eingesetztem Token)
+ist syntaktisch intakt. Ein echter Klicktest auf einem Telefon durch
+den Projektinhaber bleibt weiterhin der einzige verlaessliche
+Abschluss-Test fuer dieses Thema.

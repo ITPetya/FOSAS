@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FOSAS</title>
 <style>
   :root {
@@ -219,33 +220,60 @@
   .info-popover .tag.annahme { background: rgba(224,167,47,0.18); color: var(--warn); }
 
   /* --- App-Rahmen: ein Fenster statt Panel-Stapel, Menueband + Seiten-
-     panels + Konsole, wie bei Inventor/AutoCAD/Photoshop. */
+     panels + Konsole, wie bei Inventor/AutoCAD/Photoshop.
+     --left-w/--right-w/--console-h sind von den Zieh-Griffen unten
+     gesetzte Groessen (Resize); die collapsed-Klassen ueberschreiben sie
+     auf 0, ohne den zuletzt gezogenen Wert zu verwerfen (beim
+     Wiederaufklappen soll die vorherige Groesse zurueckkommen, nicht
+     immer die Grundeinstellung). */
   #app-shell {
+    /* Real custom-property declarations, not just var() fallbacks below -
+       getComputedStyle().getPropertyValue("--left-w") returns an empty
+       string (not the fallback) until a value has actually been set, so
+       the resize-drag JS needs a real starting value to read on the
+       very first drag, not just a value CSS itself falls back to. */
+    --left-w: 320px;
+    --right-w: 320px;
+    --console-h: 220px;
     display: grid;
-    grid-template-areas: "topbar topbar topbar" "left center right" "console console console";
+    grid-template-areas: "topbar topbar topbar topbar topbar" "left lhandle center rhandle right" "console console console console console";
+    /* The console row only reserves the resizable height while
+       console-panel is actually open - otherwise (collapsed, just the
+       thin console-bar visible) the row auto-sizes to that bar's own
+       height instead of leaving a dead gap below it. */
     grid-template-rows: 56px 1fr auto;
-    grid-template-columns: 320px 1fr 320px;
+    grid-template-columns: var(--left-w, 320px) 5px 1fr 5px var(--right-w, 320px);
     height: 100vh;
   }
+  #app-shell:has(#console-panel:not([hidden])) {
+    grid-template-rows: 56px 1fr var(--console-h, 220px);
+  }
+  #app-shell.left-collapsed { grid-template-columns: 0px 0px 1fr 5px var(--right-w, 320px); }
+  #app-shell.right-collapsed { grid-template-columns: var(--left-w, 320px) 5px 1fr 0px 0px; }
+  #app-shell.left-collapsed.right-collapsed { grid-template-columns: 0px 0px 1fr 0px 0px; }
   #topbar {
     grid-area: topbar; display: flex; align-items: center; justify-content: space-between;
     padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--panel);
+    gap: 8px; overflow-x: auto;
   }
-  #topbar .topbar-title { font-size: 1.05rem; font-weight: 600; }
+  #topbar .topbar-title { font-size: 1.05rem; font-weight: 600; white-space: nowrap; }
   #topbar .topbar-title .topbar-sub { color: var(--muted); font-weight: 400; font-size: 0.82rem; margin-left: 8px; }
-  #topbar .topbar-actions { display: flex; gap: 8px; }
+  #topbar .topbar-actions { display: flex; gap: 8px; flex: 0 0 auto; }
   .topbar-btn {
     margin: 0; width: auto; background: transparent; border: 1px solid var(--border);
-    color: var(--text); padding: 8px 16px; font-size: 0.88rem; border-radius: 6px;
+    color: var(--text); padding: 8px 16px; font-size: 0.88rem; border-radius: 6px; white-space: nowrap;
   }
   .topbar-btn:hover { border-color: var(--accent); }
+  .topbar-btn.active { border-color: var(--accent); color: var(--accent); }
   #left-panel, #result-panel {
-    overflow-y: auto; padding: 16px; background: var(--panel);
+    overflow-y: auto; overflow-x: hidden; padding: 16px; background: var(--panel); min-width: 0;
   }
   #left-panel { grid-area: left; border-right: 1px solid var(--border); }
   #result-panel { grid-area: right; border-left: 1px solid var(--border); }
+  #app-shell.left-collapsed #left-panel,
+  #app-shell.right-collapsed #result-panel { padding: 0; border: none; }
   #center-panel {
-    grid-area: center; overflow-y: auto; padding: 16px;
+    grid-area: center; overflow-y: auto; padding: 16px; min-width: 0;
     display: flex; flex-direction: column;
   }
   .center-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
@@ -255,13 +283,52 @@
   }
   .center-tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
   .center-tab-content { flex: 1; }
-  #console-wrap { grid-area: console; border-top: 1px solid var(--border); background: var(--panel); }
+  #console-wrap { grid-area: console; border-top: 1px solid var(--border); background: var(--panel); min-height: 0; display: flex; flex-direction: column; }
   #console-bar {
     display: flex; align-items: center; gap: 10px; padding: 8px 16px;
-    cursor: pointer; font-size: 0.85rem; color: var(--muted);
+    cursor: pointer; font-size: 0.85rem; color: var(--muted); flex: 0 0 auto;
   }
   #console-bar:hover { color: var(--text); }
-  #console-panel { padding: 0 16px 16px; }
+  #console-panel { padding: 0 16px 16px; overflow-y: auto; flex: 1; min-height: 0; }
+
+  /* --- Zieh-Griffe (Resize, eine Achse): zwischen den Seitenpanels und
+     der Mitte je ein schmaler senkrechter Balken (Breite, eigene
+     Grid-Spalte "lhandle"/"rhandle"), zwischen Mitte und Konsole ein
+     waagerechter Balken (Hoehe, erstes Flex-Kind in #console-wrap).
+     Reine Pointer-Events, kein externes Layout-Framework. Auf schmalen
+     Bildschirmen ausgeblendet (Media-Query unten), dort sind die
+     Seitenpanels ohnehin Overlays statt Grid-Spalten. */
+  .resize-handle { background: transparent; }
+  .resize-handle:hover, .resize-handle.dragging { background: var(--accent); }
+  #resize-handle-left { grid-area: lhandle; cursor: col-resize; }
+  #resize-handle-right { grid-area: rhandle; cursor: col-resize; }
+  #resize-handle-console { height: 5px; cursor: row-resize; flex: 0 0 auto; }
+  #app-shell.left-collapsed #resize-handle-left,
+  #app-shell.right-collapsed #resize-handle-right { cursor: default; pointer-events: none; }
+
+  /* --- Schmale Bildschirme (Handy): die Seitenpanels werden zu
+     einklappbaren Overlays (Schublade von der Seite) statt Grid-Spalten
+     zu sein - ein fester 320px-Block waere auf 375px Breite unbrauchbar.
+     Dieselben left-collapsed/right-collapsed-Klassen wie auf dem Desktop
+     steuern hier nur, ob die Schublade sichtbar ist (JS setzt sie beim
+     Laden auf schmalen Bildschirmen standardmaessig, siehe app.js). */
+  @media (max-width: 860px) {
+    #app-shell {
+      grid-template-areas: "topbar" "center" "console";
+      grid-template-columns: 1fr;
+    }
+    #resize-handle-left, #resize-handle-right { display: none; }
+    #left-panel, #result-panel {
+      position: fixed; top: 56px; bottom: 0; width: min(88vw, 340px);
+      z-index: 95; transition: transform 0.22s ease; box-shadow: 0 0 28px rgba(0,0,0,0.5);
+      border: none;
+    }
+    #left-panel { left: 0; transform: translateX(-100%); }
+    #result-panel { right: 0; transform: translateX(100%); }
+    #app-shell:not(.left-collapsed) #left-panel { transform: translateX(0); }
+    #app-shell:not(.right-collapsed) #result-panel { transform: translateX(0); }
+  }
+  #panel-backdrop { position: fixed; inset: 56px 0 0 0; background: rgba(0,0,0,0.5); z-index: 90; }
   #archive-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
   }
@@ -350,11 +417,14 @@
   <div id="topbar">
     <div class="topbar-title">FOSAS <span class="topbar-sub">virtueller Windkanal</span></div>
     <div class="topbar-actions">
+      <button type="button" class="topbar-btn active" id="toggle-left-btn">Einstellungen</button>
+      <button type="button" class="topbar-btn" id="toggle-right-btn" disabled>Ergebnis</button>
       <button type="button" class="topbar-btn" id="topbar-new-btn">Neue Berechnung</button>
       <button type="button" class="topbar-btn" id="topbar-archive-btn">Archiv</button>
       <button type="button" class="topbar-btn" id="topbar-report-btn">Bericht</button>
     </div>
   </div>
+  <div id="panel-backdrop" hidden></div>
 
   <div id="left-panel">
     <form id="case-form">
@@ -436,6 +506,7 @@
     <div class="status" id="status"></div>
     <div class="error" id="error" hidden></div>
   </div>
+  <div class="resize-handle" id="resize-handle-left"></div>
 
   <div id="center-panel">
     <div class="center-tabs">
@@ -447,7 +518,7 @@
     <div class="center-tab-content" id="center-tab-3d">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <h3 style="font-size:0.95rem;margin:0;" data-info="viewer3d">3D-Ansicht (cp auf der Oberflaeche)</h3>
-        <a id="fullscreen-link" href="#" target="_blank" rel="noopener" class="archive-toggle-btn" style="text-decoration:none;">Vollbild &#8599;</a>
+        <button type="button" id="fullscreen-btn" class="archive-toggle-btn">Vollbild &#8599;</button>
       </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin:6px 0;font-size:0.85rem;color:var(--muted);">
         <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
@@ -487,6 +558,7 @@
       </div>
     </div>
   </div>
+  <div class="resize-handle" id="resize-handle-right"></div>
 
   <div id="result-panel" hidden>
     <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -572,6 +644,7 @@
   </div>
 
   <div id="console-wrap">
+    <div class="resize-handle" id="resize-handle-console"></div>
     <div id="console-bar">
       <span id="console-toggle-icon">&#9662;</span>
       <span>Konsole</span>

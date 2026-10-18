@@ -1210,26 +1210,12 @@ function buildRotationVariantGeometry(variant) {
   return geometry;
 }
 
-function renderRotationPreviewVariant(variant) {
-  const container = document.getElementById("rotation-preview-viewer");
-  if (typeof THREE === "undefined") {
-    container.textContent = "3D-Bibliothek (three.js) konnte nicht geladen werden.";
-    return;
-  }
-
-  const geometry = buildRotationVariantGeometry(variant);
-
-  if (rotationPreviewState) {
-    // Swap geometry only, keep camera/controls so the user's own view
-    // angle survives switching between candidates (comparing
-    // orientations is the whole point of this tool).
-    rotationPreviewState.mesh.geometry.dispose();
-    rotationPreviewState.mesh.geometry = geometry;
-    rotationPreviewState.wireframe.geometry.dispose();
-    rotationPreviewState.wireframe.geometry = new THREE.WireframeGeometry(geometry);
-    return;
-  }
-
+// Shared by renderRotationPreviewVariant (the dedicated rotate/preview
+// overlay) and renderGeometryPreviewInMainViewer (the automatic, no-
+// click-needed preview in the main 3D-Ansicht tab after choosing a
+// file) - both show the exact same kind of thing (a tessellated STEP
+// mesh, no cp data), just in different containers/state variables.
+function buildTessellatedMeshScene(container, geometry) {
   const scene = new THREE.Scene();
   const material = new THREE.MeshStandardMaterial({ color: 0x4f8cff, side: THREE.DoubleSide, flatShading: true });
   const mesh = new THREE.Mesh(geometry, material);
@@ -1277,10 +1263,68 @@ function renderRotationPreviewVariant(variant) {
   }
   animate();
 
-  rotationPreviewState = {
+  return {
     renderer, controls, container, onResize, mesh, wireframe,
     get frameHandle() { return frameHandle; },
   };
+}
+
+function renderRotationPreviewVariant(variant) {
+  const container = document.getElementById("rotation-preview-viewer");
+  if (typeof THREE === "undefined") {
+    container.textContent = "3D-Bibliothek (three.js) konnte nicht geladen werden.";
+    return;
+  }
+
+  const geometry = buildRotationVariantGeometry(variant);
+
+  if (rotationPreviewState) {
+    // Swap geometry only, keep camera/controls so the user's own view
+    // angle survives switching between candidates (comparing
+    // orientations is the whole point of this tool).
+    rotationPreviewState.mesh.geometry.dispose();
+    rotationPreviewState.mesh.geometry = geometry;
+    rotationPreviewState.wireframe.geometry.dispose();
+    rotationPreviewState.wireframe.geometry = new THREE.WireframeGeometry(geometry);
+    return;
+  }
+
+  rotationPreviewState = buildTessellatedMeshScene(container, geometry);
+}
+
+// Automatic preview in the main 3D-Ansicht tab, right after choosing a
+// STEP file - before any job is submitted, so the user can confirm the
+// right file loaded and in the right orientation without having to
+// open the separate rotate/preview overlay first (that overlay stays
+// for the "something looks wrong, let me fix it" case; this is just a
+// passive confirmation). Reuses the exact same viewer3dState/
+// disposeViewer3D pair renderSurface3D uses for the real result, since
+// the two are mutually exclusive in time (this one is replaced by the
+// real result once a job finishes).
+function renderGeometryPreviewInMainViewer(variant, confident) {
+  const container = document.getElementById("viewer3d");
+  const note = document.getElementById("viewer3d-note");
+  const colorbarRow = document.getElementById("colorbar-row");
+  disposeViewer3D();
+
+  if (typeof THREE === "undefined") {
+    note.hidden = false;
+    note.textContent = "3D-Bibliothek (three.js) konnte nicht geladen werden.";
+    colorbarRow.hidden = true;
+    return;
+  }
+  note.hidden = true;
+  colorbarRow.hidden = true; // no cp-Werte vorhanden, das ist nur die rohe Geometrie
+
+  const geometry = buildRotationVariantGeometry(variant);
+  viewer3dState = buildTessellatedMeshScene(container, geometry);
+
+  document.getElementById("viewer3d-overlay-legend").innerHTML =
+    "Vorschau der hochgeladenen Geometrie (noch keine Berechnung" +
+    (confident ? ", Achsen automatisch erkannt" : ", Achsen ungeprueft") + ") &middot; " +
+    "Achsen: <span style=\"color:#ff3333\">X</span> Sehne, " +
+    "<span style=\"color:#33ff33\">Y</span> Spannweite, " +
+    "<span style=\"color:#3366ff\">Z</span> vertikal";
 }
 
 // Simple colored-line coordinate triad (body axes) plus the wind-axis
@@ -1473,8 +1517,7 @@ function renderCalculationSteps(result) {
 
 function renderResult(result, jobId) {
   currentResultJobId = jobId;
-  document.getElementById("fullscreen-link").href = "/viewer?job=" + jobId;
-  document.getElementById("result-panel").hidden = false;
+  setResultPanelVisible(true);
   document.getElementById("cl-value").textContent = result.cl.toFixed(4);
   document.getElementById("cd-value").textContent = result.cd.toFixed(4);
   document.getElementById("yplus-value").textContent = result.mean_y_plus.toFixed(2);
@@ -1661,6 +1704,11 @@ async function pollJob(jobId) {
   // Each call claims a token; a loop that is no longer the current one
   // quietly stops instead of continuing to render.
   const myToken = ++activePollToken;
+  // Invalidate any still-in-flight geometry auto-preview fetch (see
+  // autoPreviewUploadedGeometry): once a job starts, its own result
+  // owns the viewer3d container from here on, a late-resolving preview
+  // must not overwrite it.
+  activePreviewToken++;
   const statusEl = document.getElementById("status");
   expandConsole(); // the console is where the step-by-step progress lives now, see the shell redesign
   while (true) {
@@ -1715,7 +1763,7 @@ function statusLabel(job) {
 function selectJob(jobId) {
   closeArchive();
   history.replaceState(null, "", "?job=" + jobId);
-  document.getElementById("result-panel").hidden = true;
+  setResultPanelVisible(false);
   // Without this, switching away from a finished job (which has a live
   // WebGLRenderer + requestAnimationFrame loop from renderSurface3D)
   // to one with no result yet left that renderer running every frame
@@ -2176,6 +2224,148 @@ function expandConsole() {
   document.getElementById("console-toggle-icon").innerHTML = "&#9662;";
 }
 
+// --- Seitenpanels: ein-/ausklappbar + per Zieh-Griff groessenverstellbar
+// (eine Achse je Griff), wie bei Inventor/Photoshop. Auf schmalen
+// Bildschirmen werden dieselben links/rechts-Panels per Media-Query zu
+// Schubladen-Overlays (siehe CSS) - dieselben "left-collapsed"/
+// "right-collapsed"-Klassen steuern beide Darstellungen einheitlich.
+const MOBILE_BREAKPOINT_QUERY = window.matchMedia("(max-width: 860px)");
+const appShellEl = document.getElementById("app-shell");
+
+function isLeftOpen() { return !appShellEl.classList.contains("left-collapsed"); }
+function isRightOpen() { return !appShellEl.classList.contains("right-collapsed"); }
+
+function updatePanelBackdrop() {
+  const backdrop = document.getElementById("panel-backdrop");
+  // The backdrop (tap-outside-to-close) only makes sense while a panel
+  // is shown as a mobile overlay drawer, not for the desktop grid
+  // columns - a backdrop over the whole page would block clicking into
+  // the center/result panels on desktop for no reason.
+  const mobile = MOBILE_BREAKPOINT_QUERY.matches;
+  backdrop.hidden = !(mobile && (isLeftOpen() || isRightOpen()));
+}
+
+function setLeftPanelOpen(open) {
+  appShellEl.classList.toggle("left-collapsed", !open);
+  document.getElementById("toggle-left-btn").classList.toggle("active", open);
+  updatePanelBackdrop();
+}
+
+function setRightPanelOpen(open) {
+  appShellEl.classList.toggle("right-collapsed", !open);
+  document.getElementById("toggle-right-btn").classList.toggle("active", open);
+  updatePanelBackdrop();
+}
+
+// Shared by every place that shows/hides the result panel (a real
+// result exists, or not) - the "Ergebnis" toggle button only makes
+// sense once there is something to show, so it stays disabled and
+// closed until then, rather than opening onto an empty panel.
+function setResultPanelVisible(visible) {
+  document.getElementById("result-panel").hidden = !visible;
+  document.getElementById("toggle-right-btn").disabled = !visible;
+  if (visible) {
+    setRightPanelOpen(!MOBILE_BREAKPOINT_QUERY.matches); // auto-open on desktop, stays closed-by-default on mobile
+  } else {
+    setRightPanelOpen(false);
+  }
+}
+
+document.getElementById("toggle-left-btn").addEventListener("click", () => setLeftPanelOpen(!isLeftOpen()));
+document.getElementById("toggle-right-btn").addEventListener("click", () => setRightPanelOpen(!isRightOpen()));
+document.getElementById("panel-backdrop").addEventListener("click", () => {
+  setLeftPanelOpen(false);
+  setRightPanelOpen(false);
+});
+
+function applyResponsiveDefaults() {
+  if (MOBILE_BREAKPOINT_QUERY.matches) {
+    setLeftPanelOpen(false);
+    setRightPanelOpen(false);
+  } else {
+    setLeftPanelOpen(true);
+    // Right panel still follows "only open if there is a result" even
+    // on desktop - do not force it open onto nothing.
+    setRightPanelOpen(!document.getElementById("result-panel").hidden);
+  }
+}
+applyResponsiveDefaults();
+// A resize across the breakpoint (rotating a tablet, resizing a
+// desktop window) re-applies the right default instead of leaving a
+// mobile-opened drawer stuck in a now-desktop layout or vice versa.
+MOBILE_BREAKPOINT_QUERY.addEventListener("change", applyResponsiveDefaults);
+
+// Zieh-Griffe: eine Pointer-Drag-Funktion fuer alle drei (links/rechts
+// Breite, Konsole Hoehe), da das Prinzip identisch ist - nur welche
+// CSS-Variable geschrieben wird und in welche Richtung unterscheidet
+// sich. pointermove/up werden bewusst auf window gebunden (nicht auf
+// den Griff selbst), weil der Zeiger beim schnellen Ziehen den schmalen
+// 5px-Griff leicht verlassen kann.
+function setupResizeHandle(handleId, { axis, cssVar, min, max, invert }) {
+  const handle = document.getElementById(handleId);
+  let dragStart = 0;
+  let startSize = 0;
+
+  function currentSize() {
+    const raw = getComputedStyle(appShellEl).getPropertyValue(cssVar).trim();
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : min;
+  }
+
+  function onMove(e) {
+    const pos = axis === "x" ? e.clientX : e.clientY;
+    const delta = (pos - dragStart) * (invert ? -1 : 1);
+    const size = Math.min(max, Math.max(min, startSize + delta));
+    appShellEl.style.setProperty(cssVar, size + "px");
+  }
+  function onUp() {
+    handle.classList.remove("dragging");
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  }
+  handle.addEventListener("pointerdown", (e) => {
+    dragStart = axis === "x" ? e.clientX : e.clientY;
+    startSize = currentSize();
+    handle.classList.add("dragging");
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    e.preventDefault();
+  });
+}
+setupResizeHandle("resize-handle-left", { axis: "x", cssVar: "--left-w", min: 220, max: 600, invert: false });
+setupResizeHandle("resize-handle-right", { axis: "x", cssVar: "--right-w", min: 220, max: 600, invert: true });
+setupResizeHandle("resize-handle-console", { axis: "y", cssVar: "--console-h", min: 120, max: 560, invert: true });
+
+// --- Vollbild: frueher ein Link, der /viewer?job=... in einem neuen Tab
+// oeffnete - auf dem Handy wirkte das wie "die Seite laedt neu" (neuer
+// Tab nicht offensichtlich erkennbar/fokussiert). Jetzt die echte
+// Fullscreen-API direkt auf dem Center-Panel (3D-Ansicht/FBD/cp bleiben
+// im Vollbild umschaltbar), funktioniert auf Desktop und Handy gleich.
+const fullscreenBtn = document.getElementById("fullscreen-btn");
+fullscreenBtn.addEventListener("click", () => {
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    document.getElementById("center-panel").requestFullscreen().catch((err) => {
+      setError("Vollbild nicht verfuegbar: " + err.message);
+    });
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  const isFullscreen = document.fullscreenElement === document.getElementById("center-panel");
+  fullscreenBtn.textContent = isFullscreen ? "Vollbild verlassen" : "Vollbild ↗";
+  // The three.js canvas has a fixed pixel size computed from its
+  // container at creation time - entering/leaving fullscreen resizes
+  // that container without firing a window "resize" event, so the
+  // existing onResize handlers (bound to window) never fire on their
+  // own. A fake resize event nudges them; a second one a frame later
+  // covers browsers where the fullscreen transition has not finished
+  // laying out yet when fullscreenchange itself fires (same class of
+  // issue as the documented one in renderSurface3D's own onResize).
+  window.dispatchEvent(new Event("resize"));
+  requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+});
+
 // Custom-styled STEP-file picker (see the .file-input-* CSS): the
 // native input stays functional and focusable, just visually hidden,
 // with this label mirroring the chosen filename - form.reset() below
@@ -2194,7 +2384,52 @@ function updateFileInputName() {
   activeGeometryPreview = null;
   document.getElementById("geometry-preview-status").textContent = "";
 }
-document.getElementById("step_file").addEventListener("change", updateFileInputName);
+document.getElementById("step_file").addEventListener("change", () => {
+  updateFileInputName();
+  const files = document.getElementById("step_file").files;
+  if (files.length) autoPreviewUploadedGeometry(files[0]);
+});
+
+// Passive confirmation right after choosing a file, before any job is
+// submitted: "did the right geometry load, in the right orientation?"
+// (user-requested - previously nothing at all was shown between
+// choosing a file and a finished result). A network/parse problem here
+// is only a hint, never blocking - the real submission still reports
+// any genuine problem properly, this is just an early, optional look.
+//
+// activePreviewToken guards against a real (if unlikely) race: if this
+// fetch is still in flight when a job on the SAME viewer3d container
+// already finished and rendered its real result (a very fast job, or
+// the user picked a second file while this one was still loading), the
+// stale preview must not overwrite that real result when it resolves.
+// Same pattern as pollJob's activePollToken above.
+let activePreviewToken = 0;
+
+async function autoPreviewUploadedGeometry(file) {
+  const myToken = ++activePreviewToken;
+  const form = new FormData();
+  form.append("step_file", file);
+  let res;
+  try {
+    res = await fetch("/geometry/preview", { method: "POST", headers: authHeaders(), body: form });
+  } catch (err) {
+    return;
+  }
+  if (myToken !== activePreviewToken) return;
+  if (res.status === 401) { reloadToRefreshToken(); return; }
+  if (!res.ok) {
+    const note = document.getElementById("viewer3d-note");
+    note.hidden = false;
+    note.textContent = "Konnte keine Geometrie-Vorschau laden (" + res.status + ") - Absenden ist trotzdem moeglich.";
+    document.getElementById("colorbar-row").hidden = true;
+    return;
+  }
+  const data = await res.json();
+  if (myToken !== activePreviewToken) return;
+  const label = data.suggested_label || "identity";
+  const variant = data.variants.find((v) => v.label === label);
+  if (variant) renderGeometryPreviewInMainViewer(variant, data.confident);
+}
 
 // --- Geometry preview/rotate tool (ADR-0020 Teil B): upload once, see
 // all 6 possible axis orientations in 3D, pick one, then submit without
@@ -2333,7 +2568,7 @@ document.getElementById("topbar-new-btn").addEventListener("click", () => {
   updateFileInputName();
   updateGciCheckAvailability();
   history.replaceState(null, "", window.location.pathname);
-  document.getElementById("result-panel").hidden = true;
+  setResultPanelVisible(false);
   document.getElementById("console-panel").hidden = true;
   document.getElementById("console-toggle-icon").innerHTML = "&#9656;";
   setError(null);
@@ -2434,7 +2669,7 @@ document.getElementById("case-form").addEventListener("submit", async (e) => {
 });
 
 async function submitSingleJob(fileInput, aoaDeg) {
-  document.getElementById("result-panel").hidden = true;
+  setResultPanelVisible(false);
   document.getElementById("console-panel").hidden = true;
   document.getElementById("status").textContent = "Lade Datei hoch und starte Berechnung ...";
 

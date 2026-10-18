@@ -122,6 +122,21 @@ damaligen Stand zum jeweiligen Zeitpunkt, nicht die heutige Struktur -
 bewusst nicht rueckwirkend umgeschrieben, nur hier an einer Stelle
 klargestellt. `viewer.html` ist von diesem Umbau unberuehrt.
 
+**Mobile-Tauglichkeit und sofortige Geometrie-Vorschau, seit 2026-10-18
+(siehe ADR-0021).** Das linke und das rechte Panel sind ueber zwei
+Kopfzeilen-Knoepfe ein-/ausklappbar (Desktop: Grid-Spalte auf 0,
+schmale Bildschirme <=860px: seitliche Schubladen-Overlays, dort auch
+standardmaessig eingeklappt); drei Zieh-Griffe (links/Mitte,
+Mitte/rechts, Mitte/Konsole) verstellen die jeweilige Groesse in einer
+Achse ueber CSS-Variablen (`--left-w`/`--right-w`/`--console-h`). Der
+"Vollbild"-Knopf ruft die echte Fullscreen-API auf `#center-panel` auf
+statt (wie zuvor) `/viewer?job=...` in einem neuen Tab zu oeffnen. Eine
+STEP-Datei wird sofort nach Auswahl automatisch zu `/geometry/preview`
+hochgeladen (`autoPreviewUploadedGeometry`) und als Netz im 3D-Tab
+angezeigt, noch vor jeder Berechnung - reine passive Bestaetigung
+("richtige Datei, richtige Achsen"), nicht Teil des eigentlichen
+Absendevorgangs.
+
 ## Koordinatenkonvention (wichtig, empirisch bestaetigt)
 
 SU2 erwartet fuer Kraft-/Momentenbeiwerte und die automatische Berechnung

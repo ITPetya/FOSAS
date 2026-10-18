@@ -75,6 +75,13 @@ die vorige ausdruecklich freigegeben hat.
   Rest am 2026-10-16 umgesetzt und gegen beide echten Dateien end-to-end
   verifiziert (siehe ADR-0020); die Frontend-Logik nur per Node-
   Simulation gegengeprueft, echter Browser-Klicktest steht noch aus.
+  Mobile-Tauglichkeit (ein-/ausklappbare und groessenverstellbare
+  Panels, echtes Vollbild, sofortige Geometrie-Vorschau nach Upload) am
+  2026-10-18 vom Projektinhaber nach einem ersten Handy-Test angestossen
+  und umgesetzt, siehe ADR-0021; weiterhin nur per Node/three.js-Stub
+  und gegen eine echte lokale Engine gegengeprueft, kein echter Browser
+  in dieser Werkzeugumgebung verfuegbar - ein echter Klicktest auf
+  einem Telefon durch den Projektinhaber steht noch aus.
 - Phase 4, Animation (quasi-stationaer), Cache, Parallelisierung.
 - Phase 5, Installer, Uninstaller, Prozessverwaltung, Servermodus,
   KI-Schnittstelle. Servermodus ist bereits erreicht (Phase 1/2 liefen
