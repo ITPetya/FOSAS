@@ -476,6 +476,26 @@ const INFO_TEXT = {
     Formel selbst ist Gesichert, die zugrunde liegende Masse erbt aber
     die Annahme aus der Materialauswahl).</p>
   `,
+  reaction_force: `
+    <span class="tag annahme">Annahme (einzelne, starre Einspannung)</span>
+    <h4>Reaktionskraft R</h4>
+    <p>Die Kraft, die ein Befestigungspunkt am angeklickten Ort
+    aufbringen muesste, um den Koerper im Gleichgewicht zu halten
+    (Summe aus Luftkraeften und, falls gewaehlt, Gewichtskraft, mit
+    umgedrehtem Vorzeichen). Nimmt an, dass genau EIN Punkt den Koerper
+    voll einspannt - bei einem Gelenklager oder mehreren Befestigungen
+    waere die wirkliche Verteilung anders.</p>
+  `,
+  reaction_moment: `
+    <span class="tag annahme">Annahme (einzelne, starre Einspannung)</span>
+    <h4>Reaktionsmoment M</h4>
+    <p>Das Moment, das dieselbe Einspannung zusaetzlich aufbringen
+    muesste (Luftkraft-Moment um den Momenten-Bezugspunkt, auf den
+    gewaehlten Punkt umgerechnet, plus Moment der Gewichtskraft um
+    diesen Punkt, mit umgedrehtem Vorzeichen). Ein Gelenklager koennte
+    kein Moment aufnehmen - diese Rechnung nimmt eine starre Einspannung
+    an.</p>
+  `,
   calculation_steps: `
     <span class="tag gesichert">Gesichert</span>
     <h4>Rechenweg</h4>
@@ -1089,8 +1109,15 @@ function renderSurface3D(result) {
   comMarker.position.copy(comScene);
   coordLayer.add(comMarker);
 
-  const forcesLayer = buildForcesLayer(result, momentOriginScene, comScene);
+  const { group: forcesLayer, visualScale: forceVisualScale } = buildForcesLayer(result, momentOriginScene, comScene);
   scene.add(forcesLayer);
+
+  // Bearing-point reaction (point 7, docs/ARCHITECTURE.md): empty until
+  // the user actually picks a point (see renderBearingReaction below),
+  // part of the same scene from the start so picking a point on one
+  // render and then rotating the view does not need a full re-render.
+  const bearingLayer = new THREE.Group();
+  scene.add(bearingLayer);
 
   // Exact colors THREE.AxesHelper itself renders (pure red/green/blue
   // vertex colors), not just a similar-looking tone, so the legend text
@@ -1153,7 +1180,13 @@ function renderSurface3D(result) {
   viewer3dState = {
     renderer, controls, container, onResize, coordLayer, forcesLayer,
     get frameHandle() { return frameHandle; },
+    // Everything the bearing-point pick/render logic needs, so it does
+    // not have to re-derive the normalization (cx/cy/cz/extent) or
+    // re-run buildForcesLayer's own scale computation.
+    camera, points, bearingLayer, forceVisualScale,
+    result, cx, cy, cz, extent,
   };
+  resetBearingReaction();
 }
 
 // Geometry preview/rotate tool (docs/ARCHITECTURE.md
@@ -1446,7 +1479,163 @@ function buildForcesLayer(result, originScene, comScene) {
     addArrow({ x: 0, y: 0, z: -1 }, weight, 0x996633, comScene);
   }
 
-  return group;
+  // visualScale is returned alongside the group so a bearing-reaction
+  // arrow (added later, once a bearing point is picked - see
+  // renderBearingReaction) can match this exact same length scale,
+  // instead of drawing its own independently-scaled (and therefore
+  // visually inconsistent) arrow.
+  return { group, visualScale };
+}
+
+// --- Bearing-point reaction (point 7, docs/ARCHITECTURE.md
+// "Technische-Mechanik-Visualisierung"): click a point directly on the
+// rendered 3D result (not a new pre-solve preview step - this is a pure
+// statics follow-up on data the job already has, see
+// fosas_core.reactions). Clicking snaps to the nearest real surface
+// node (Raycaster against the existing THREE.Points object), never a
+// point floating off the body.
+
+let bearingPickHandlers = null; // { canvas, onDown, onUp } while pick mode is active, else null
+
+function resetBearingReaction() {
+  stopBearingPickMode();
+  document.getElementById("bearing-reaction-metrics").hidden = true;
+  document.getElementById("bearing-point-hint").hidden = true;
+  if (viewer3dState && viewer3dState.bearingLayer) {
+    while (viewer3dState.bearingLayer.children.length) {
+      viewer3dState.bearingLayer.remove(viewer3dState.bearingLayer.children[0]);
+    }
+  }
+}
+
+function stopBearingPickMode() {
+  const btn = document.getElementById("bearing-pick-btn");
+  btn.textContent = "Befestigungspunkt waehlen";
+  btn.classList.remove("active");
+  if (bearingPickHandlers) {
+    bearingPickHandlers.canvas.style.cursor = "";
+    bearingPickHandlers.canvas.removeEventListener("pointerdown", bearingPickHandlers.onDown);
+    bearingPickHandlers.canvas.removeEventListener("pointerup", bearingPickHandlers.onUp);
+    bearingPickHandlers = null;
+  }
+}
+
+function startBearingPickMode() {
+  if (!viewer3dState || !viewer3dState.points) {
+    setError("Keine 3D-Ansicht vorhanden - zuerst eine fertige Berechnung oeffnen.");
+    return;
+  }
+  const btn = document.getElementById("bearing-pick-btn");
+  btn.textContent = "Auf die 3D-Ansicht klicken ...";
+  btn.classList.add("active");
+  const canvas = viewer3dState.renderer.domElement;
+  canvas.style.cursor = "crosshair";
+
+  // pointerdown/pointerup (not a plain "click") so a drag-to-rotate
+  // with OrbitControls is never misread as a pick - only a press and
+  // release within a few pixels of each other counts.
+  let downPos = null;
+  function onDown(e) { downPos = { x: e.clientX, y: e.clientY }; }
+  function onUp(e) {
+    if (!downPos) return;
+    const dx = e.clientX - downPos.x, dy = e.clientY - downPos.y;
+    downPos = null;
+    if (Math.hypot(dx, dy) > 4) return; // a rotate/drag, not a pick click
+    pickAtCanvasPosition(e.clientX, e.clientY);
+  }
+  canvas.addEventListener("pointerdown", onDown);
+  canvas.addEventListener("pointerup", onUp);
+  bearingPickHandlers = { canvas, onDown, onUp };
+}
+
+document.getElementById("bearing-pick-btn").addEventListener("click", () => {
+  if (bearingPickHandlers) { stopBearingPickMode(); return; }
+  startBearingPickMode();
+});
+
+function pickAtCanvasPosition(clientX, clientY) {
+  const canvas = viewer3dState.renderer.domElement;
+  const rect = canvas.getBoundingClientRect();
+  const mouse = new THREE.Vector2(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1,
+  );
+  const raycaster = new THREE.Raycaster();
+  // Points have no surface for a ray to hit in the usual sense - this
+  // is a proximity threshold in normalized scene units, a few times the
+  // rendered point size (0.02, see renderSurface3D's PointsMaterial) so
+  // a click near (not exactly on) a point still picks it.
+  raycaster.params.Points.threshold = 0.03;
+  raycaster.setFromCamera(mouse, viewer3dState.camera);
+  const intersects = raycaster.intersectObject(viewer3dState.points);
+  if (intersects.length === 0) return; // missed - stay in pick mode, let them try again
+
+  const index = intersects[0].index;
+  const p = viewer3dState.result.surface[index];
+  stopBearingPickMode();
+  applyBearingPoint(p.x, p.y, p.z);
+}
+
+async function applyBearingPoint(x, y, z) {
+  if (!currentResultJobId) return;
+  const form = new FormData();
+  form.append("x", x);
+  form.append("y", y);
+  form.append("z", z);
+  let res;
+  try {
+    res = await fetch("/jobs/" + currentResultJobId + "/bearing-reaction", {
+      method: "POST", headers: authHeaders(), body: form,
+    });
+  } catch (err) {
+    setError("Lagerreaktion konnte nicht berechnet werden: " + err);
+    return;
+  }
+  if (res.status === 401) { reloadToRefreshToken(); return; }
+  if (!res.ok) {
+    const detail = await res.text();
+    setError("Lagerreaktion konnte nicht berechnet werden (" + res.status + "): " + detail);
+    return;
+  }
+  renderBearingReaction(await res.json());
+}
+
+function renderBearingReaction(reaction) {
+  const [fx, fy, fz] = reaction.reaction_force;
+  const [mx, my, mz] = reaction.reaction_moment;
+  document.getElementById("reaction-force-value").textContent =
+    reaction.reaction_force_magnitude.toPrecision(3) + " (" + fx.toPrecision(3) + ", " + fy.toPrecision(3) + ", " + fz.toPrecision(3) + ")";
+  document.getElementById("reaction-moment-value").textContent =
+    reaction.reaction_moment_magnitude.toPrecision(3) + " (" + mx.toPrecision(3) + ", " + my.toPrecision(3) + ", " + mz.toPrecision(3) + ")";
+  document.getElementById("bearing-reaction-metrics").hidden = false;
+  const hint = document.getElementById("bearing-point-hint");
+  hint.hidden = false;
+  hint.textContent = "Befestigungspunkt bei (" + reaction.bearing_point.map((c) => c.toFixed(3)).join(", ") + ") m, Koerperachsen.";
+
+  if (!viewer3dState || !viewer3dState.bearingLayer) return;
+  const layer = viewer3dState.bearingLayer;
+  while (layer.children.length) layer.remove(layer.children[0]);
+
+  const { cx, cy, cz, extent, forceVisualScale } = viewer3dState;
+  const pointScene = bodyPointToScene(reaction.bearing_point[0], reaction.bearing_point[1], reaction.bearing_point[2], cx, cy, cz, extent);
+  const marker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.03, 12, 12),
+    new THREE.MeshBasicMaterial({ color: 0xff6633 }),
+  );
+  marker.position.copy(pointScene);
+  layer.add(marker);
+
+  if (reaction.reaction_force_magnitude > 1e-9) {
+    const dirScene = bodyDirToScene(fx, fy, fz).normalize();
+    layer.add(new THREE.ArrowHelper(
+      dirScene, pointScene, reaction.reaction_force_magnitude * forceVisualScale, 0xff6633, 0.1, 0.05,
+    ));
+  }
+
+  const legendEl = document.getElementById("viewer3d-overlay-legend");
+  if (!legendEl.innerHTML.includes("Befestigungspunkt")) {
+    legendEl.innerHTML += " &middot; <span style=\"color:#ff6633\">●</span> Befestigungspunkt, Pfeil = Reaktionskraft R";
+  }
 }
 
 document.getElementById("layer-toggle-coord").addEventListener("change", (e) => {
@@ -2573,6 +2762,7 @@ document.getElementById("topbar-new-btn").addEventListener("click", () => {
   document.getElementById("console-toggle-icon").innerHTML = "&#9656;";
   setError(null);
   document.getElementById("status").textContent = "";
+  resetBearingReaction();
   disposeViewer3D();
   closeGeometryPreview();
 });

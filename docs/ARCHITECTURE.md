@@ -585,8 +585,24 @@ angenommen.
    `mass=0.012331 kg`, `weight=0.1209 N`, alle per Hand nachgerechnet
    (volume\*density=mass, mass\*g=weight) und im echten PDF-Bericht
    wiedergefunden.
-   **Noch offen, nicht in diesem Schritt:** die eigentliche
-   Lagerreaktionsberechnung braucht einen Lagerpunkt, und der
+   **Lagerreaktionsberechnung umgesetzt (2026-10-19, siehe ADR-0022):**
+   Die urspruengliche Notiz unten (siehe naechster Absatz, historisch
+   belassen) ging von einer neuen Zweiphasen-Abgabe aus. Tatsaechlich
+   gebaut wurde stattdessen eine reine Nachrechnung auf dem bereits
+   fertigen Ergebnis: neues, schmales Modul
+   `fosas_core.reactions.compute_bearing_reaction` (Starrkoerper-
+   Statik, Kraefte-/Momentengleichgewicht, Annahme einer einzigen,
+   vollstaendig starren Einspannung, explizit als solche ausgewiesen),
+   neuer Endpunkt `POST /jobs/{job_id}/bearing-reaction` (keine
+   Persistenz, jede Anfrage rechnet neu), neue Pick-Interaktion in der
+   Web-UI (`clients/web/app.js`: Raycaster gegen die bereits gerenderte
+   Oberflaechen-Punktwolke, Einrasten auf einen echten Oberflaechen-
+   knoten, Drag-vs-Klick-Unterscheidung ueber die Zeigerbewegung
+   zwischen Pointerdown/-up). Keine Erweiterung des 2D-Freikoerperbilds
+   in dieser Runde (siehe ADR-0022 fuer die vollstaendige Abgrenzung).
+
+   **Urspruengliche Notiz, historisch belassen (nicht mehr aktuell):**
+   die eigentliche Lagerreaktionsberechnung braucht einen Lagerpunkt, und der
    entschiedene Mechanismus dafuer (Anklicken im 3D-Viewer) setzt eine
    neue, bisher nicht existierende Zweiphasen-Abgabe voraus (STEP
    hochladen -> Geometrie-Vorschau in 3D ohne Loeserlauf -> Punkt

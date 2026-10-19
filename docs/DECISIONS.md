@@ -973,3 +973,70 @@ Daten, die ausgelieferte `app.js`/`index.html` (mit eingesetztem Token)
 ist syntaktisch intakt. Ein echter Klicktest auf einem Telefon durch
 den Projektinhaber bleibt weiterhin der einzige verlaessliche
 Abschluss-Test fuer dieses Thema.
+
+## ADR-0022: Lagerreaktionsberechnung als Nachrechnung auf dem fertigen Ergebnis, nicht als neue Zweiphasen-Abgabe
+
+**Kontext:** Punkt 7 der "Technische-Mechanik-Visualisierung"-
+Anforderung (docs/ARCHITECTURE.md) blieb beim Befestigungspunkt mit
+Lagerreaktionen offen. Am 2026-10-14 wurde der Auswahlmechanismus
+entschieden ("Anklicken im 3D-Viewer"), die Umsetzung selbst aber
+zurueckgestellt: die damalige Notiz ging davon aus, der Klick muesse
+**vor** dem Loeserlauf auf einer rohen Geometrie-Vorschau passieren,
+was die (damals noch nicht existierende) Zweiphasen-Abgabe-
+Architektur gebraucht haette. Der Projektinhaber hat diesen Punkt nach
+Abschluss der Mobile-UI-Runde (ADR-0021) wieder aufgegriffen und die
+Umsetzungsentscheidung an den Assistenten delegiert.
+
+**Entscheidung:** Die Lagerreaktionsberechnung ist eine reine
+Starrkoerper-Statik-Nachrechnung auf Werten, die `run_case` fuer jeden
+Auftrag ohnehin liefert (`forces`, `moments`, `center_of_mass`,
+`weight`) - sie braucht keinen neuen Gmsh/SU2-Lauf. Der
+Befestigungspunkt wird deshalb **nach** einem fertigen Auftrag direkt
+auf dem echten, bereits vorhandenen 3D-Ergebnis angeklickt (Raycaster
+gegen die schon gerenderte Punktwolke, Einrasten auf einen echten
+Oberflaechenknoten), statt vorher auf einer rohen Vorschau. Das ist
+einfacher (keine neue Zweiphasen-Architektur, der bestehende
+Auftragsablauf bleibt unveraendert) und informativer (man sieht beim
+Klicken den echten cp-eingefaerbten Koerper statt nur der rohen Form).
+Revidiert damit die Annahme der Notiz vom 2026-10-14, nicht die
+damalige Entscheidung zum Auswahlmechanismus selbst.
+
+Neues, bewusst schmales Modul `fosas_core/reactions.py`
+(`compute_bearing_reaction`): nimmt nur die sechs tatsaechlich
+benoetigten Werte entgegen (nicht das ganze `CaseResult`, das staendig
+neue, hierfuer irrelevante Felder bekommt), nicht das ganze Objekt -
+das haelt die Funktion leicht von Hand nachrechenbar und von
+`CaseResult`s wachsendem Umfang entkoppelt. Die Windachsen->
+Koerperachsen-Kraftrichtung (Drag/Lift/Side) ist 1:1 aus
+`clients/web/app.js::buildForcesLayer` uebernommen (dort bereits per
+Skalarprodukt auf Orthonormalitaet gegengeprueft), nicht neu
+hergeleitet - Python und JS muessen hier dieselbe Physik rechnen.
+
+Angenommen wird eine einzige, vollstaendig starre Einspannung am
+gewaehlten Punkt (reagiert auf Kraft UND Moment) - explizit als
+Annahme ausgewiesen (Tooltip, Tag "Annahme"), nicht als exakte
+Modellierung eines realen Gelenklagers oder Mehrpunkt-Systems. Der
+gewaehlte Punkt wird nicht persistiert: jede Anfrage an den neuen
+Endpunkt `POST /jobs/{job_id}/bearing-reaction` rechnet neu (billig,
+rein algebraisch) - kein neues Feld auf `Job`/`JobStore`, keine
+Migration bestehender `job_meta.json`-Dateien.
+
+**Nicht Teil dieser Runde:** Erweiterung des 2D-Freikoerperbilds um den
+Befestigungspunkt (separate, kleinere Folgerunde); freie Punktwahl
+ausserhalb der Koerperoberflaeche; PDF-Bericht-Integration;
+Mehrpunkt-/statisch-unbestimmte Lager.
+
+**Verifikation:** `core/tests/test_reactions.py`, mehrere per Hand
+nachgerechnete Gleichgewichtsfaelle (u. a. Lagerpunkt = Momenten-
+Bezugspunkt reduziert auf die reine Negation von mx/my/mz; Lagerpunkt =
+Schwerpunkt macht den Gewichtsmoment dort exakt null; Betrag des
+Windachsen-Kraftvektors entspricht `forces.resultant` ueber mehrere
+AoA/Beta-Kombinationen). Echter Lauf gegen eine lokale Test-Engine
+(NACA0012-Fluegel, Material Aluminium, AoA=5°): Endpunkt an zwei echten
+Punkten (Momenten-Bezugspunkt, Schwerpunkt) aufgerufen, beide Antworten
+unabhaengig in einem separaten Python-Einzeiler nachgerechnet und
+deckungsgleich bestaetigt. Neue Frontend-Logik (Pick-Modus inkl.
+Drag-vs-Klick-Unterscheidung, Kachel-/3D-Darstellung) komplett per
+Node-Simulation gegengeprueft (echte Raycasting-Geometrie kann der
+Stub nicht pruefen, daher die kuenstlich injizierte Trefferantwort);
+ein echter Klicktest im Browser steht wie immer noch aus.

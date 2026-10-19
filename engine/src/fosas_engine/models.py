@@ -502,3 +502,17 @@ class GeometryPreviewOut(BaseModel):
             confident=orientation.confident,
             variants=variants,
         )
+
+
+class BearingReactionOut(BaseModel):
+    """Mirrors fosas_core.reactions.BearingReaction (point 7,
+    docs/ARCHITECTURE.md "Technische-Mechanik-Visualisierung"). A single,
+    fully rigid support at bearing_point is assumed - disclosed in the
+    UI, not hidden in this shape.
+    """
+
+    bearing_point: tuple[float, float, float]
+    reaction_force: tuple[float, float, float]
+    reaction_force_magnitude: float
+    reaction_moment: tuple[float, float, float]
+    reaction_moment_magnitude: float

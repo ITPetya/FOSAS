@@ -42,6 +42,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 
 from fosas_core.geometry import GeometryError, ROTATION_LABELS, apply_named_rotation, detect_axis_orientation, import_step
 from fosas_core.pipeline import CaseParams, ExecutablePaths, PipelineError, run_case
+from fosas_core.reactions import compute_bearing_reaction
 from fosas_core.report import (
     CombinedReportData,
     GciReportData,
@@ -61,7 +62,7 @@ from fosas_core.report import (
 from fosas_engine.gci_studies import GciStudyStore, new_gci_study_id
 from fosas_engine.geometry_previews import GeometryPreviewStore
 from fosas_engine.jobs import Job, JobNotArchivableError, JobNotDeletableError, JobNotResumableError, JobStore, new_job_id
-from fosas_engine.models import GciStudyOut, GeometryPreviewOut, GeometryVariantOut, JobOut, PolarStudyOut
+from fosas_engine.models import BearingReactionOut, GciStudyOut, GeometryPreviewOut, GeometryVariantOut, JobOut, PolarStudyOut
 from fosas_engine.polar_studies import PolarStudyStore, new_polar_study_id
 from fosas_engine.settings import Settings
 
@@ -437,6 +438,43 @@ button {{ padding: 8px 16px; cursor: pointer; }}
             content=pdf_bytes,
             media_type="application/pdf",
             headers={"Content-Disposition": f'inline; filename="job_report_{job_id}.pdf"'},
+        )
+
+    @app.post(
+        "/jobs/{job_id}/bearing-reaction", response_model=BearingReactionOut, dependencies=[Depends(require_token)]
+    )
+    def create_bearing_reaction(
+        job_id: str,
+        x: float = Form(..., description="Bearing point X (chordwise), metres, body axes"),
+        y: float = Form(..., description="Bearing point Y (spanwise), metres, body axes"),
+        z: float = Form(..., description="Bearing point Z (vertical), metres, body axes"),
+    ):
+        # Point 7, docs/ARCHITECTURE.md "Technische-Mechanik-Visualisierung":
+        # a pure rigid-body statics follow-up on an already-finished job's
+        # result, not a new Gmsh/SU2 run - instant, no executor submission,
+        # no new Job record. The chosen point is never persisted (see
+        # fosas_core.reactions module docstring): recomputed on every call.
+        job = app.state.jobs.get(job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="No such job")
+        if job.result is None:
+            raise HTTPException(status_code=409, detail="Job has no result yet (not done or failed)")
+
+        reaction = compute_bearing_reaction(
+            aoa_deg=job.result.aoa_deg,
+            sideslip_deg=job.result.sideslip_deg,
+            forces=job.result.forces,
+            moments=job.result.moments,
+            center_of_mass=job.result.center_of_mass,
+            weight=job.result.weight,
+            bearing_point=(x, y, z),
+        )
+        return BearingReactionOut(
+            bearing_point=reaction.bearing_point,
+            reaction_force=reaction.reaction_force,
+            reaction_force_magnitude=reaction.reaction_force_magnitude,
+            reaction_moment=reaction.reaction_moment,
+            reaction_moment_magnitude=reaction.reaction_moment_magnitude,
         )
 
     @app.post("/jobs/{job_id}/resume", response_model=JobOut, dependencies=[Depends(require_token)])

@@ -82,6 +82,14 @@ die vorige ausdruecklich freigegeben hat.
   und gegen eine echte lokale Engine gegengeprueft, kein echter Browser
   in dieser Werkzeugumgebung verfuegbar - ein echter Klicktest auf
   einem Telefon durch den Projektinhaber steht noch aus.
+  Lagerreaktionsberechnung (Punkt 7, Befestigungspunkt mit
+  Lagerreaktionen, bisher zurueckgestellt) am 2026-10-19 vom
+  Projektinhaber wieder aufgegriffen, Umsetzungsentscheidung dem
+  Assistenten ueberlassen: als reine Nachrechnung auf dem fertigen
+  Ergebnis umgesetzt (keine neue Zweiphasen-Abgabe noetig, siehe
+  ADR-0022), end-to-end gegen eine echte lokale Engine verifiziert;
+  Frontend-Pick-Interaktion nur per Node-Simulation gegengeprueft, echter
+  Browser-Klicktest steht noch aus.
 - Phase 4, Animation (quasi-stationaer), Cache, Parallelisierung.
 - Phase 5, Installer, Uninstaller, Prozessverwaltung, Servermodus,
   KI-Schnittstelle. Servermodus ist bereits erreicht (Phase 1/2 liefen

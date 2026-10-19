@@ -805,6 +805,73 @@ def test_job_report_returns_a_real_pdf(client, settings, tmp_path):
     assert response.content.startswith(b"%PDF")
 
 
+# --- Bearing-point reaction force/moment (point 7, docs/ARCHITECTURE.md
+# "Technische-Mechanik-Visualisierung"): a pure statics follow-up on an
+# already-finished job, same not-done-yet/not-found pattern as the job
+# report route above. The actual math is unit-tested in
+# core/tests/test_reactions.py; these only prove the route wiring.
+
+
+def test_bearing_reaction_rejects_missing_token(client):
+    # Token dependency runs before the route body, so this 401s
+    # regardless of whether the job actually exists.
+    response = client.post("/jobs/does-not-exist/bearing-reaction", data={"x": "0", "y": "0", "z": "0"})
+    assert response.status_code == 401
+
+
+def test_bearing_reaction_not_found(client, settings):
+    headers = {"Authorization": f"Bearer {settings.token}"}
+    response = client.post(
+        "/jobs/does-not-exist/bearing-reaction", headers=headers, data={"x": "0", "y": "0", "z": "0"}
+    )
+    assert response.status_code == 404
+
+
+def test_bearing_reaction_conflict_when_not_done(client, settings, tmp_path):
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    _create_finished_job(app, settings.work_root, "job1", status="failed")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+
+    response = client.post("/jobs/job1/bearing-reaction", headers=headers, data={"x": "0", "y": "0", "z": "0"})
+    assert response.status_code == 409
+
+
+def test_bearing_reaction_at_moment_origin_matches_the_raw_moment_system(client, settings, tmp_path):
+    # _fake_case_result's moment_origin and center_of_mass are both
+    # exactly (0.3, 0.6, 0.0) (a coincidence of that fixture, not
+    # generally true) - picking that exact point as the bearing point
+    # means zero lever-arm transfer for BOTH the aero moment and the
+    # weight moment, so the reaction moment must equal exactly the
+    # negated raw (mx, my, mz), independent of the (harder to hand-
+    # verify) aero force vector itself. See core/tests/test_reactions.py
+    # for the lever-arm-transfer math itself.
+    from fosas_engine.app import create_app
+
+    app = create_app(settings)
+    client = TestClient(app)
+    _create_finished_job(app, settings.work_root, "job1", status="done")
+    headers = {"Authorization": f"Bearer {settings.token}"}
+
+    response = client.post(
+        "/jobs/job1/bearing-reaction", headers=headers, data={"x": "0.3", "y": "0.6", "z": "0.0"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["bearing_point"] == pytest.approx([0.3, 0.6, 0.0])
+    assert body["reaction_moment"] == pytest.approx([-0.1, 12.5, -0.02])
+    assert body["reaction_moment_magnitude"] == pytest.approx(
+        (0.1**2 + 12.5**2 + 0.02**2) ** 0.5
+    )
+    # Internal consistency: the magnitude field must match the vector
+    # it is reported alongside, not an independently (and potentially
+    # inconsistently) computed value.
+    rf = body["reaction_force"]
+    assert body["reaction_force_magnitude"] == pytest.approx((rf[0] ** 2 + rf[1] ** 2 + rf[2] ** 2) ** 0.5)
+
+
 # --- Login gate (settings.public_password), see docs/RISKS.md R23 and
 # fosas_engine.app's module docstring: required before exposing the
 # engine beyond the tailnet (e.g. via "tailscale funnel"), since "/",
